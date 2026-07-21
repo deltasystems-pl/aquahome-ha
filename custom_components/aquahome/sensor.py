@@ -43,23 +43,48 @@ from homeassistant.const import (
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
+    UnitOfMass,
     UnitOfTime,
     UnitOfVolume,
 )
 from homeassistant.util import dt as dt_util
 
-from .api import Device, PropertyValue, WaterTreatment, scaled_value
-from .const import TOTAL_WATER_CLAMP_TOLERANCE
-from .entity import AquaHomeEntity
+from .api import (
+    Device,
+    PropertyValue,
+    RechargeUi,
+    RegenerationInfo,
+    WaterTreatment,
+    WaterTreatmentStatus,
+    scaled_value,
+)
+from .const import (
+    MAX_STATE_LENGTH,
+    REGENERATION_STATUS_OPTIONS,
+    TOTAL_WATER_CLAMP_TOLERANCE,
+    WEEKDAY_SLOTS,
+)
+from .entity import AquaHomeActivityEntity, AquaHomeEntity
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import Any
 
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
     from homeassistant.helpers.typing import StateType
 
-    from .coordinator import AquaHomeConfigEntry, AquaHomeCoordinator
+    from .coordinator import (
+        AquaHomeConfigEntry,
+        AquaHomeCoordinator,
+        DeviceActivity,
+    )
+
+#: Enriched ``recharge_ui.state`` / ``regeneration_status`` value meaning a live
+#: recharge cycle is in progress.
+_REGENERATING = "regenerating"
+#: ``recharge_ui.state`` value meaning a regeneration is scheduled but not running.
+_SCHEDULED = "scheduled"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,11 +100,19 @@ class AquaHomeSensorDescription(SensorEntityDescription):
     ``value_fn`` maps a coordinator :class:`~.api.models.Device` to the sensor's
     native value (or ``None`` when the source is absent). ``exists_fn`` gates
     whether the entity is created at all for a given device — evaluated once at
-    setup against the first refreshed payload.
+    setup against the first refreshed payload. ``attributes_fn`` — when set —
+    supplies the entity's extra state attributes from the same device view (used
+    e.g. to surface each per-weekday slot's stale ``reported`` timestamp).
+    ``suggested_unit_fn`` — when set — derives a display unit from the first
+    payload (evaluated once at entity creation): Home Assistant's unit system
+    never converts ``weight`` sensors, so without it a metric account would be
+    shown pounds forever.
     """
 
     value_fn: Callable[[Device], StateType | datetime]
     exists_fn: Callable[[Device], bool] = lambda device: True
+    attributes_fn: Callable[[Device], dict[str, Any]] | None = None
+    suggested_unit_fn: Callable[[Device], str | None] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +145,44 @@ def _prop_str(device: Device, name: str) -> str | None:
     if prop is None or not isinstance(prop.value, str):
         return None
     return prop.value
+
+
+def _recharge_ui(device: Device) -> RechargeUi | None:
+    """Return the enriched ``recharge_ui`` state block, or ``None``."""
+    enriched = _enriched(device)
+    return enriched.recharge_ui if enriched is not None else None
+
+
+def _regeneration_info(device: Device) -> RegenerationInfo | None:
+    """Return the enriched ``regeneration`` block, or ``None``."""
+    enriched = _enriched(device)
+    return enriched.regeneration if enriched is not None else None
+
+
+def _status(device: Device) -> WaterTreatmentStatus | None:
+    """Return the enriched water-treatment status block, or ``None``."""
+    enriched = _enriched(device)
+    return enriched.water_treatment_status if enriched is not None else None
+
+
+def _regen_active(device: Device) -> bool:
+    """Return whether a regeneration cycle is currently running.
+
+    ``True`` when the ``recharge_ui`` tile reads ``regenerating`` or either
+    regeneration-status source (the ``regeneration`` block or the enriched
+    top-level ``regeneration_status``) reports ``regenerating``. None-safe: an
+    absent enriched block or sub-object simply means "not regenerating".
+    """
+    enriched = _enriched(device)
+    if enriched is None:
+        return False
+    recharge_ui = enriched.recharge_ui
+    if recharge_ui is not None and recharge_ui.state == _REGENERATING:
+        return True
+    regeneration = enriched.regeneration
+    if regeneration is not None and regeneration.regeneration_status == _REGENERATING:
+        return True
+    return enriched.regeneration_status == _REGENERATING
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +289,145 @@ def _wifi_module_version(device: Device) -> StateType:
     return enriched.wifi_module_version if enriched is not None else None
 
 
+def _regeneration_status(device: Device) -> StateType:
+    """Return the regeneration status, constrained to the known enum options.
+
+    Prefers the enriched ``regeneration`` block's status, falling back to the
+    top-level ``regeneration_status`` field. A value the enum does not list
+    collapses to ``None`` so the ENUM sensor never carries an unlisted state.
+    """
+    regeneration = _regeneration_info(device)
+    status = regeneration.regeneration_status if regeneration is not None else None
+    if status is None:
+        enriched = _enriched(device)
+        status = enriched.regeneration_status if enriched is not None else None
+    if status not in REGENERATION_STATUS_OPTIONS:
+        return None
+    return status
+
+
+def _regeneration_time_remaining(device: Device) -> StateType:
+    """Return seconds remaining in the running regeneration, else zero.
+
+    The countdown is trusted only while a regeneration is actually active; any
+    other time it is forced to zero rather than surfacing a stale value the
+    cloud left behind (a fork lesson — the tile keeps its last countdown after
+    the cycle ends). ``None`` is reported only when the ``recharge_ui`` block is
+    absent entirely.
+    """
+    recharge_ui = _recharge_ui(device)
+    if recharge_ui is None:
+        return None
+    if not _regen_active(device):
+        return 0
+    return recharge_ui.time_remaining_seconds or 0
+
+
+def _next_regeneration(device: Device) -> datetime | None:
+    """Return the next scheduled regeneration as a device-local timestamp.
+
+    Only meaningful while the ``recharge_ui`` tile reads ``scheduled``: the next
+    run is device-local midnight plus the ``regen_time_secs`` offset, in the
+    timezone named by the ``tz_id`` property (UTC when it is absent or
+    unrecognised). A candidate that has already passed today rolls to tomorrow.
+    Any other tile state yields ``None``.
+    """
+    recharge_ui = _recharge_ui(device)
+    if recharge_ui is None or recharge_ui.state != _SCHEDULED:
+        return None
+    regen_secs = _prop_number(device, "regen_time_secs")
+    if regen_secs is None:
+        return None
+    tz_value = _prop_str(device, "tz_id")
+    tz = (dt_util.get_time_zone(tz_value) if tz_value else None) or dt_util.UTC
+    now = dt_util.now(tz)
+    candidate = datetime.combine(now.date(), time(), tzinfo=tz) + timedelta(
+        seconds=int(regen_secs)
+    )
+    if candidate <= now:
+        candidate += timedelta(days=1)
+    return candidate
+
+
+def _capacity_remaining(device: Device) -> StateType:
+    """Return the remaining softening capacity as a percentage (÷10 scaled)."""
+    return _prop_number(device, "capacity_remaining_percent")
+
+
+def _hardness_setting(device: Device) -> StateType:
+    """Return the configured water hardness in grains per gallon."""
+    return _prop_number(device, "hardness_grains")
+
+
+def _total_salt_used(device: Device) -> StateType:
+    """Return the lifetime salt consumption in pounds."""
+    return _prop_number(device, "total_salt_use_lbs")
+
+
+def _total_rock_removed(device: Device) -> StateType:
+    """Return the lifetime hardness (rock) removed in pounds."""
+    return _prop_number(device, "total_rock_removed_lbs")
+
+
+def _error_codes(device: Device) -> StateType:
+    """Return the active error codes joined into one string, or ``None``.
+
+    An absent status block, an absent ``error_codes`` field, or a present-but-
+    empty list all yield ``None`` (no active error). The joined string is
+    truncated to Home Assistant's maximum state length.
+    """
+    status = _status(device)
+    if status is None or not status.error_codes:
+        return None
+    return ", ".join(status.error_codes)[:MAX_STATE_LENGTH]
+
+
+def _error_codes_attributes(device: Device) -> dict[str, Any]:
+    """Return the active error codes as a list attribute, or an empty mapping."""
+    status = _status(device)
+    if status is None or not status.error_codes:
+        return {}
+    return {"codes": list(status.error_codes)}
+
+
+def _daily_use_value(prop_name: str) -> Callable[[Device], StateType | datetime]:
+    """Build a value function reading one per-weekday average-use slot."""
+
+    def _value(device: Device) -> StateType | datetime:
+        """Return the slot's average daily use in native gallons."""
+        return _prop_number(device, prop_name)
+
+    return _value
+
+
+def _daily_use_exists(prop_name: str) -> Callable[[Device], bool]:
+    """Build an exists function true only when the slot property is present."""
+
+    def _exists(device: Device) -> bool:
+        """Return whether the average-use slot property exists for this device."""
+        return _property(device, prop_name) is not None
+
+    return _exists
+
+
+def _daily_use_attributes(prop_name: str) -> Callable[[Device], dict[str, Any]]:
+    """Build an attributes function exposing the slot's ``reported`` timestamp.
+
+    Each weekday slot is refreshed only on that weekday, so a slot can be a week
+    (day_7 on the dev device, a month) stale. Surfacing the raw property's
+    ``updated_at`` lets the user judge how current the value actually is.
+    """
+
+    def _attributes(device: Device) -> dict[str, Any]:
+        """Return the slot's last-reported timestamp, when available."""
+        prop = _property(device, prop_name)
+        if prop is None or prop.updated_at is None:
+            return {}
+        return {"reported": prop.updated_at.isoformat()}
+
+    return _attributes
+
+
 # ---------------------------------------------------------------------------
 # Existence gates
 # ---------------------------------------------------------------------------
@@ -241,6 +451,93 @@ def _exists_out_of_salt_estimate(device: Device) -> bool:
 def _exists_average_daily_water_use(device: Device) -> bool:
     """Report whether the average-daily-use property is present."""
     return _property(device, "avg_daily_use_gals") is not None
+
+
+def _exists_regeneration_status(device: Device) -> bool:
+    """Report whether any regeneration-status source is present."""
+    enriched = _enriched(device)
+    return enriched is not None and (
+        enriched.regeneration is not None or enriched.regeneration_status is not None
+    )
+
+
+def _exists_recharge_ui(device: Device) -> bool:
+    """Report whether the enriched ``recharge_ui`` block is present."""
+    return _recharge_ui(device) is not None
+
+
+def _exists_next_regeneration(device: Device) -> bool:
+    """Report whether both the ``recharge_ui`` block and schedule offset exist."""
+    return (
+        _recharge_ui(device) is not None
+        and _property(device, "regen_time_secs") is not None
+    )
+
+
+def _exists_property(name: str) -> Callable[[Device], bool]:
+    """Build an exists function true only when the named raw property is present."""
+
+    def _exists(device: Device) -> bool:
+        """Return whether the named raw property exists for this device."""
+        return _property(device, name) is not None
+
+    return _exists
+
+
+#: ``converted_units`` spellings meaning the account displays weights in kg.
+_KILOGRAM_UNIT_NAMES = frozenset({"kilograms", "kilogram", "kg"})
+
+
+def _weight_display_unit(name: str) -> Callable[[Device], str | None]:
+    """Build a suggested-unit function mirroring the account's weight display.
+
+    Home Assistant's unit system converts volumes but never weights, so a
+    weight sensor would otherwise show its native pounds to every user. When
+    the backing property's server-side ``converted_units`` says the account
+    displays kilograms, suggest kilograms; otherwise keep the native unit. The
+    suggestion is only consulted at first registration, so a later change of
+    the account preference never churns an existing entity.
+    """
+
+    def _suggested_unit(device: Device) -> str | None:
+        """Return kilograms when the account's converted unit is metric."""
+        prop = _property(device, name)
+        if prop is None or prop.converted_units is None:
+            return None
+        if prop.converted_units.casefold() in _KILOGRAM_UNIT_NAMES:
+            return UnitOfMass.KILOGRAMS
+        return None
+
+    return _suggested_unit
+
+
+def _exists_error_codes(device: Device) -> bool:
+    """Report whether the status block carries an ``error_codes`` field.
+
+    Present-but-empty (``()``) still creates the entity; only an absent field
+    (``None`` — as on the dev device, which omits it) suppresses it.
+    """
+    status = _status(device)
+    return status is not None and status.error_codes is not None
+
+
+#: Per-weekday average-use sensors. Keys and translation keys are SLOT-based
+#: (``average_daily_use_day_N``) so an entity's identity never depends on the
+#: weekday mapping — the day labels live in ``strings.json`` (map A) and a future
+#: correction to that mapping renames only display strings, never unique IDs.
+_DAILY_USE_DESCRIPTIONS: tuple[AquaHomeSensorDescription, ...] = tuple(
+    AquaHomeSensorDescription(
+        key=f"average_daily_use_day_{slot}",
+        translation_key=f"average_daily_use_day_{slot}",
+        device_class=SensorDeviceClass.VOLUME_STORAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfVolume.GALLONS,
+        value_fn=_daily_use_value(f"avg_daily_use_day_{slot}_gals"),
+        exists_fn=_daily_use_exists(f"avg_daily_use_day_{slot}_gals"),
+        attributes_fn=_daily_use_attributes(f"avg_daily_use_day_{slot}_gals"),
+    )
+    for slot in range(1, len(WEEKDAY_SLOTS) + 1)
+)
 
 
 SENSOR_DESCRIPTIONS: tuple[AquaHomeSensorDescription, ...] = (
@@ -349,6 +646,150 @@ SENSOR_DESCRIPTIONS: tuple[AquaHomeSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_wifi_module_version,
     ),
+    AquaHomeSensorDescription(
+        key="regeneration_status",
+        translation_key="regeneration_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(REGENERATION_STATUS_OPTIONS),
+        value_fn=_regeneration_status,
+        exists_fn=_exists_regeneration_status,
+    ),
+    AquaHomeSensorDescription(
+        key="regeneration_time_remaining",
+        translation_key="regeneration_time_remaining",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        value_fn=_regeneration_time_remaining,
+        exists_fn=_exists_recharge_ui,
+    ),
+    AquaHomeSensorDescription(
+        key="next_regeneration",
+        translation_key="next_regeneration",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=_next_regeneration,
+        exists_fn=_exists_next_regeneration,
+    ),
+    *_DAILY_USE_DESCRIPTIONS,
+    AquaHomeSensorDescription(
+        key="capacity_remaining",
+        translation_key="capacity_remaining",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        value_fn=_capacity_remaining,
+        exists_fn=_exists_property("capacity_remaining_percent"),
+    ),
+    AquaHomeSensorDescription(
+        key="hardness_setting",
+        translation_key="hardness_setting",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="gpg",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_hardness_setting,
+        exists_fn=_exists_property("hardness_grains"),
+    ),
+    AquaHomeSensorDescription(
+        key="total_salt_used",
+        translation_key="total_salt_used",
+        device_class=SensorDeviceClass.WEIGHT,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfMass.POUNDS,
+        value_fn=_total_salt_used,
+        exists_fn=_exists_property("total_salt_use_lbs"),
+        suggested_unit_fn=_weight_display_unit("total_salt_use_lbs"),
+    ),
+    AquaHomeSensorDescription(
+        key="total_rock_removed",
+        translation_key="total_rock_removed",
+        device_class=SensorDeviceClass.WEIGHT,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfMass.POUNDS,
+        value_fn=_total_rock_removed,
+        exists_fn=_exists_property("total_rock_removed_lbs"),
+        suggested_unit_fn=_weight_display_unit("total_rock_removed_lbs"),
+    ),
+    AquaHomeSensorDescription(
+        key="error_codes",
+        translation_key="error_codes",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_error_codes,
+        exists_fn=_exists_error_codes,
+        attributes_fn=_error_codes_attributes,
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
+# Activity-coordinator-backed sensors (alert + regeneration history)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class AquaHomeActivitySensorDescription(SensorEntityDescription):
+    """Describe a sensor read from a device's activity coordinator.
+
+    ``value_fn`` maps the parsed :class:`~.coordinator.DeviceActivity` to the
+    sensor's native value; ``attributes_fn`` optionally supplies extra state
+    attributes from the same feed. ``exists_fn`` gates creation against the
+    paired fast coordinator's device view (e.g. a feature gate).
+    """
+
+    value_fn: Callable[[DeviceActivity], StateType | datetime]
+    attributes_fn: Callable[[DeviceActivity], dict[str, Any]] | None = None
+    exists_fn: Callable[[Device], bool] = lambda device: True
+
+
+def _last_regeneration(activity: DeviceActivity) -> datetime | None:
+    """Return the start time of the most recent regeneration event."""
+    events = activity.regeneration_events
+    return events[0].start_time if events else None
+
+
+def _latest_alert(activity: DeviceActivity) -> StateType:
+    """Return the newest alert's message, truncated to the max state length."""
+    alerts = activity.alerts
+    if not alerts or alerts[0].message is None:
+        return None
+    return alerts[0].message[:MAX_STATE_LENGTH]
+
+
+def _latest_alert_attributes(activity: DeviceActivity) -> dict[str, Any]:
+    """Return the newest alert's metadata as extra state attributes."""
+    alerts = activity.alerts
+    if not alerts:
+        return {}
+    alert = alerts[0]
+    return {
+        "title": alert.title,
+        "level": alert.level,
+        "alert_type": alert.type,
+        "alert_id": alert.id,
+        "timestamp": alert.timestamp.isoformat()
+        if alert.timestamp is not None
+        else None,
+        "is_read": alert.is_read,
+    }
+
+
+def _exists_last_regeneration(device: Device) -> bool:
+    """Report whether the device advertises the regeneration feature (None-safe)."""
+    enriched = _enriched(device)
+    return enriched is not None and "regeneration" in enriched.features
+
+
+ACTIVITY_SENSOR_DESCRIPTIONS: tuple[AquaHomeActivitySensorDescription, ...] = (
+    AquaHomeActivitySensorDescription(
+        key="last_regeneration",
+        translation_key="last_regeneration",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=_last_regeneration,
+        exists_fn=_exists_last_regeneration,
+    ),
+    AquaHomeActivitySensorDescription(
+        key="latest_alert",
+        translation_key="latest_alert",
+        value_fn=_latest_alert,
+        attributes_fn=_latest_alert_attributes,
+    ),
 )
 
 
@@ -357,9 +798,17 @@ async def async_setup_entry(
     entry: AquaHomeConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Create sensor entities for every coordinator whose source data exists."""
+    """Create sensor entities for every coordinator whose source data exists.
+
+    Two families are set up per device: the fast-coordinator telemetry sensors
+    (from :data:`SENSOR_DESCRIPTIONS`) and the activity-coordinator history
+    sensors (from :data:`ACTIVITY_SENSOR_DESCRIPTIONS`). The latter pair each
+    activity coordinator with its fast coordinator's device view (same device-id
+    key) for the existence gate and shared ``DeviceInfo``.
+    """
+    runtime = entry.runtime_data
     entities: list[SensorEntity] = []
-    for coordinator in entry.runtime_data.coordinators.values():
+    for coordinator in runtime.coordinators.values():
         device = coordinator.data
         for description in SENSOR_DESCRIPTIONS:
             if not description.exists_fn(device):
@@ -368,6 +817,16 @@ async def async_setup_entry(
                 entities.append(AquaHomeTotalWaterSensor(coordinator, description))
             else:
                 entities.append(AquaHomeSensor(coordinator, description))
+    for device_id, activity in runtime.activity_coordinators.items():
+        fast = runtime.coordinators.get(device_id)
+        if fast is None:
+            continue
+        device = fast.data
+        entities.extend(
+            AquaHomeActivitySensor(activity, description, device)
+            for description in ACTIVITY_SENSOR_DESCRIPTIONS
+            if description.exists_fn(device)
+        )
     async_add_entities(entities)
 
 
@@ -376,10 +835,59 @@ class AquaHomeSensor(AquaHomeEntity, SensorEntity):
 
     entity_description: AquaHomeSensorDescription
 
+    def __init__(
+        self,
+        coordinator: AquaHomeCoordinator,
+        description: AquaHomeSensorDescription,
+    ) -> None:
+        """Bind the sensor, deriving a display unit when the description asks.
+
+        ``suggested_unit_fn`` runs once against the first refreshed payload;
+        the registry persists the suggestion from first registration onward.
+        """
+        super().__init__(coordinator, description)
+        if description.suggested_unit_fn is not None:
+            self._attr_suggested_unit_of_measurement = description.suggested_unit_fn(
+                coordinator.data
+            )
+
     @property
     def native_value(self) -> StateType | datetime:
         """Return the current value by applying the description's ``value_fn``."""
         return self.entity_description.value_fn(self.coordinator.data)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the description's extra attributes, or ``None`` when unset."""
+        attributes_fn = self.entity_description.attributes_fn
+        if attributes_fn is None:
+            return None
+        return attributes_fn(self.coordinator.data)
+
+
+class AquaHomeActivitySensor(AquaHomeActivityEntity, SensorEntity):
+    """A sensor backed by a device's activity coordinator (alerts / history)."""
+
+    entity_description: AquaHomeActivitySensorDescription
+
+    @property
+    def native_value(self) -> StateType | datetime:
+        """Return the value from the activity feed, or ``None`` when it is absent."""
+        data: DeviceActivity | None = self.coordinator.data
+        if data is None:
+            return None
+        return self.entity_description.value_fn(data)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the feed-derived attributes, or ``None`` when unset/absent."""
+        attributes_fn = self.entity_description.attributes_fn
+        if attributes_fn is None:
+            return None
+        data: DeviceActivity | None = self.coordinator.data
+        if data is None:
+            return None
+        return attributes_fn(data)
 
 
 class AquaHomeTotalWaterSensor(AquaHomeEntity, RestoreSensor):
