@@ -9,7 +9,7 @@ imports from here.
 
 from __future__ import annotations
 
-from .auth import AuthManager
+from .auth import AuthManager, async_probe_host
 from .client import AquaHomeClient
 from .const import (
     API_BASE_URL,
@@ -26,6 +26,7 @@ from .exceptions import (
     DeviceOfflineError,
     ForbiddenCommandError,
     RateLimitError,
+    UserNotVerifiedError,
 )
 from .models import (
     SCALED_PROPERTIES,
@@ -97,8 +98,10 @@ __all__ = [
     "RegenerationEventsPage",
     "RegenerationInfo",
     "SaltLevel",
+    "UserNotVerifiedError",
     "UserSummary",
     "WaterTreatment",
     "WaterTreatmentStatus",
+    "async_probe_host",
     "scaled_value",
 ]
