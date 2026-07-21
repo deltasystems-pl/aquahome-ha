@@ -387,6 +387,11 @@ def test_live_ticket_parses() -> None:
         ("average_exhaustion_percent", 890, 89.0),
         ("avg_days_between_regens", 735, 7.35),
         ("avg_salt_per_regen_lbs", 38281, 3.8281),
+        # Tenths of pounds despite the plain _lbs suffix: 149 regens x the
+        # validated 3.8281 lb dose = 570.4 lb exactly. The server's own
+        # converted_value skips the ÷10 for these two, so it must not be used.
+        ("total_salt_use_lbs", 5704, 570.4),
+        ("total_rock_removed_lbs", 1754, 175.4),
     ],
 )
 def test_scaled_value_applies_verified_divisor(
@@ -406,6 +411,8 @@ def test_scaled_value_from_real_property_map() -> None:
     assert scaled_value(props["average_exhaustion_percent"]) == pytest.approx(89.0)
     assert scaled_value(props["avg_days_between_regens"]) == pytest.approx(7.35)
     assert scaled_value(props["avg_salt_per_regen_lbs"]) == pytest.approx(3.8281)
+    assert scaled_value(props["total_salt_use_lbs"]) == pytest.approx(570.4)
+    assert scaled_value(props["total_rock_removed_lbs"]) == pytest.approx(175.4)
 
 
 def test_scaled_value_service_reminder_sentinel_is_none() -> None:

@@ -19,6 +19,7 @@ from datetime import UTC, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
+import pytest
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
@@ -127,8 +128,10 @@ async def test_tier2_fast_sensor_values(
     # capacity_remaining_percent 1000 -> 100.0 (÷10 via SCALED_PROPERTIES).
     assert _native(hass, "capacity_remaining") == 100.0
     assert _native(hass, "hardness_setting") == 26
-    assert _native(hass, "total_salt_used") == 5704
-    assert _native(hass, "total_rock_removed") == 1754
+    # The lifetime weight totals are tenths of pounds (÷10): 149 regenerations
+    # x the validated 3.8281 lb dose = 570.4 lb, exactly raw 5704 ÷ 10.
+    assert _native(hass, "total_salt_used") == 570.4
+    assert _native(hass, "total_rock_removed") == 175.4
     # recharge tile is "ready" and nothing is regenerating -> forced to zero.
     assert _native(hass, "regeneration_time_remaining") == 0
     assert _native(hass, "regeneration_status") == "none"
@@ -516,3 +519,78 @@ async def test_activity_sensors_none_when_feed_unavailable(
     for key in ("last_regeneration", "latest_alert"):
         assert _native(hass, key) is None
         assert _state_value(hass, key) == STATE_UNAVAILABLE
+
+
+async def test_latest_alert_message_truncated_to_max_state_length(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """An overlong alert message is truncated so the state write never fails."""
+    freezer.move_to(FROZEN_INSTANT)
+    alerts = copy.deepcopy(load_fixture("alerts.json"))
+    alerts["alerts"][0]["message"] = "A" * (MAX_STATE_LENGTH + 145)
+    add_device_routes(mock_api, alerts=alerts)
+    with _ONLY_SENSOR:
+        await setup_integration(hass, mock_config_entry)
+
+    value = _native(hass, "latest_alert")
+    assert value == "A" * MAX_STATE_LENGTH
+    assert _state_value(hass, "latest_alert") == "A" * MAX_STATE_LENGTH
+
+
+async def test_activity_sensors_stay_available_while_device_offline(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Cloud-side history stays available while the softener itself is offline.
+
+    The activity entities deliberately skip the device-online availability gate:
+    the alert history (a disconnect alert, most likely) is exactly what the user
+    needs during an outage.
+    """
+    freezer.move_to(FROZEN_INSTANT)
+    detail = _load_detail()
+    detail["is_online"] = False
+    add_device_routes(mock_api, device_detail=detail)
+    with _ONLY_SENSOR:
+        await setup_integration(hass, mock_config_entry)
+
+    assert _state_value(hass, "last_regeneration") not in (
+        None,
+        STATE_UNAVAILABLE,
+        STATE_UNKNOWN,
+    )
+    assert _state_value(hass, "latest_alert") == "Device went offline"
+
+
+async def test_weight_totals_scaled_and_displayed_in_kilograms(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The tenths-of-pounds totals surface as kilograms for a metric account.
+
+    Native values are the ÷10-scaled pounds; the account's ``converted_units``
+    (kilograms) drives ``suggested_unit_of_measurement``, so the state machine
+    shows kg. Pins both the scaling and the suggested-unit derivation (the
+    latter survived mutation testing when only native values were asserted).
+    """
+    freezer.move_to(FROZEN_INSTANT)
+    add_device_routes(mock_api)
+    with _ONLY_SENSOR:
+        await setup_integration(hass, mock_config_entry)
+
+    salt = hass.states.get(_require_entity_id(hass, "total_salt_used"))
+    assert salt is not None
+    assert salt.attributes["unit_of_measurement"] == "kg"
+    assert float(salt.state) == pytest.approx(258.73, abs=0.01)
+
+    rock = hass.states.get(_require_entity_id(hass, "total_rock_removed"))
+    assert rock is not None
+    assert rock.attributes["unit_of_measurement"] == "kg"
+    assert float(rock.state) == pytest.approx(79.56, abs=0.01)

@@ -87,7 +87,6 @@
           "regenerating": "Regenerating",
           "scheduled": "Scheduled",
           "none": "Idle",
-          "unknown": "Unknown",
           "disabled": "Disabled",
           "suspended": "Suspended",
           "error": "Error",

@@ -923,6 +923,14 @@ class RateLimitStatus:
 SENTINEL_DISABLED = -1
 
 #: Raw property name -> divisor to recover the human-readable value.
+#:
+#: The two lifetime weight totals are tenths of pounds despite the plain
+#: ``_lbs`` suffix: anchored on the validated x10^4 per-regeneration dose
+#: (38281 -> 3.8281 lb ≈ 1.74 kg), 149 regenerations x 3.8281 lb = 570.4 lb —
+#: exactly ``total_salt_use_lbs`` 5704 ÷ 10 (an unscaled 5704 lb would mean an
+#: absurd 17 kg of salt per cycle). The server's own ``converted_value`` for
+#: these two applies lb→kg WITHOUT the ÷10 (5704 -> "2587 kg"), so it is wrong
+#: for them — bind the scaled raw value, never that conversion.
 SCALED_PROPERTIES: dict[str, float] = {
     "salt_level_tenths": 10.0,
     "iron_level_tenths_ppm": 10.0,
@@ -931,6 +939,8 @@ SCALED_PROPERTIES: dict[str, float] = {
     "average_exhaustion_percent": 10.0,
     "avg_days_between_regens": 100.0,
     "avg_salt_per_regen_lbs": 10_000.0,
+    "total_salt_use_lbs": 10.0,
+    "total_rock_removed_lbs": 10.0,
 }
 
 #: Scale factors that are plausible but NOT yet confirmed against a live,

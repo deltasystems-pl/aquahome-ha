@@ -61,12 +61,14 @@ ALERT_EVENT_TYPE_OTHER: Final = "other"
 # Home Assistant's hard limit on a state string's length.
 MAX_STATE_LENGTH: Final = 255
 
-# The regeneration_status enum as documented by the OpenAPI spec.
+# The regeneration_status enum as documented by the OpenAPI spec, minus its
+# "unknown" member: HA reserves the literal state "unknown" (STATE_UNKNOWN), so
+# a device-reported "unknown" falls through the options check to None and
+# renders as the genuine unknown state instead of a colliding enum option.
 REGENERATION_STATUS_OPTIONS: Final[tuple[str, ...]] = (
     "regenerating",
     "scheduled",
     "none",
-    "unknown",
     "disabled",
     "suspended",
     "error",
