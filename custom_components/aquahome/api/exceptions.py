@@ -1,6 +1,7 @@
 """Typed error taxonomy for the iQua cloud API client.
 
-Mapping rules (implemented in ``client.py``):
+Mapping rules (implemented in ``client.py`` and, for the auth endpoints,
+``auth.py``):
 
 - Network failures (DNS, timeout, connection reset) -> ``AquaHomeConnectionError``.
 - HTTP >= 400 with a parseable ``ApiErrorModel`` body -> ``ApiError`` or a

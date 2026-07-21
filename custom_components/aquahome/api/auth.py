@@ -37,6 +37,7 @@ from .exceptions import (
     ApiError,
     AquaHomeConnectionError,
     AuthError,
+    RateLimitError,
     UserNotVerifiedError,
 )
 from .models import LoginResult
@@ -52,6 +53,8 @@ _AUTH_INVALID_CODE_OR_EMAIL_CODE = "AuthInvalidCodeOrEmail"
 #: Error code signalling an unverified account (email confirmation-code challenge);
 #: maps to :class:`UserNotVerifiedError` on any HTTP status.
 _USER_NOT_VERIFIED_CODE = "UserNotVerified"
+#: Machine-readable error code the API returns when it throttles a request.
+_THROTTLE_CODE = "ThrottleLimitExceeded"
 
 
 class AuthManager:
@@ -287,6 +290,11 @@ class AuthManager:
         )
         if code == _USER_NOT_VERIFIED_CODE:
             raise UserNotVerifiedError(message, status=status, code=code, fields=fields)
+        # A throttled login must be distinguishable from a wrong-host login: the
+        # config-flow host probe stops probing entirely on RateLimitError instead
+        # of hammering the next host with a throttled account's credentials.
+        if status == HTTPStatus.TOO_MANY_REQUESTS or code == _THROTTLE_CODE:
+            raise RateLimitError(message, status=status, code=code, fields=fields)
         if status == HTTPStatus.UNAUTHORIZED or code == auth_code:
             raise AuthError(message, status=status, code=code, fields=fields)
         raise ApiError(message, status=status, code=code, fields=fields)

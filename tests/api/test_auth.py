@@ -30,6 +30,7 @@ from custom_components.aquahome.api.exceptions import (
     ApiError,
     AquaHomeConnectionError,
     AuthError,
+    RateLimitError,
     UserNotVerifiedError,
 )
 from custom_components.aquahome.api.models import LoginResult
@@ -186,6 +187,44 @@ async def test_login_bad_credentials_code_without_401_still_auth_error(
         auth = AuthManager(session, time_func=fake_clock)
         with pytest.raises(AuthError):
             await auth.async_login("dev@example.com", "wrong")
+
+
+async def test_login_throttled_raises_rate_limit_error(
+    session: aiohttp.ClientSession, fake_clock: FakeClock
+) -> None:
+    """A 429 (or throttle code) on login raises RateLimitError, not ApiError.
+
+    The config-flow host probe stops probing entirely on RateLimitError; a
+    throttled login mapped to a generic error would make it hammer the second
+    host with a throttled account's credentials.
+    """
+    with aioresponses() as mocked:
+        mocked.post(
+            LOGIN_URL,
+            status=429,
+            payload={"code": "ThrottleLimitExceeded", "detail": "Slow down"},
+        )
+        auth = AuthManager(session, time_func=fake_clock)
+        with pytest.raises(RateLimitError) as excinfo:
+            await auth.async_login("dev@example.com", "pw")
+
+    assert excinfo.value.status == 429
+    assert excinfo.value.code == "ThrottleLimitExceeded"
+
+
+async def test_login_throttle_code_without_429_still_rate_limit_error(
+    session: aiohttp.ClientSession, fake_clock: FakeClock
+) -> None:
+    """The throttle code maps to RateLimitError even off a non-429 status."""
+    with aioresponses() as mocked:
+        mocked.post(
+            LOGIN_URL,
+            status=400,
+            payload={"code": "ThrottleLimitExceeded", "detail": "Slow down"},
+        )
+        auth = AuthManager(session, time_func=fake_clock)
+        with pytest.raises(RateLimitError):
+            await auth.async_login("dev@example.com", "pw")
 
 
 async def test_login_other_error_raises_api_error(
