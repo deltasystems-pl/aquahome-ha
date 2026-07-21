@@ -58,3 +58,9 @@ COMMAND_FUNCTIONS: dict[str, frozenset[str]] = {
 # GET /devices/{id}/live is server-throttled; enforce a client-side floor
 # between ticket requests.
 LIVE_TICKET_MIN_INTERVAL_SECONDS = 60.0
+
+# Fallback backoff applied after a 429 when the server sends no usable
+# `ratelimit-policy` refill interval. The token-bucket 429 windows observed on
+# the fork clear in ~5 min, so a one-minute floor is a safe, cheap default
+# (see knowledge/research/automation-gap-analysis.md §7 D1).
+DEFAULT_RATE_LIMIT_BACKOFF_SECONDS = 60.0

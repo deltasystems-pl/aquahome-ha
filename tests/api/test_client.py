@@ -709,3 +709,193 @@ async def test_iqua2_base_url_is_used_for_requests(
 
     assert len(devices) == 1
     assert hosts == {"api.iqua2.com"}
+
+
+# ---------------------------------------------------------------------------
+# Settings PATCH round-trip
+# ---------------------------------------------------------------------------
+
+
+async def test_update_settings_patches_and_returns_document(
+    session: aiohttp.ClientSession,
+) -> None:
+    """PATCH settings sends ``{settings: {...}}`` and returns the raw document."""
+    fixture = load_fixture("settings.json")
+    with aioresponses() as mocked:
+        mocked.patch(_pattern(f"/devices/{DEVICE_ID}/settings"), payload=fixture)
+        client = _make_client(session)
+        result = await client.async_update_settings(
+            DEVICE_ID, {"inlet_hardness": "7.0"}
+        )
+
+        (call,) = _calls_for(mocked, "PATCH", f"/devices/{DEVICE_ID}/settings")
+
+    # The full DeviceSettingsBody document round-trips back untouched.
+    assert result == fixture
+    assert "settings" in result
+    # The request wraps the update map under a single ``settings`` key.
+    assert call.kwargs["json"] == {"settings": {"inlet_hardness": "7.0"}}
+
+
+# ---------------------------------------------------------------------------
+# Rate-limit backoff (shared client-level throttle)
+# ---------------------------------------------------------------------------
+
+
+async def test_429_arms_backoff_and_next_call_raises_without_io(
+    session: aiohttp.ClientSession,
+) -> None:
+    """After a 429 the client refuses the next request with no HTTP round-trip."""
+    clock = FakeMonotonic()
+    with aioresponses() as mocked:
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}"),
+            status=429,
+            headers={
+                "ratelimit-limit": "5",
+                "ratelimit-remaining": "0",
+                "ratelimit-policy": "5;w=60;burst=50;policy=token_bucket",
+            },
+            payload={"code": "ThrottleLimitExceeded", "detail": "slow down"},
+        )
+        client = _make_client(session, monotonic=clock)
+
+        with pytest.raises(RateLimitError):
+            await client.async_get_device(DEVICE_ID)
+
+        # Clock frozen: the 12 s refill window is still open. A second call must
+        # fail fast — reaching the network would hit an unmatched mock instead.
+        with pytest.raises(RateLimitError) as excinfo:
+            await client.async_get_device(DEVICE_ID)
+
+        calls = _calls_for(mocked, "GET", f"/devices/{DEVICE_ID}")
+
+    assert len(calls) == 1
+    # The client-side refusal still carries the last-seen telemetry.
+    assert excinfo.value.rate_limit is not None
+    assert excinfo.value.rate_limit.remaining == 0
+
+
+async def test_backoff_clears_once_the_refill_window_elapses(
+    session: aiohttp.ClientSession,
+) -> None:
+    """Advancing the injected monotonic past the refill window lets calls flow."""
+    clock = FakeMonotonic()
+    with aioresponses() as mocked:
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}"),
+            status=429,
+            headers={"ratelimit-policy": "5;w=60;burst=50;policy=token_bucket"},
+            payload={"code": "ThrottleLimitExceeded", "detail": "slow down"},
+        )
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}"),
+            payload=load_fixture("device-detail.json"),
+        )
+        client = _make_client(session, monotonic=clock)
+
+        with pytest.raises(RateLimitError):
+            await client.async_get_device(DEVICE_ID)
+
+        clock.advance(13)  # past the 60 / 5 == 12 s refill window
+        device = await client.async_get_device(DEVICE_ID)
+
+        calls = _calls_for(mocked, "GET", f"/devices/{DEVICE_ID}")
+
+    assert device.id == DEVICE_ID
+    assert len(calls) == 2
+
+
+async def test_garbage_policy_falls_back_to_default_backoff(
+    session: aiohttp.ClientSession,
+) -> None:
+    """An unparsable policy backs off for the default constant, not 12 s."""
+    clock = FakeMonotonic()
+    with aioresponses() as mocked:
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}"),
+            status=429,
+            headers={"ratelimit-policy": "not-a-policy"},
+            payload={"code": "ThrottleLimitExceeded", "detail": "slow down"},
+        )
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}"),
+            payload=load_fixture("device-detail.json"),
+        )
+        client = _make_client(session, monotonic=clock)
+
+        with pytest.raises(RateLimitError):
+            await client.async_get_device(DEVICE_ID)
+
+        # A 12 s refill would already be clear; the 60 s default is not.
+        clock.advance(30)
+        with pytest.raises(RateLimitError):
+            await client.async_get_device(DEVICE_ID)
+
+        # Past the 60 s default the window clears and traffic resumes.
+        clock.advance(31)
+        device = await client.async_get_device(DEVICE_ID)
+
+        calls = _calls_for(mocked, "GET", f"/devices/{DEVICE_ID}")
+
+    assert device.id == DEVICE_ID
+    # The blocked middle call never reached the network.
+    assert len(calls) == 2
+
+
+async def test_live_429_does_not_freeze_the_rest_domain(
+    session: aiohttp.ClientSession,
+) -> None:
+    """A /live throttle response must not arm the shared REST backoff."""
+    clock = FakeMonotonic()
+    with aioresponses() as mocked:
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}/live"),
+            status=429,
+            headers={"ratelimit-policy": "6;w=600;burst=60"},
+            payload={"code": "ThrottleLimitExceeded", "detail": "live budget"},
+        )
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}"),
+            payload=load_fixture("device-detail.json"),
+        )
+        client = _make_client(session, monotonic=clock)
+
+        with pytest.raises(RateLimitError):
+            await client.async_get_live_ticket(DEVICE_ID, ["total_outlet_water_gals"])
+
+        # Clock frozen: had the /live 429 armed the shared backoff (100 s
+        # refill), this poll would fail fast. The REST domain must stay open.
+        device = await client.async_get_device(DEVICE_ID)
+
+    assert device.id == DEVICE_ID
+
+
+async def test_rest_backoff_does_not_gate_the_live_domain(
+    session: aiohttp.ClientSession,
+) -> None:
+    """An armed REST backoff leaves /live governed only by its own interval."""
+    clock = FakeMonotonic()
+    with aioresponses() as mocked:
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}"),
+            status=429,
+            headers={"ratelimit-policy": "5;w=60;burst=50;policy=token_bucket"},
+            payload={"code": "ThrottleLimitExceeded", "detail": "slow down"},
+        )
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}/live"),
+            payload={"websocket_uri": "/ws/?p=ticket-a"},
+        )
+        client = _make_client(session, monotonic=clock)
+
+        with pytest.raises(RateLimitError):
+            await client.async_get_device(DEVICE_ID)
+
+        # REST is backing off (12 s window, clock frozen) — /live still flows,
+        # subject only to its own minimum-interval throttle.
+        ticket = await client.async_get_live_ticket(
+            DEVICE_ID, ["total_outlet_water_gals"]
+        )
+
+    assert ticket.websocket_uri == "/ws/?p=ticket-a"

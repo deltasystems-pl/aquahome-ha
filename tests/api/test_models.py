@@ -25,6 +25,7 @@ from custom_components.aquahome.api.models import (
     LiveTicket,
     LoginResult,
     PropertyValue,
+    RateLimitStatus,
     RegenerationEventsPage,
     SaltLevel,
     WaterTreatment,
@@ -433,6 +434,42 @@ def test_scaled_value_non_numeric_is_none() -> None:
     assert scaled_value(PropertyValue(name="service_active", value=True)) is None
     assert scaled_value(PropertyValue(name="tz_id", value="Europe/Warsaw")) is None
     assert scaled_value(PropertyValue(name="missing", value=None)) is None
+
+
+# ---------------------------------------------------------------------------
+# Rate-limit policy refill parsing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("policy", "expected"),
+    [
+        # Both disagreeing fork docstring examples: w / limit.
+        ("5;w=60;burst=50;policy=token_bucket", 12.0),
+        ("6;w=600;burst=60", 100.0),
+        # Field order is not assumed — w= is matched by label.
+        ("5;burst=50;w=60", 12.0),
+        # Garbage / incomplete strings collapse to None, never raise.
+        (None, None),
+        ("", None),
+        ("garbage", None),
+        ("5", None),  # no window field
+        ("5;w=", None),  # empty window
+        ("5;w=abc", None),  # non-numeric window
+        ("abc;w=60", None),  # non-integer leading limit
+        ("0;w=60", None),  # zero limit -> no division
+        ("-5;w=60", None),  # negative limit
+        ("5;w=0", None),  # zero window
+    ],
+)
+def test_rate_limit_refill_seconds(policy: str | None, expected: float | None) -> None:
+    """Derive the token-bucket refill interval defensively from the policy."""
+    status = RateLimitStatus(limit=5, remaining=0, policy=policy)
+    result = status.refill_seconds
+    if expected is None:
+        assert result is None
+    else:
+        assert result == pytest.approx(expected)
 
 
 # ---------------------------------------------------------------------------

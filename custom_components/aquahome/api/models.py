@@ -834,6 +834,26 @@ class LiveTicket:
 # ---------------------------------------------------------------------------
 
 
+def _policy_leading_limit(token: str) -> int | None:
+    """Parse the leading bare-integer limit of a ``ratelimit-policy`` string."""
+    try:
+        return int(token.strip())
+    except ValueError:
+        return None
+
+
+def _policy_window_seconds(tokens: list[str]) -> float | None:
+    """Return the ``w=<seconds>`` window of a policy string, wherever it sits."""
+    for token in tokens:
+        stripped = token.strip()
+        if stripped[:2].casefold() == "w=":
+            try:
+                return float(stripped[2:])
+            except ValueError:
+                return None
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class RateLimitStatus:
     """Latest rate-limit telemetry parsed from the ``ratelimit-*`` headers.
@@ -847,6 +867,31 @@ class RateLimitStatus:
     limit: int | None = None
     remaining: int | None = None
     policy: str | None = None
+
+    @property
+    def refill_seconds(self) -> float | None:
+        """Return the token-bucket refill interval (seconds), or ``None``.
+
+        Derived from the ``ratelimit-policy`` string as ``w / limit`` — the
+        window length divided by the token count, i.e. the average seconds
+        between two granted tokens (``60 / 5 == 12``). The two policy shapes
+        documented by the fork disagree on both numbers and field order
+        (``"5;w=60;burst=50;policy=token_bucket"`` vs ``"6;w=600;burst=60"``),
+        so this parses defensively: the limit is the *leading* bare integer and
+        ``w=`` is matched by label in any position. Missing, zero, or unparsable
+        fields yield ``None`` — reading this must never raise.
+        """
+        policy = self.policy
+        if not policy:
+            return None
+        tokens = policy.split(";")
+        limit = _policy_leading_limit(tokens[0])
+        if limit is None or limit <= 0:
+            return None
+        window = _policy_window_seconds(tokens)
+        if window is None or window <= 0:
+            return None
+        return window / limit
 
 
 # ---------------------------------------------------------------------------

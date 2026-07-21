@@ -27,6 +27,7 @@ from .const import (
     APP_USER_AGENT,
     APP_VERSION_HEADER,
     COMMAND_FUNCTIONS,
+    DEFAULT_RATE_LIMIT_BACKOFF_SECONDS,
     DEFAULT_TIMEOUT_SECONDS,
     DEVICES_PER_PAGE,
     FORBIDDEN_COMMAND_FUNCTIONS,
@@ -128,6 +129,9 @@ class AquaHomeClient:
         #: Latest rate-limit telemetry seen on any response (``None`` until one).
         self.rate_limit: RateLimitStatus | None = None
         self._last_live_ticket_at: float | None = None
+        #: Monotonic deadline until which every request is refused client-side
+        #: after a 429, so a throttled account is not hammered further.
+        self._backoff_until: float | None = None
 
     # -- Devices -----------------------------------------------------------
 
@@ -202,6 +206,28 @@ class AquaHomeClient:
     async def async_get_settings(self, device_id: str) -> dict[str, Any]:
         """Return the raw settings document (typed in a later phase)."""
         return await self._request("GET", f"/devices/{device_id}/settings")
+
+    async def async_update_settings(
+        self, device_id: str, settings: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Update device settings and return the refreshed settings document.
+
+        Sends ``PATCH /devices/{id}/settings`` with a
+        ``{"settings": {name: value}}`` body (spec ``DeviceSettingsUpdateBody``)
+        and returns the raw ``DeviceSettingsBody`` document the server echoes
+        back (typed in a later phase).
+
+        The client is a thin transport: it forwards ``settings`` verbatim.
+        Validating each value against the setting's own ``select_rules`` /
+        ``NumberRule`` — including number precision-expansion (e.g. ``12.5``
+        grains -> ``125``) — is the responsibility of the Phase-4 entity layer,
+        NOT this method.
+        """
+        return await self._request(
+            "PATCH",
+            f"/devices/{device_id}/settings",
+            json_body={"settings": dict(settings)},
+        )
 
     async def async_get_alerts(
         self, device_id: str, *, page: int = 1, per_page: int = 20
@@ -314,10 +340,15 @@ class AquaHomeClient:
             msg = "Live-ticket requests are throttled; try again shortly"
             raise RateLimitError(msg, rate_limit=self.rate_limit)
         self._last_live_ticket_at = now
+        # /live is a SEPARATE server throttle domain with its own small budget
+        # (~6 requests / 10 min — see automation-gap-analysis.md §7 D3): a /live
+        # 429 must not freeze the primary device poll, and a REST backoff must
+        # not gate /live, so the shared backoff is bypassed in both directions.
         body = await self._request(
             "GET",
             f"/devices/{device_id}/live",
             params={"properties": ",".join(properties), "type": type_},
+            shared_backoff=False,
         )
         return LiveTicket.from_dict(body)
 
@@ -344,19 +375,50 @@ class AquaHomeClient:
         *,
         params: Mapping[str, Any] | None = None,
         json_body: dict[str, Any] | None = None,
+        shared_backoff: bool = True,
     ) -> dict[str, Any]:
         """Send an authenticated request, refreshing once on a 401 and retrying.
 
         Maps error responses onto the :mod:`.exceptions` taxonomy and records
-        rate-limit telemetry from every response.
+        rate-limit telemetry from every response. With ``shared_backoff`` (the
+        REST throttle domain) the call refuses immediately, without any I/O,
+        while a 429 backoff window is still open, and a throttle response arms
+        that window. ``/live`` passes ``shared_backoff=False`` — it is a
+        separate server throttle domain governed only by its own client-side
+        minimum interval.
         """
+        if shared_backoff:
+            self._enforce_backoff()
         status, body = await self._send(method, path, params, json_body)
         if status == HTTPStatus.UNAUTHORIZED:
             await self._auth.async_refresh()
             status, body = await self._send(method, path, params, json_body)
         if status >= HTTPStatus.BAD_REQUEST:
-            self._raise_for_status(status, body)
+            self._raise_for_status(status, body, arm_backoff=shared_backoff)
         return body
+
+    def _enforce_backoff(self) -> None:
+        """Raise a :class:`RateLimitError` immediately while backing off.
+
+        After a 429 the client holds off all traffic until
+        :attr:`_backoff_until`; calling out again during that window would only
+        deepen the throttle, so it fails fast with no I/O.
+        """
+        until = self._backoff_until
+        if until is not None and self._monotonic() < until:
+            msg = "Backing off after a rate-limit response; try again shortly"
+            raise RateLimitError(msg, rate_limit=self.rate_limit)
+
+    def _begin_backoff(self) -> None:
+        """Arm the client-level backoff window after a throttle response.
+
+        Uses the server's ``ratelimit-policy`` refill interval when it parses,
+        otherwise falls back to
+        :data:`~.const.DEFAULT_RATE_LIMIT_BACKOFF_SECONDS`.
+        """
+        refill = self.rate_limit.refill_seconds if self.rate_limit is not None else None
+        delay = refill or DEFAULT_RATE_LIMIT_BACKOFF_SECONDS
+        self._backoff_until = self._monotonic() + delay
 
     async def _send(
         self,
@@ -419,8 +481,14 @@ class AquaHomeClient:
             return {}
         return data if isinstance(data, dict) else {}
 
-    def _raise_for_status(self, status: int, body: dict[str, Any]) -> NoReturn:
-        """Map an error response onto the typed exception taxonomy."""
+    def _raise_for_status(
+        self, status: int, body: dict[str, Any], *, arm_backoff: bool = True
+    ) -> NoReturn:
+        """Map an error response onto the typed exception taxonomy.
+
+        ``arm_backoff`` is ``False`` for the ``/live`` throttle domain, whose
+        429s must not open the shared REST backoff window.
+        """
         raw_code = body.get("code")
         code = raw_code if isinstance(raw_code, str) else None
         raw_fields = body.get("fields")
@@ -430,6 +498,8 @@ class AquaHomeClient:
             detail if isinstance(detail, str) and detail else f"iQua API error {status}"
         )
         if status == HTTPStatus.TOO_MANY_REQUESTS or code == _THROTTLE_CODE:
+            if arm_backoff:
+                self._begin_backoff()
             raise RateLimitError(
                 message,
                 status=status,
