@@ -6,6 +6,7 @@ Mapping rules (implemented in ``client.py``):
 - HTTP >= 400 with a parseable ``ApiErrorModel`` body -> ``ApiError`` or a
   subclass selected by HTTP status and the machine-readable ``code``:
   401 / ``AuthBadUsernameOrPassword`` / ``AuthCannotRefreshToken`` -> ``AuthError``,
+  ``UserNotVerified`` (any status) -> ``UserNotVerifiedError``,
   429 / ``ThrottleLimitExceeded`` -> ``RateLimitError``.
 - Client-side safety refusals (forbidden command functions) ->
   ``ForbiddenCommandError`` — raised before any request is made.
@@ -47,6 +48,18 @@ class ApiError(AquaHomeError):
 
 class AuthError(ApiError):
     """Authentication or token refresh failed; reauthentication required."""
+
+
+class UserNotVerifiedError(AuthError):
+    """The account is unverified and must clear an email confirmation-code challenge.
+
+    Raised when the API returns the ``UserNotVerified`` code (an AWS-Cognito
+    account-verification state first seen in the field ~Dec 2025). A subclass of
+    :class:`AuthError` so existing ``except AuthError`` handlers still catch it,
+    but distinct so the config/reauth flow can route the user to a
+    ``POST /auth/validate-user`` step (submit the emailed code) rather than
+    treating it as bad credentials or retry-looping.
+    """
 
 
 class RateLimitError(ApiError):

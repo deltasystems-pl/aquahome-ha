@@ -17,7 +17,7 @@ import base64
 import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from http import HTTPStatus
 from typing import Any, NoReturn
 
@@ -28,10 +28,17 @@ from .const import (
     API_BASE_URL,
     APP_USER_AGENT,
     APP_VERSION_HEADER,
+    DEFAULT_TIMEOUT_SECONDS,
+    IQUA2_BASE_URL,
     MAX_REFRESH_HOURS,
     TOKEN_REFRESH_MARGIN_SECONDS,
 )
-from .exceptions import ApiError, AquaHomeConnectionError, AuthError
+from .exceptions import (
+    ApiError,
+    AquaHomeConnectionError,
+    AuthError,
+    UserNotVerifiedError,
+)
 from .models import LoginResult
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,6 +47,11 @@ _LOGGER = logging.getLogger(__name__)
 _AUTH_BAD_CREDENTIALS_CODE = "AuthBadUsernameOrPassword"
 #: Error code returned by ``POST /auth/refresh`` for an unusable refresh token.
 _AUTH_CANNOT_REFRESH_CODE = "AuthCannotRefreshToken"
+#: Error code returned by ``POST /auth/validate-user`` for a bad code/email.
+_AUTH_INVALID_CODE_OR_EMAIL_CODE = "AuthInvalidCodeOrEmail"
+#: Error code signalling an unverified account (email confirmation-code challenge);
+#: maps to :class:`UserNotVerifiedError` on any HTTP status.
+_USER_NOT_VERIFIED_CODE = "UserNotVerified"
 
 
 class AuthManager:
@@ -52,6 +64,7 @@ class AuthManager:
         base_url: str = API_BASE_URL,
         time_func: Callable[[], float] = time.time,
         on_token_update: Callable[[str, str], None] | None = None,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
         """Bind the manager to an aiohttp session and API host.
 
@@ -59,11 +72,17 @@ class AuthManager:
         change caused by login or refresh, so the config entry can persist the
         new pair. It does NOT fire for :meth:`set_tokens`, which merely restores
         a previously persisted pair.
+
+        ``timeout_seconds`` bounds every auth request. The refresh path holds the
+        single-flight lock across its POST, so an unbounded request would block
+        all polling behind one stalled refresh; the per-request timeout caps that
+        to a connection error the caller can handle.
         """
         self._session = session
         self._base_url = base_url
         self._time_func = time_func
         self._on_token_update = on_token_update
+        self._timeout_seconds = timeout_seconds
         self._access_token: str | None = None
         self._refresh_token: str | None = None
         self._lock = asyncio.Lock()
@@ -89,6 +108,33 @@ class AuthManager:
         result = LoginResult.from_dict(body)
         self._store_tokens(result.access_token, result.refresh_token, notify=True)
         return result
+
+    async def async_validate_user(self, email: str, code: str) -> None:
+        """Submit an emailed confirmation code to verify an unverified account.
+
+        ``POST /auth/validate-user`` — clears the ``UserNotVerified`` login
+        challenge. Raises :class:`AuthError` when the code or email is rejected
+        (HTTP 401 / ``AuthInvalidCodeOrEmail``), :class:`ApiError` for any other
+        error, and :class:`AquaHomeConnectionError` on a network failure. The
+        ``200`` StatusResponse body carries no data and is ignored.
+        """
+        await self._post(
+            "/auth/validate-user",
+            {"email": email, "code": code},
+            auth_code=_AUTH_INVALID_CODE_OR_EMAIL_CODE,
+        )
+
+    async def async_resend_confirmation_code(self, email: str) -> None:
+        """Request that a fresh confirmation code be emailed to the account.
+
+        ``POST /auth/resend-confirmation-code``. Same error mapping as
+        :meth:`async_validate_user`; the ``200`` StatusResponse body is ignored.
+        """
+        await self._post(
+            "/auth/resend-confirmation-code",
+            {"email": email},
+            auth_code=_AUTH_INVALID_CODE_OR_EMAIL_CODE,
+        )
 
     def set_tokens(self, access_token: str, refresh_token: str) -> None:
         """Restore a persisted token pair without firing the update callback."""
@@ -205,7 +251,10 @@ class AuthManager:
         url = f"{self._base_url}{path}"
         try:
             async with self._session.post(
-                url, json=payload, headers=self._headers()
+                url,
+                json=payload,
+                headers=self._headers(),
+                timeout=aiohttp.ClientTimeout(total=self._timeout_seconds),
             ) as response:
                 status = response.status
                 body = await self._read_json(response)
@@ -236,6 +285,54 @@ class AuthManager:
         message = (
             detail if isinstance(detail, str) and detail else f"iQua API error {status}"
         )
+        if code == _USER_NOT_VERIFIED_CODE:
+            raise UserNotVerifiedError(message, status=status, code=code, fields=fields)
         if status == HTTPStatus.UNAUTHORIZED or code == auth_code:
             raise AuthError(message, status=status, code=code, fields=fields)
         raise ApiError(message, status=status, code=code, fields=fields)
+
+
+async def async_probe_host(
+    session: aiohttp.ClientSession,
+    email: str,
+    password: str,
+    *,
+    hosts: Sequence[str] = (API_BASE_URL, IQUA2_BASE_URL),
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+) -> tuple[str, LoginResult]:
+    """Find the API host that authenticates ``email``/``password``.
+
+    Post-migration ("iQua2") accounts live on a separate but byte-identical host;
+    a login simply fails on the wrong one. Each host is tried in order with a
+    throwaway :class:`AuthManager`; the first success returns
+    ``(host, login_result)`` so the caller can persist the working host and its
+    token pair.
+
+    An unverified-account challenge (:class:`UserNotVerifiedError`) is account
+    state, not a wrong host, so it aborts the probe immediately. A plain
+    :class:`AuthError` (bad credentials) or an :class:`AquaHomeConnectionError`
+    (host unreachable) moves on to the next host. When every host fails, the
+    :class:`AuthError` is raised if any host rejected the credentials — Home
+    Assistant maps this to ``invalid_auth`` — otherwise the last connection error
+    is raised, mapped to ``cannot_connect``.
+    """
+    auth_error: AuthError | None = None
+    connection_error: AquaHomeConnectionError | None = None
+    for host in hosts:
+        manager = AuthManager(session, base_url=host, timeout_seconds=timeout_seconds)
+        try:
+            result = await manager.async_login(email, password)
+        except UserNotVerifiedError:
+            raise
+        except AuthError as err:
+            auth_error = err
+        except AquaHomeConnectionError as err:
+            connection_error = err
+        else:
+            return host, result
+    if auth_error is not None:
+        raise auth_error
+    if connection_error is not None:
+        raise connection_error
+    msg = "No API hosts were provided to probe"
+    raise AquaHomeConnectionError(msg)
