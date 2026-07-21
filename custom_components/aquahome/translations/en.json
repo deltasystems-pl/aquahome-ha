@@ -1,0 +1,121 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to iQua",
+        "description": "Sign in with the email and password you use in the iQua app. The correct API host is detected automatically.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "verify": {
+        "title": "Verify your account",
+        "description": "Your iQua account requires email verification. A confirmation code has been sent to {email} — enter it below.",
+        "data": {
+          "code": "Confirmation code"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate AquaHome",
+        "description": "The stored credentials for {email} no longer work. Enter the current iQua password to reconnect.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password",
+      "cannot_connect": "Failed to connect to the iQua cloud",
+      "rate_limited": "The iQua cloud is rate-limiting requests — wait a few minutes and try again",
+      "invalid_code": "The confirmation code was not accepted",
+      "no_devices": "No devices found on this iQua account",
+      "wrong_account": "These credentials belong to a different iQua account than the one being re-authenticated"
+    },
+    "abort": {
+      "already_configured": "Account is already configured",
+      "reauth_successful": "Re-authentication was successful"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "salt_level": {
+        "name": "Salt level"
+      },
+      "water_used_today": {
+        "name": "Water used today"
+      },
+      "treated_water_available": {
+        "name": "Treated water available"
+      },
+      "total_water": {
+        "name": "Total water"
+      },
+      "days_since_last_recharge": {
+        "name": "Days since last recharge"
+      },
+      "days_powered_up": {
+        "name": "Days powered up"
+      },
+      "total_recharges": {
+        "name": "Total recharges"
+      },
+      "rf_signal_strength": {
+        "name": "RF signal strength"
+      },
+      "out_of_salt_estimate": {
+        "name": "Out of salt estimate"
+      },
+      "average_daily_water_use": {
+        "name": "Average daily water use"
+      },
+      "model": {
+        "name": "Model"
+      },
+      "serial_number": {
+        "name": "Serial number"
+      },
+      "control_version": {
+        "name": "Controller firmware"
+      },
+      "wifi_module_version": {
+        "name": "Wi-Fi module firmware"
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      },
+      "salt_level_alert": {
+        "name": "Salt level alert"
+      },
+      "error_code_alert": {
+        "name": "Error code alert"
+      },
+      "flow_monitor_alert": {
+        "name": "Flow monitor alert"
+      },
+      "connection_alert": {
+        "name": "Connection alert"
+      },
+      "water_usage_alert": {
+        "name": "Water usage alert"
+      },
+      "resin_alert": {
+        "name": "Resin alert"
+      },
+      "alarm_beeping": {
+        "name": "Alarm sounding"
+      },
+      "water_to_drain_alert": {
+        "name": "Water-to-drain alert"
+      }
+    }
+  },
+  "issues": {
+    "unique_id_migration": {
+      "title": "AquaHome entity identities were migrated",
+      "description": "An integration update renamed the internal identity of the following entities. History is preserved, but if you renamed or customized any of them, review the changes:\n\n{renames}"
+    }
+  }
+}

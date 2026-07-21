@@ -57,6 +57,10 @@ exclude = ["\\.venv"]
 module = "tests.*"
 disallow_untyped_decorators = false
 
+[[tool.mypy.overrides]]
+module = "pytest_homeassistant_custom_component.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
