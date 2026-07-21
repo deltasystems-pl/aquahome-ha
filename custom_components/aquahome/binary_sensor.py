@@ -8,13 +8,18 @@ so the platform deliberately overrides
 ``device_online`` would suppress exactly the signals that matter during an
 outage.
 
-Which binaries exist for a given device is decided once at setup from the first
-coordinator refresh, via each description's ``exists_fn``. The six plain alert
-flags exist only when the enriched status block actually carries them; the two
-feature-gated binaries (audible alarm, water-to-drain) exist when the device
-advertises the matching feature or the field is present in the payload. On the
-dev device (features ``["regeneration"]``) this yields the online binary plus
-the six alert binaries; the two feature-gated binaries are absent.
+Which binaries exist for a given device is discovered from the coordinator's
+device view via each description's ``exists_fn``. The set present at setup is
+created immediately; :func:`~.dynamic.async_setup_dynamic_entities` then grows it
+(debounced :data:`~.const.CAPABILITY_DEBOUNCE_POLLS` polls) when hardware added
+later — a water-shutoff valve, an audible alarm, or a paired leak detector —
+first advertises a feature-gated binary, and never removes one (vanished
+hardware goes unavailable, not deleted). The six plain alert flags exist only
+when the enriched status block actually carries them; the two feature-gated
+binaries (audible alarm, water-to-drain) exist when the device advertises the
+matching feature or the field is present in the payload. On the dev device
+(features ``["regeneration"]``) this yields the online binary plus the six alert
+binaries; the two feature-gated binaries are absent.
 
 The Tier-2 binaries derive the softener's recharge mode from the enriched
 ``recharge_ui`` state (with an ``iqua2`` fallback to the ``regeneration`` block on
@@ -24,6 +29,12 @@ tells us nothing about the underlying mode, so every derived binary reports
 ``unknown`` (``None``) in that case rather than a fabricated ``False``. The
 water-shutoff-valve binary is feature-gated on ``"wsov"`` and thus absent on the
 dev device, which advertises only ``["regeneration"]``.
+
+Each paired leak detector contributes four binaries — leak detected (moisture),
+low battery, tamper, and connectivity — registered under the detector's own
+sub-device via :class:`~.entity.AquaHomeLeakDetectorEntity`. The dev device pairs
+none, so none is created there; a detector that later vanishes makes its binaries
+unavailable through the base entity rather than reporting a fabricated state.
 """
 
 from __future__ import annotations
@@ -38,17 +49,30 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 from homeassistant.const import EntityCategory
+from homeassistant.core import callback
 
-from .api import Device, RechargeUi, RegenerationInfo, WaterTreatmentStatus
-from .const import RECHARGE_STATE_OFFLINE
+from .api import (
+    Device,
+    LeakDetector,
+    LeakDetectorFlag,
+    LeakDetectorStatus,
+    RechargeUi,
+    RegenerationInfo,
+    WaterTreatmentStatus,
+)
+from .const import CAPABILITY_DEBOUNCE_POLLS, RECHARGE_STATE_OFFLINE
 from .coordinator import resolve_device_online
-from .entity import AquaHomeEntity
+from .dynamic import async_setup_dynamic_entities
+from .entity import AquaHomeEntity, AquaHomeLeakDetectorEntity
 
 if TYPE_CHECKING:
+    from collections.abc import Set as AbstractSet
+
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity import Entity
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-    from .coordinator import AquaHomeConfigEntry
+    from .coordinator import AquaHomeConfigEntry, AquaHomeCoordinator
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +371,77 @@ BINARY_SENSORS: tuple[AquaHomeBinarySensorDescription, ...] = (
 
 
 # ---------------------------------------------------------------------------
+# Per-leak-detector binaries (one sub-device per detector)
+# ---------------------------------------------------------------------------
+
+
+def _leak_detectors(device: Device) -> tuple[LeakDetector, ...]:
+    """Return the device's paired leak detectors, or an empty tuple."""
+    enriched = device.enriched_data
+    if enriched is None or enriched.leak_detectors is None:
+        return ()
+    return enriched.leak_detectors.details
+
+
+def _leak_flag_value(
+    accessor: Callable[[LeakDetectorStatus], LeakDetectorFlag | None],
+) -> Callable[[LeakDetectorStatus], bool | None]:
+    """Build a value function reading one boolean flag off a detector status.
+
+    Yields ``None`` when the flag object is absent, so a detector that omits a
+    particular flag reports ``unknown`` for it rather than a fabricated state.
+    """
+
+    def _value(status: LeakDetectorStatus) -> bool | None:
+        """Read the flag's boolean value, tolerating an absent flag object."""
+        flag = accessor(status)
+        return flag.value if flag is not None else None
+
+    return _value
+
+
+@dataclass(frozen=True, kw_only=True)
+class AquaHomeLeakBinarySensorDescription(BinarySensorEntityDescription):
+    """Describe one per-leak-detector binary and how to derive it.
+
+    ``value_fn`` maps a detector's :class:`~.api.models.LeakDetectorStatus` to the
+    flag state (``None`` when the backing flag is absent).
+    """
+
+    value_fn: Callable[[LeakDetectorStatus], bool | None]
+
+
+LEAK_BINARY_SENSORS: tuple[AquaHomeLeakBinarySensorDescription, ...] = (
+    AquaHomeLeakBinarySensorDescription(
+        key="leak_detected",
+        translation_key="leak_detected",
+        device_class=BinarySensorDeviceClass.MOISTURE,
+        value_fn=_leak_flag_value(lambda status: status.leak_detected),
+    ),
+    AquaHomeLeakBinarySensorDescription(
+        key="leak_low_battery",
+        translation_key="leak_low_battery",
+        device_class=BinarySensorDeviceClass.BATTERY,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_leak_flag_value(lambda status: status.low_battery),
+    ),
+    AquaHomeLeakBinarySensorDescription(
+        key="leak_tampered",
+        translation_key="leak_tampered",
+        device_class=BinarySensorDeviceClass.TAMPER,
+        value_fn=_leak_flag_value(lambda status: status.tampered),
+    ),
+    AquaHomeLeakBinarySensorDescription(
+        key="leak_connectivity",
+        translation_key="leak_connectivity",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_leak_flag_value(lambda status: status.is_connected),
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
 # Entity and platform setup
 # ---------------------------------------------------------------------------
 
@@ -363,18 +458,86 @@ class AquaHomeBinarySensor(AquaHomeEntity, BinarySensorEntity):
         return self.entity_description.value_fn(self.coordinator.data)
 
 
+class AquaHomeLeakBinarySensor(AquaHomeLeakDetectorEntity, BinarySensorEntity):
+    """A single leak-detector binary backed by its detector's status block."""
+
+    entity_description: AquaHomeLeakBinarySensorDescription
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the flag state, or ``None`` when the detector/flag is absent."""
+        detector = self.detector
+        if detector is None or detector.status is None:
+            return None
+        return self.entity_description.value_fn(detector.status)
+
+
+@callback
+def _async_add_dynamic_binaries(
+    entry: AquaHomeConfigEntry,
+    coordinator: AquaHomeCoordinator,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Add one device's binaries now and grow the set as capabilities appear.
+
+    Both the feature-gated static binaries and each paired leak detector's four
+    binaries are keyed uniquely and handed to
+    :func:`~.dynamic.async_setup_dynamic_entities`, which creates the keys present
+    at setup and adds later ones once seen :data:`~.const.CAPABILITY_DEBOUNCE_POLLS`
+    consecutive polls.
+    """
+
+    def _discover() -> set[str]:
+        """Return the binary keys present on the current device view."""
+        device = coordinator.data
+        keys = {
+            description.key
+            for description in BINARY_SENSORS
+            if description.exists_fn(device)
+        }
+        for detector in _leak_detectors(device):
+            keys.update(
+                f"leak_{detector.detector_id}_{description.key}"
+                for description in LEAK_BINARY_SENSORS
+            )
+        return keys
+
+    def _create(keys: AbstractSet[str]) -> list[Entity]:
+        """Build the binary entities whose keys are in ``keys``."""
+        device = coordinator.data
+        entities: list[Entity] = [
+            AquaHomeBinarySensor(coordinator, description)
+            for description in BINARY_SENSORS
+            if description.key in keys
+        ]
+        for detector in _leak_detectors(device):
+            entities.extend(
+                AquaHomeLeakBinarySensor(coordinator, description, detector.detector_id)
+                for description in LEAK_BINARY_SENSORS
+                if f"leak_{detector.detector_id}_{description.key}" in keys
+            )
+        return entities
+
+    async_setup_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        discover=_discover,
+        create=_create,
+        debounce_polls=CAPABILITY_DEBOUNCE_POLLS,
+    )
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: AquaHomeConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the binary sensors that exist for each configured device."""
-    entities: list[AquaHomeBinarySensor] = []
+    """Set up each device's binaries, growing the set as capabilities appear.
+
+    Every device's fast telemetry coordinator drives a dynamic adder: the
+    feature-gated binaries and any paired leak detector's binaries materialise as
+    soon as the capability signature carries them, without a reload.
+    """
     for coordinator in entry.runtime_data.coordinators.values():
-        device = coordinator.data
-        entities.extend(
-            AquaHomeBinarySensor(coordinator, description)
-            for description in BINARY_SENSORS
-            if description.exists_fn(device)
-        )
-    async_add_entities(entities)
+        _async_add_dynamic_binaries(entry, coordinator, async_add_entities)

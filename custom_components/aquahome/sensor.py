@@ -44,13 +44,17 @@ from homeassistant.const import (
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
     UnitOfMass,
+    UnitOfTemperature,
     UnitOfTime,
     UnitOfVolume,
 )
+from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
 from .api import (
     Device,
+    LeakDetector,
+    LeakDetectorStatus,
     PropertyValue,
     RechargeUi,
     RegenerationInfo,
@@ -59,18 +63,26 @@ from .api import (
     scaled_value,
 )
 from .const import (
+    CAPABILITY_DEBOUNCE_POLLS,
     MAX_STATE_LENGTH,
     REGENERATION_STATUS_OPTIONS,
     TOTAL_WATER_CLAMP_TOLERANCE,
     WEEKDAY_SLOTS,
 )
-from .entity import AquaHomeActivityEntity, AquaHomeEntity
+from .dynamic import async_setup_dynamic_entities
+from .entity import (
+    AquaHomeActivityEntity,
+    AquaHomeEntity,
+    AquaHomeLeakDetectorEntity,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Set as AbstractSet
     from typing import Any
 
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity import Entity
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
     from homeassistant.helpers.typing import StateType
 
@@ -163,6 +175,14 @@ def _status(device: Device) -> WaterTreatmentStatus | None:
     """Return the enriched water-treatment status block, or ``None``."""
     enriched = _enriched(device)
     return enriched.water_treatment_status if enriched is not None else None
+
+
+def _leak_detectors(device: Device) -> tuple[LeakDetector, ...]:
+    """Return the device's paired leak detectors, or an empty tuple."""
+    enriched = _enriched(device)
+    if enriched is None or enriched.leak_detectors is None:
+        return ()
+    return enriched.leak_detectors.details
 
 
 def _regen_active(device: Device) -> bool:
@@ -719,6 +739,60 @@ SENSOR_DESCRIPTIONS: tuple[AquaHomeSensorDescription, ...] = (
 
 
 # ---------------------------------------------------------------------------
+# Per-leak-detector sensors (one sub-device per detector)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class AquaHomeLeakSensorDescription(SensorEntityDescription):
+    """Describe one per-leak-detector sensor and how to read its value.
+
+    ``value_fn`` maps a detector's :class:`~.api.models.LeakDetectorStatus` to the
+    sensor's native value (``None`` when the backing field is absent).
+    """
+
+    value_fn: Callable[[LeakDetectorStatus], StateType]
+
+
+def _leak_temperature(status: LeakDetectorStatus) -> StateType:
+    """Return the detector's raw (native-unit) temperature reading."""
+    temperature = status.temperature
+    return temperature.raw_value if temperature is not None else None
+
+
+def _leak_signal_strength(status: LeakDetectorStatus) -> StateType:
+    """Return the detector's RF signal strength in dBm."""
+    return status.signal_strength
+
+
+#: Per-leak-detector sensors. The temperature binds the detector's ``raw_value``
+#: — its native unit — which the API convention reports in US customary, so the
+#: entity is labelled Fahrenheit; this is live-unverified (no leak hardware in the
+#: dev cohort). Signal strength mirrors the softener RF sensor: diagnostic and
+#: registry-disabled by default, in dBm.
+LEAK_SENSOR_DESCRIPTIONS: tuple[AquaHomeLeakSensorDescription, ...] = (
+    AquaHomeLeakSensorDescription(
+        key="leak_temperature",
+        translation_key="leak_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
+        value_fn=_leak_temperature,
+    ),
+    AquaHomeLeakSensorDescription(
+        key="leak_signal_strength",
+        translation_key="leak_signal_strength",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=_leak_signal_strength,
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
 # Activity-coordinator-backed sensors (alert + regeneration history)
 # ---------------------------------------------------------------------------
 
@@ -793,6 +867,66 @@ ACTIVITY_SENSOR_DESCRIPTIONS: tuple[AquaHomeActivitySensorDescription, ...] = (
 )
 
 
+@callback
+def _async_add_dynamic_sensors(
+    entry: AquaHomeConfigEntry,
+    coordinator: AquaHomeCoordinator,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Add one device's fast-coordinator sensors, growing the set over time.
+
+    The telemetry descriptions and any paired leak detector's sensors are keyed
+    uniquely and handed to :func:`~.dynamic.async_setup_dynamic_entities`, which
+    creates the keys present at setup and adds later ones once seen
+    :data:`~.const.CAPABILITY_DEBOUNCE_POLLS` consecutive polls. The lifetime
+    total-water counter keeps its dedicated :class:`AquaHomeTotalWaterSensor`
+    class through the retrofit.
+    """
+
+    def _discover() -> set[str]:
+        """Return the fast-sensor keys present on the current device view."""
+        device = coordinator.data
+        keys = {
+            description.key
+            for description in SENSOR_DESCRIPTIONS
+            if description.exists_fn(device)
+        }
+        for detector in _leak_detectors(device):
+            keys.update(
+                f"leak_{detector.detector_id}_{description.key}"
+                for description in LEAK_SENSOR_DESCRIPTIONS
+            )
+        return keys
+
+    def _create(keys: AbstractSet[str]) -> list[Entity]:
+        """Build the fast-sensor entities whose keys are in ``keys``."""
+        device = coordinator.data
+        entities: list[Entity] = []
+        for description in SENSOR_DESCRIPTIONS:
+            if description.key not in keys:
+                continue
+            if description.key == _TOTAL_WATER_KEY:
+                entities.append(AquaHomeTotalWaterSensor(coordinator, description))
+            else:
+                entities.append(AquaHomeSensor(coordinator, description))
+        for detector in _leak_detectors(device):
+            entities.extend(
+                AquaHomeLeakSensor(coordinator, description, detector.detector_id)
+                for description in LEAK_SENSOR_DESCRIPTIONS
+                if f"leak_{detector.detector_id}_{description.key}" in keys
+            )
+        return entities
+
+    async_setup_dynamic_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        discover=_discover,
+        create=_create,
+        debounce_polls=CAPABILITY_DEBOUNCE_POLLS,
+    )
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: AquaHomeConfigEntry,
@@ -800,34 +934,31 @@ async def async_setup_entry(
 ) -> None:
     """Create sensor entities for every coordinator whose source data exists.
 
-    Two families are set up per device: the fast-coordinator telemetry sensors
-    (from :data:`SENSOR_DESCRIPTIONS`) and the activity-coordinator history
-    sensors (from :data:`ACTIVITY_SENSOR_DESCRIPTIONS`). The latter pair each
-    activity coordinator with its fast coordinator's device view (same device-id
-    key) for the existence gate and shared ``DeviceInfo``.
+    Two families are set up per device. The fast-coordinator telemetry sensors
+    (from :data:`SENSOR_DESCRIPTIONS`) and any paired leak detector's sensors are
+    driven by a dynamic adder so a capability that surfaces later — a leak
+    detector paired after setup — materialises without a reload. The
+    activity-coordinator history sensors (from
+    :data:`ACTIVITY_SENSOR_DESCRIPTIONS`) are static: their existence is not
+    capability-driven, so each activity coordinator is paired once with its fast
+    coordinator's device view (same device-id key) for the existence gate and the
+    shared ``DeviceInfo``.
     """
     runtime = entry.runtime_data
-    entities: list[SensorEntity] = []
     for coordinator in runtime.coordinators.values():
-        device = coordinator.data
-        for description in SENSOR_DESCRIPTIONS:
-            if not description.exists_fn(device):
-                continue
-            if description.key == _TOTAL_WATER_KEY:
-                entities.append(AquaHomeTotalWaterSensor(coordinator, description))
-            else:
-                entities.append(AquaHomeSensor(coordinator, description))
+        _async_add_dynamic_sensors(entry, coordinator, async_add_entities)
+    activity_entities: list[SensorEntity] = []
     for device_id, activity in runtime.activity_coordinators.items():
         fast = runtime.coordinators.get(device_id)
         if fast is None:
             continue
         device = fast.data
-        entities.extend(
+        activity_entities.extend(
             AquaHomeActivitySensor(activity, description, device)
             for description in ACTIVITY_SENSOR_DESCRIPTIONS
             if description.exists_fn(device)
         )
-    async_add_entities(entities)
+    async_add_entities(activity_entities)
 
 
 class AquaHomeSensor(AquaHomeEntity, SensorEntity):
@@ -863,6 +994,20 @@ class AquaHomeSensor(AquaHomeEntity, SensorEntity):
         if attributes_fn is None:
             return None
         return attributes_fn(self.coordinator.data)
+
+
+class AquaHomeLeakSensor(AquaHomeLeakDetectorEntity, SensorEntity):
+    """A per-leak-detector sensor backed by its detector's status block."""
+
+    entity_description: AquaHomeLeakSensorDescription
+
+    @property
+    def native_value(self) -> StateType:
+        """Return the value, or ``None`` when the detector/field is absent."""
+        detector = self.detector
+        if detector is None or detector.status is None:
+            return None
+        return self.entity_description.value_fn(detector.status)
 
 
 class AquaHomeActivitySensor(AquaHomeActivityEntity, SensorEntity):
