@@ -4,8 +4,7 @@ Custom Home Assistant integration for **AquaHome 20 Smart** and other water
 treatment devices supported by the iQua mobile app. The integration talks to
 the same iQua cloud API the official Android app uses (`api.myiquaapp.com`).
 
-> **Status: under development — not yet released.** The implementation follows
-> the phased plan in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+> **Status: under development — not yet released.**
 
 ## Planned feature set
 
@@ -21,7 +20,6 @@ the same iQua cloud API the official Android app uses (`api.myiquaapp.com`).
 ## Repository layout
 
 - `custom_components/aquahome/` — the integration.
-- `docs/` — entity analysis and the master implementation plan.
 - `knowledge/` — verified API reference, device facts, and research reports the
   implementation is grounded in.
 - `tests/` — test suite (fixtures are real, redacted API payloads).
