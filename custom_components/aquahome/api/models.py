@@ -261,6 +261,8 @@ class WaterTreatmentStatus:
     error_code_alert: bool | None = None
     service_reminder_message: str | None = None
     water_to_drain_monitor_enabled: bool | None = None
+    alarm_is_beeping: bool | None = None
+    water_to_drain_alert: bool | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
@@ -277,6 +279,8 @@ class WaterTreatmentStatus:
             water_to_drain_monitor_enabled=_as_bool(
                 data.get("water_to_drain_monitor_enabled")
             ),
+            alarm_is_beeping=_as_bool(data.get("alarm_is_beeping")),
+            water_to_drain_alert=_as_bool(data.get("water_to_drain_alert")),
         )
 
 
