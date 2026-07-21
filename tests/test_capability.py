@@ -159,6 +159,50 @@ async def test_wsov_valve_appears_after_two_consecutive_polls(
         )
 
 
+async def test_wsov_stale_reserve_does_not_fake_second_sighting(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    entity_registry: er.EntityRegistry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A serve-stale re-serve is not an observation and cannot satisfy the debounce.
+
+    One genuine poll carries the valve (streak 1); the next poll fails with a
+    transient 500, so the coordinator re-serves the same cached payload. That
+    re-serve repeats the previous observation — it must neither create the valve
+    (a glitched payload plus a transient failure would otherwise fake the second
+    sighting) nor reset the streak: the following genuine sighting is the real
+    second one and creates the entity. (A 429 takes the identical coordinator
+    path but also arms the client's real-monotonic backoff, which a frozen-clock
+    test cannot outwait — the unit test below covers the counter arithmetic
+    independent of the failure flavour.)
+    """
+    mock_api.get(devices_url(), payload=load_fixture("devices-list.json"), repeat=True)
+    mock_api.get(device_url(), payload=_base_detail())
+    mock_api.get(device_url(), payload=with_wsov(_base_detail()))
+    mock_api.get(device_url(), status=500)
+    mock_api.get(device_url(), payload=with_wsov(_base_detail()), repeat=True)
+    add_activity_routes(mock_api)
+    add_settings_routes(mock_api)
+
+    with patch("custom_components.aquahome.PLATFORMS", [Platform.VALVE]):
+        assert await setup_integration(hass, mock_config_entry)
+
+        await _fire_next_poll(hass, freezer)  # genuine sighting: streak = 1
+        await _fire_next_poll(hass, freezer)  # 500 -> stale re-serve: ignored
+        assert (
+            entity_registry.async_get_entity_id(Platform.VALVE, DOMAIN, _VALVE_UID)
+            is None
+        )
+
+        await _fire_next_poll(hass, freezer)  # genuine second sighting
+        assert (
+            entity_registry.async_get_entity_id(Platform.VALVE, DOMAIN, _VALVE_UID)
+            is not None
+        )
+
+
 async def test_wsov_flap_resets_debounce_counter(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -355,8 +399,11 @@ class _FakeCoordinator:
     """Minimal coordinator exposing only the listener API the helper uses."""
 
     def __init__(self) -> None:
-        """Start with no registered listeners."""
+        """Start with no registered listeners, serving fresh data."""
         self._listeners: list[Callable[[], None]] = []
+        #: Mirrors the real coordinators' ``serving_stale`` property: ``True``
+        #: while a refresh merely re-served cached data.
+        self.serving_stale = False
 
     def async_add_listener(
         self, update_callback: Callable[[], None], context: Any = None
@@ -405,6 +452,7 @@ class _Harness:
     created: list[set[str]]
     add_calls: list[list[object]]
     unloads: list[Callable[[], None]]
+    coordinator: _FakeCoordinator
 
 
 def _make_harness(initial: AbstractSet[str], *, debounce_polls: int) -> _Harness:
@@ -442,7 +490,9 @@ def _make_harness(initial: AbstractSet[str], *, debounce_polls: int) -> _Harness
         create=_create,
         debounce_polls=debounce_polls,
     )
-    return _Harness(coordinator.fire, present, created, add_calls, entry.unloads)
+    return _Harness(
+        coordinator.fire, present, created, add_calls, entry.unloads, coordinator
+    )
 
 
 def test_unit_initial_set_added_immediately() -> None:
@@ -500,6 +550,43 @@ def test_unit_known_key_never_recreated_or_removed() -> None:
 
     assert harness.created == [{"a"}]
     assert len(harness.add_calls) == 1
+
+
+def test_unit_stale_reserve_neither_advances_nor_resets() -> None:
+    """A ``serving_stale`` update is skipped: no count-up, no streak reset.
+
+    With the streak at 1, a stale re-serve must not promote the key (that would
+    let one glitched payload plus a rate-limited re-serve fake the second
+    sighting) — and it must not reset the streak either, so the next genuine
+    sighting is the real second one and creates the key.
+    """
+    harness = _make_harness(set(), debounce_polls=2)
+
+    harness.present.add("a")
+    harness.fire()  # genuine sighting: streak = 1
+    harness.coordinator.serving_stale = True
+    harness.fire()  # stale re-serve: ignored entirely
+    assert harness.created == []
+
+    harness.coordinator.serving_stale = False
+    harness.fire()  # genuine second sighting -> created
+    assert harness.created == [{"a"}]
+
+
+def test_unit_create_receives_only_the_new_subset() -> None:
+    """A later growth passes only the newly-added keys to ``create``.
+
+    Re-creating already-known keys would duplicate their entities (same unique
+    IDs), so the second batch must be exactly the delta.
+    """
+    harness = _make_harness({"a"}, debounce_polls=1)
+    assert harness.created == [{"a"}]
+
+    harness.present.add("b")
+    harness.fire()
+
+    assert harness.created == [{"a"}, {"b"}]
+    assert harness.add_calls == [["a"], ["b"]]
 
 
 def test_unit_debounce_one_adds_on_first_sighting() -> None:

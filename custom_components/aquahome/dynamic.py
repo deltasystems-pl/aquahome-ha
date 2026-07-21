@@ -55,8 +55,12 @@ def async_setup_dynamic_entities(  # noqa: PLR0913 - contract-fixed capability-d
     consecutive-sightings counter; once a key has been seen ``debounce_polls``
     updates in a row it is created and becomes known. A key that vanishes before
     reaching the threshold has its counter reset, so only *consecutive* sightings
-    count. Known keys are never removed — removed hardware is surfaced as
-    unavailable by each entity, never deleted here.
+    count. A refresh that merely re-served cached data (the coordinator's
+    ``serving_stale``) is ignored entirely — it repeats the previous payload, so
+    letting it advance the counter would allow one glitched poll plus a
+    rate-limited re-serve to fake the second sighting. Known keys are never
+    removed — removed hardware is surfaced as unavailable by each entity, never
+    deleted here.
 
     ``debounce_polls`` is :data:`~.const.CAPABILITY_DEBOUNCE_POLLS` (2) for the
     fast telemetry coordinator, whose payloads can blip; it is ``1`` for the
@@ -72,6 +76,13 @@ def async_setup_dynamic_entities(  # noqa: PLR0913 - contract-fixed capability-d
     @callback
     def _handle_update() -> None:
         """Grow the entity set when a new key persists for ``debounce_polls``."""
+        if getattr(coordinator, "serving_stale", False):
+            # A stale re-serve repeats the cached payload verbatim: it carries
+            # no new observation, so it must neither advance nor reset the
+            # consecutive-sightings counters. Without this, one glitched 200
+            # payload followed by a rate-limited re-serve would fake the second
+            # sighting and defeat the debounce.
+            return
         current = discover()
         added: set[str] = set()
         for key in current:

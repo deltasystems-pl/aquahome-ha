@@ -138,6 +138,16 @@ class AquaHomeCoordinator(DataUpdateCoordinator[Device]):
             return False
         return resolve_device_online(data)
 
+    @property
+    def serving_stale(self) -> bool:
+        """Return whether the latest refresh re-served cached data.
+
+        A stale re-serve repeats the previous payload verbatim, so consumers
+        that count *observations* — the capability debounce in
+        :func:`~.dynamic.async_setup_dynamic_entities` — must ignore it.
+        """
+        return self._serving_stale
+
     async def _async_update_data(self) -> Device:
         """Fetch the full device view, serving cached data on transient errors.
 
@@ -432,6 +442,15 @@ class AquaHomeSettingsCoordinator(DataUpdateCoordinator[DeviceSettingsDocument])
             name=f"{DOMAIN} {device_slug} settings",
             update_interval=SETTINGS_UPDATE_INTERVAL,
         )
+
+    @property
+    def serving_stale(self) -> bool:
+        """Return whether the latest refresh re-served cached data.
+
+        Mirrors :attr:`AquaHomeCoordinator.serving_stale` — the dynamic-entity
+        debounce must not treat a stale re-serve as a new observation.
+        """
+        return self._serving_stale
 
     async def _async_update_data(self) -> DeviceSettingsDocument:
         """Fetch the settings document, serving cached data on transient errors.

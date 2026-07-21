@@ -252,6 +252,46 @@ async def test_all_selects_are_config_and_named_from_server_labels(
         assert entry.original_name == _find_setting(fixture, name)["label"], name
 
 
+async def test_entity_name_relocalizes_with_the_label(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    entity_registry: er.EntityRegistry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A refresh carrying a re-localized label renames the entity in place.
+
+    The server localizes setting labels from ``accept-language``; the base
+    settings entity re-reads ``_attr_name`` from the label on every coordinator
+    update, so a language change follows the next refresh without re-creating
+    the entity (adversarial-review coverage gap, 2026-07-21).
+    """
+    freezer.move_to(FROZEN_INSTANT)
+    base = load_fixture("settings.json")
+    relabeled = load_fixture("settings.json")
+    _find_setting(relabeled, "inlet_hardness")["label"] = "Twardość wody na wejściu"
+    _register_base_routes(mock_api)
+    mock_api.get(settings_url(), payload=base)
+    mock_api.get(settings_url(), payload=relabeled, repeat=True)
+
+    assert await setup_integration(hass, mock_config_entry)
+
+    entity_id = _entity_id(entity_registry, "inlet_hardness")
+    assert entity_id is not None
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.attributes["friendly_name"] is not None
+    assert state.attributes["friendly_name"].endswith("Inlet Water Hardness (PPM)")
+
+    freezer.tick(SETTINGS_UPDATE_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.attributes["friendly_name"].endswith("Twardość wody na wejściu")
+
+
 # ---------------------------------------------------------------------------
 # Option / current-option resolution
 # ---------------------------------------------------------------------------

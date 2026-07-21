@@ -224,6 +224,34 @@ async def test_number_out_of_range_raises_and_makes_no_request(
     assert _settings_requests(mock_api, "PATCH") == []
 
 
+@pytest.mark.parametrize(
+    "value", [float("nan"), float("inf"), float("-inf")], ids=["nan", "inf", "-inf"]
+)
+async def test_number_non_finite_value_rejected_as_out_of_range(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+    value: float,
+) -> None:
+    """A non-finite value is rejected as a translated validation error.
+
+    Home Assistant's service layer coerces YAML ``.nan``/``.inf`` to real floats
+    and its own range guard is ``False`` for NaN, so without the entity's
+    finiteness check ``round`` would escape as a raw, untranslated
+    ``ValueError`` (adversarial-review finding, 2026-07-21).
+    """
+    add_device_routes(mock_api, settings=_doc_with(make_number_setting()))
+    with _only_number():
+        await setup_integration(hass, mock_config_entry)
+
+    entity = _number(hass, NUMBER_NAME)
+    with pytest.raises(ServiceValidationError) as err:
+        await entity.async_set_native_value(value)
+
+    assert err.value.translation_key == "number_out_of_range"
+    assert _settings_requests(mock_api, "PATCH") == []
+
+
 # ---------------------------------------------------------------------------
 # Absent bounds — native-space fallbacks
 # ---------------------------------------------------------------------------

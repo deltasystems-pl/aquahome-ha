@@ -222,10 +222,15 @@ class AquaHomeNumber(AquaHomeSettingsEntity, NumberEntity):
         :class:`~homeassistant.exceptions.ServiceValidationError`; a valid value
         is multiplied back by ``10**precision`` and rounded to the nearest
         integer the device expects.
+
+        Non-finite values need their own guard: Home Assistant's service layer
+        coerces YAML ``.nan``/``.inf`` to real floats and its own range check
+        (like the one below) is ``False`` for NaN, so without this branch
+        ``round`` would raise a raw, untranslated ``ValueError``.
         """
         minimum = self.native_min_value
         maximum = self.native_max_value
-        if value < minimum or value > maximum:
+        if not math.isfinite(value) or value < minimum or value > maximum:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="number_out_of_range",
