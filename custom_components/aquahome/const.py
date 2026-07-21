@@ -93,6 +93,59 @@ WEEKDAY_SLOTS: Final[tuple[str, ...]] = (
     "saturday",
 )
 
+# Cadence of the per-device settings coordinator. The rule-driven settings
+# document changes only when the owner reconfigures the device, so a gentle
+# interval suffices; every PATCH write reconciles immediately from the
+# document the server returns, independent of this cadence.
+SETTINGS_UPDATE_INTERVAL: Final = timedelta(hours=6)
+
+# Serve-stale window for the settings coordinator. Device configuration stays
+# valid across long cloud blips, so this is the widest of the three windows
+# while still going honestly unavailable within a day.
+SETTINGS_MAX_STALE_SECONDS: Final = 86400.0
+
+# How long an optimistic control state (valve motion, scan switch) is shown
+# before falling back to polled truth. Sized for the cloud round-trip feel the
+# prior-art fork validated (~10 s), not for the device's real actuation time.
+OPTIMISTIC_STATE_TTL_SECONDS: Final = 10.0
+
+# A capability discovered by the fast poll (wsov/leak hardware added after
+# setup) must be seen this many consecutive polls before its entities are
+# created, so a glitched payload cannot flap entities into existence.
+CAPABILITY_DEBOUNCE_POLLS: Final = 2
+
+# Delay between sending the get_all_data command (which asks the DEVICE to push
+# fresh state to the cloud) and the follow-up coordinator poll that reads it.
+REFRESH_BUTTON_POLL_DELAY_SECONDS: Final = 15.0
+
+# Settings that configure the phone app's display/account preferences rather
+# than the water treatment itself. They become entities like every other
+# setting but are registry-disabled by default (user decision 2026-07-21):
+# our sensors bind fixed conversions, so flipping these only affects the app.
+DISPLAY_PREFERENCE_SETTINGS: Final = frozenset(
+    {
+        "volume_units",
+        "weight_units",
+        "hardness_units",
+        "date_format",
+        "time_format",
+        "timezone",
+    }
+)
+
+# The recharge_ui tile advertises vacation_mode / recharge_off / enable_recharge
+# actions, but their /command payload mapping is undocumented and unverified
+# (gap-analysis ledger P1; the active community fork sends none of them). The
+# buttons exist in code but are not created until a supervised live test proves
+# the payloads and flips this gate.
+RECHARGE_ACTION_COMMANDS_VERIFIED: Final = False
+
+# Feature-list tokens from enriched_data.water_treatment.features.
+FEATURE_REGENERATION: Final = "regeneration"
+FEATURE_AUDIBLE_ALARM: Final = "audible_alarm"
+FEATURE_WSOV: Final = "wsov"
+FEATURE_LEAK_DETECTOR: Final = "leak_detector"
+
 # Config-entry data key for the stored refresh token (access token uses
 # homeassistant.const.CONF_ACCESS_TOKEN).
 CONF_REFRESH_TOKEN: Final = "refresh_token"  # noqa: S105 - entry-data key, not a secret

@@ -140,6 +140,57 @@
       },
       "latest_alert": {
         "name": "Latest alert"
+      },
+      "leak_temperature": {
+        "name": "Temperature"
+      },
+      "leak_signal_strength": {
+        "name": "Signal strength"
+      }
+    },
+    "button": {
+      "regenerate_now": {
+        "name": "Regenerate now"
+      },
+      "schedule_regeneration": {
+        "name": "Schedule regeneration"
+      },
+      "cancel_regeneration": {
+        "name": "Cancel regeneration"
+      },
+      "silence_alarm": {
+        "name": "Silence alarm"
+      },
+      "refresh_data": {
+        "name": "Refresh data"
+      },
+      "advance_valve": {
+        "name": "Advance valve"
+      },
+      "reset_error_code": {
+        "name": "Reset error code"
+      },
+      "reset_wsov_error_code": {
+        "name": "Reset shutoff valve error"
+      },
+      "vacation_mode": {
+        "name": "Vacation mode"
+      },
+      "recharge_off": {
+        "name": "Recharge off"
+      },
+      "enable_recharge": {
+        "name": "Enable recharge"
+      }
+    },
+    "valve": {
+      "water_shutoff_valve": {
+        "name": "Water shutoff valve"
+      }
+    },
+    "switch": {
+      "leak_detector_scan": {
+        "name": "Leak detector scan"
       }
     },
     "event": {
@@ -201,7 +252,51 @@
       },
       "wsov_closed": {
         "name": "Shutoff valve closed"
+      },
+      "leak_detected": {
+        "name": "Leak detected"
+      },
+      "leak_low_battery": {
+        "name": "Low battery"
+      },
+      "leak_tampered": {
+        "name": "Tampered"
+      },
+      "leak_connectivity": {
+        "name": "Connectivity"
       }
+    }
+  },
+  "exceptions": {
+    "command_rejected": {
+      "message": "The device rejected the command: {message}"
+    },
+    "command_failed": {
+      "message": "Sending the command failed: {message}"
+    },
+    "cannot_connect": {
+      "message": "Could not reach the iQua cloud"
+    },
+    "rate_limited": {
+      "message": "The iQua cloud is rate-limiting requests; try again in a few minutes"
+    },
+    "auth_failed": {
+      "message": "Authentication with the iQua cloud failed"
+    },
+    "setting_rejected": {
+      "message": "The device rejected the setting change: {message}"
+    },
+    "setting_unavailable": {
+      "message": "This setting is not currently available on the device"
+    },
+    "invalid_option": {
+      "message": "{option} is not an offered option for this setting"
+    },
+    "number_out_of_range": {
+      "message": "Value must be between {min} and {max}"
+    },
+    "valve_action_blocked": {
+      "message": "The valve does not currently allow this action"
     }
   },
   "issues": {
