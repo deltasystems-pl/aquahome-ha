@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.entity import EntityDescription
 
     from .api import Device
-    from .coordinator import AquaHomeCoordinator
+    from .coordinator import AquaHomeActivityCoordinator, AquaHomeCoordinator
 
 
 def device_slug(device: Device) -> str:
@@ -38,6 +38,27 @@ def device_slug(device: Device) -> str:
     unit preference or a mutable nickname.
     """
     return slugify(device.serial_number or device.id)
+
+
+def build_device_info(device: Device) -> DeviceInfo:
+    """Assemble the shared device-registry entry for an AquaHome device.
+
+    Every entity base builds its ``DeviceInfo`` here so all platforms — the fast
+    telemetry entities and the activity-coordinator-backed ones alike — register
+    against the same device. Each enriched read is ``None``-safe because the
+    enriched block is absent on feature-poor devices.
+    """
+    enriched = device.enriched_data
+    model = enriched.model if enriched is not None else None
+    return DeviceInfo(
+        identifiers={(DOMAIN, device_slug(device))},
+        serial_number=device.serial_number,
+        manufacturer=MANUFACTURER,
+        model=model or device.system_type_display,
+        name=device.nickname or model or "AquaHome",
+        sw_version=enriched.control_version if enriched is not None else None,
+        hw_version=enriched.pwa if enriched is not None else None,
+    )
 
 
 class AquaHomeEntity(CoordinatorEntity["AquaHomeCoordinator"]):
@@ -65,18 +86,7 @@ class AquaHomeEntity(CoordinatorEntity["AquaHomeCoordinator"]):
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.device_slug}_{description.key}"
-        device = coordinator.data
-        enriched = device.enriched_data
-        model = enriched.model if enriched is not None else None
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.device_slug)},
-            serial_number=device.serial_number,
-            manufacturer=MANUFACTURER,
-            model=model or device.system_type_display,
-            name=device.nickname or model or "AquaHome",
-            sw_version=enriched.control_version if enriched is not None else None,
-            hw_version=enriched.pwa if enriched is not None else None,
-        )
+        self._attr_device_info = build_device_info(coordinator.data)
 
     @property
     def available(self) -> bool:
@@ -89,3 +99,32 @@ class AquaHomeEntity(CoordinatorEntity["AquaHomeCoordinator"]):
         return super().available and (
             not self._require_device_online or self.coordinator.device_online
         )
+
+
+class AquaHomeActivityEntity(CoordinatorEntity["AquaHomeActivityCoordinator"]):
+    """Base entity bound to one device's activity coordinator.
+
+    Availability follows the activity coordinator's own update success only: the
+    alert and regeneration history is cloud-side and stays valid while the
+    softener itself is offline, so — unlike :class:`AquaHomeEntity` — there is no
+    device-online gate here.
+    """
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: AquaHomeActivityCoordinator,
+        description: EntityDescription,
+        device: Device,
+    ) -> None:
+        """Bind the entity to its activity coordinator, description, and device.
+
+        ``device`` is the paired fast coordinator's device view, used only to
+        build the shared :class:`~homeassistant.helpers.device_registry.DeviceInfo`
+        so the entity attaches to the same device as the telemetry entities.
+        """
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{coordinator.device_slug}_{description.key}"
+        self._attr_device_info = build_device_info(device)

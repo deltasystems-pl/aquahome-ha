@@ -20,6 +20,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -28,6 +29,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
+    Alert,
     ApiError,
     AquaHomeClient,
     AquaHomeConnectionError,
@@ -36,8 +38,17 @@ from .api import (
     AuthManager,
     Device,
     RateLimitError,
+    RegenerationEvent,
 )
-from .const import DOMAIN, MAX_STALE_SECONDS, UPDATE_INTERVAL
+from .const import (
+    ACTIVITY_MAX_STALE_SECONDS,
+    ACTIVITY_PAGE_SIZE,
+    ACTIVITY_UPDATE_INTERVAL,
+    DOMAIN,
+    EVENT_AQUAHOME,
+    MAX_STALE_SECONDS,
+    UPDATE_INTERVAL,
+)
 from .entity import device_slug
 
 if TYPE_CHECKING:
@@ -47,6 +58,9 @@ _LOGGER = logging.getLogger(__name__)
 
 type AquaHomeConfigEntry = ConfigEntry[AquaHomeRuntimeData]
 
+#: Aware sentinel used to sort alerts lacking a timestamp after every dated one.
+_UNDATED_ALERT_SORT_KEY = datetime.min.replace(tzinfo=UTC)
+
 
 @dataclass
 class AquaHomeRuntimeData:
@@ -55,6 +69,7 @@ class AquaHomeRuntimeData:
     client: AquaHomeClient
     auth: AuthManager
     coordinators: dict[str, AquaHomeCoordinator]
+    activity_coordinators: dict[str, AquaHomeActivityCoordinator]
 
 
 def resolve_device_online(device: Device) -> bool:
@@ -168,6 +183,193 @@ class AquaHomeCoordinator(DataUpdateCoordinator[Device]):
             if not self._serving_stale:
                 _LOGGER.warning(
                     "AquaHome device %s poll failed (%s); serving cached data",
+                    self.device_slug,
+                    err,
+                )
+                self._serving_stale = True
+            return cached
+        raise UpdateFailed(str(err)) from err
+
+
+def _sort_alerts_newest_first(alerts: tuple[Alert, ...]) -> tuple[Alert, ...]:
+    """Return the alerts sorted newest-first, with undated alerts last.
+
+    The sort is stable and ``reverse``-stable, so alerts that share a timestamp
+    (or all lack one) keep their original API order; an alert whose timestamp
+    could not be parsed sorts after every dated alert instead of raising.
+    """
+    return tuple(
+        sorted(
+            alerts,
+            key=lambda alert: alert.timestamp or _UNDATED_ALERT_SORT_KEY,
+            reverse=True,
+        )
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceActivity:
+    """Parsed activity feed for one device: alerts and regeneration history.
+
+    ``alerts`` is sorted newest-first by timestamp (undated alerts last);
+    ``regeneration_events`` preserves the API's own newest-first order.
+    ``new_alerts`` holds the alerts observed for the first time on the most
+    recent refresh, ordered oldest-to-newest, and is empty (``()``) on the first
+    successful refresh so a fresh setup never replays the backlog.
+    """
+
+    alerts: tuple[Alert, ...]
+    regeneration_events: tuple[RegenerationEvent, ...]
+    new_alerts: tuple[Alert, ...]
+
+
+class AquaHomeActivityCoordinator(DataUpdateCoordinator[DeviceActivity]):
+    """Poll one device's slow-moving activity feed (alerts + regenerations).
+
+    Runs on the gentle :data:`~.const.ACTIVITY_UPDATE_INTERVAL`; the fast
+    telemetry coordinator asks for an early refresh when it sees a rising alert
+    badge or a regeneration transition. Alerts new since the previous refresh are
+    diffed against a watermark of seen ids, fired on the Home Assistant event bus
+    as :data:`~.const.EVENT_AQUAHOME`, and exposed on :class:`DeviceActivity` for
+    the event and activity-sensor platforms.
+
+    The serve-stale behaviour mirrors :class:`AquaHomeCoordinator` in spirit but
+    is implemented standalone: history records stay valid far longer than live
+    telemetry, so the grace window is the wider
+    :data:`~.const.ACTIVITY_MAX_STALE_SECONDS`.
+    """
+
+    def __init__(  # noqa: PLR0913 - contract-fixed dependency-injection signature
+        self,
+        hass: HomeAssistant,
+        entry: AquaHomeConfigEntry,
+        client: AquaHomeClient,
+        *,
+        device_id: str,
+        device_slug: str,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
+        """Bind the coordinator to one device's activity feed.
+
+        ``monotonic`` is injected so the serve-stale time-to-live can be driven
+        deterministically in tests.
+        """
+        self.device_id = device_id
+        self.device_slug = device_slug
+        self.client = client
+        self._monotonic = monotonic
+        self._last_good: float | None = None
+        self._serving_stale = False
+        #: Alert ids seen on the previous successful refresh. ``None`` until the
+        #: first success, which establishes the watermark without firing events.
+        self._seen_alert_ids: frozenset[str] | None = None
+        super().__init__(
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name=f"{DOMAIN} {device_slug} activity",
+            update_interval=ACTIVITY_UPDATE_INTERVAL,
+        )
+
+    async def _async_update_data(self) -> DeviceActivity:
+        """Fetch one page of alerts and regenerations, firing events for new alerts.
+
+        Authentication failures raise :class:`ConfigEntryAuthFailed` (straight to
+        reauth). Rate limits and transient 5xx errors take the serve-stale path;
+        a non-transient 4xx is raised as :class:`UpdateFailed`.
+        """
+        try:
+            alerts_page = await self.client.async_get_alerts(
+                self.device_id, page=1, per_page=ACTIVITY_PAGE_SIZE
+            )
+            events_page = await self.client.async_get_regeneration_events(
+                self.device_id, page=1, per_page=ACTIVITY_PAGE_SIZE
+            )
+        except AuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except (RateLimitError, AquaHomeConnectionError) as err:
+            return self._serve_stale(err)
+        except ApiError as err:
+            if (
+                err.status is not None
+                and err.status >= HTTPStatus.INTERNAL_SERVER_ERROR
+            ):
+                return self._serve_stale(err)
+            raise UpdateFailed(str(err)) from err
+
+        alerts = _sort_alerts_newest_first(alerts_page.alerts)
+        new_alerts = self._diff_new_alerts(alerts)
+        self._last_good = self._monotonic()
+        if self._serving_stale:
+            _LOGGER.info(
+                "AquaHome device %s activity recovered; serving fresh data again",
+                self.device_slug,
+            )
+            self._serving_stale = False
+        for alert in new_alerts:
+            self._fire_alert_event(alert)
+        return DeviceActivity(
+            alerts=alerts,
+            regeneration_events=events_page.events,
+            new_alerts=new_alerts,
+        )
+
+    def _diff_new_alerts(self, alerts: tuple[Alert, ...]) -> tuple[Alert, ...]:
+        """Return alerts unseen on the previous refresh, ordered oldest-to-newest.
+
+        The first successful refresh only establishes the watermark (returns no
+        new alerts). Afterwards any alert whose id was absent from the previous
+        page is new; the watermark is then reset to the current ids, so a shrunk
+        or empty page never re-fires a backlog.
+        """
+        current_ids = frozenset(alert.id for alert in alerts if alert.id)
+        seen = self._seen_alert_ids
+        if seen is None:
+            self._seen_alert_ids = current_ids
+            return ()
+        new = tuple(
+            alert for alert in reversed(alerts) if alert.id and alert.id not in seen
+        )
+        self._seen_alert_ids = current_ids
+        return new
+
+    def _fire_alert_event(self, alert: Alert) -> None:
+        """Fire the ``aquahome_event`` bus event for one newly observed alert."""
+        self.hass.bus.async_fire(
+            EVENT_AQUAHOME,
+            {
+                "device_id": self.device_id,
+                "device": self.device_slug,
+                "type": "alert",
+                "alert_id": alert.id,
+                "alert_type": alert.type,
+                "title": alert.title,
+                "message": alert.message,
+                "level": alert.level,
+                "timestamp": alert.timestamp.isoformat()
+                if alert.timestamp is not None
+                else None,
+            },
+        )
+
+    def _serve_stale(self, err: AquaHomeError) -> DeviceActivity:
+        """Return the last-good activity across a transient failure, or fail.
+
+        Within :data:`~.const.ACTIVITY_MAX_STALE_SECONDS` of the last success the
+        cached activity is returned so the entities keep their state; the first
+        stale poll logs one warning and subsequent ones stay quiet. Past the
+        grace period, or with no cached data yet, the failure is surfaced as
+        :class:`UpdateFailed`.
+        """
+        cached: DeviceActivity | None = self.data
+        if (
+            cached is not None
+            and self._last_good is not None
+            and self._monotonic() - self._last_good < ACTIVITY_MAX_STALE_SECONDS
+        ):
+            if not self._serving_stale:
+                _LOGGER.warning(
+                    "AquaHome device %s activity poll failed (%s); serving cached data",
                     self.device_slug,
                     err,
                 )

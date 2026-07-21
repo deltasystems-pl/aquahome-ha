@@ -1,11 +1,16 @@
 """The AquaHome integration for iQua-cloud water treatment devices.
 
-Sets up one :class:`~.coordinator.AquaHomeCoordinator` per cloud device behind a
-shared authenticated :class:`~.api.AquaHomeClient`, stores them on
-``entry.runtime_data`` (:class:`~.coordinator.AquaHomeRuntimeData`), and forwards
-the sensor / binary-sensor platforms. Rotated tokens are persisted back onto the
-config entry so the entry survives long Home Assistant downtime without forcing
-interactive reauthentication.
+Sets up, per cloud device, a fast :class:`~.coordinator.AquaHomeCoordinator`
+(telemetry) plus a gentle :class:`~.coordinator.AquaHomeActivityCoordinator`
+(alert + regeneration history) behind a shared authenticated
+:class:`~.api.AquaHomeClient`, stores them on ``entry.runtime_data``
+(:class:`~.coordinator.AquaHomeRuntimeData`), and forwards the sensor /
+binary-sensor / event platforms. A rising alert badge or a regeneration
+transition seen by the fast coordinator triggers an early activity refresh, and
+the activity feed is refreshed tolerantly at setup so it never blocks core
+telemetry. Rotated tokens are persisted back onto the config entry so the entry
+survives long Home Assistant downtime without forcing interactive
+reauthentication.
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ from homeassistant.const import (
     CONF_HOST,
     CONF_PASSWORD,
 )
+from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -33,6 +39,7 @@ from .api import (
 )
 from .const import CONF_REFRESH_TOKEN, CONFIG_VERSION, PLATFORMS
 from .coordinator import (
+    AquaHomeActivityCoordinator,
     AquaHomeConfigEntry,
     AquaHomeCoordinator,
     AquaHomeRuntimeData,
@@ -42,6 +49,9 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
+
+#: ``recharge_ui.state`` / ``regeneration_status`` value meaning a live recharge.
+_REGENERATING = "regenerating"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> bool:
@@ -78,16 +88,126 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         )
 
     coordinators: dict[str, AquaHomeCoordinator] = {}
+    activity_coordinators: dict[str, AquaHomeActivityCoordinator] = {}
     for device in devices:
         coordinator = AquaHomeCoordinator(hass, entry, client, device)
         await coordinator.async_config_entry_first_refresh()
         coordinators[device.id] = coordinator
 
+        activity = AquaHomeActivityCoordinator(
+            hass,
+            entry,
+            client,
+            device_id=device.id,
+            device_slug=coordinator.device_slug,
+        )
+        await _async_first_activity_refresh(activity)
+        activity_coordinators[device.id] = activity
+
+        _async_wire_activity_triggers(hass, entry, coordinator, activity)
+
     entry.runtime_data = AquaHomeRuntimeData(
-        client=client, auth=auth, coordinators=coordinators
+        client=client,
+        auth=auth,
+        coordinators=coordinators,
+        activity_coordinators=activity_coordinators,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def _async_first_activity_refresh(
+    activity: AquaHomeActivityCoordinator,
+) -> None:
+    """Refresh the activity feed once at setup, tolerating a failure.
+
+    The alert / regeneration feed must never block core telemetry, so — unlike
+    the fast coordinator's ``async_config_entry_first_refresh`` — a failed first
+    activity refresh does not abort setup: it is logged and swallowed, and the
+    activity entities show unavailable until the next 30-minute refresh succeeds.
+    ``async_refresh`` never raises, so setup always continues past this point.
+    """
+    await activity.async_refresh()
+    if not activity.last_update_success:
+        _LOGGER.warning(
+            "AquaHome activity feed for %s did not load during setup; its entities "
+            "will be unavailable until the next refresh",
+            activity.device_slug,
+        )
+
+
+def _async_wire_activity_triggers(
+    hass: HomeAssistant,
+    entry: AquaHomeConfigEntry,
+    fast: AquaHomeCoordinator,
+    activity: AquaHomeActivityCoordinator,
+) -> None:
+    """Trigger an early activity refresh on a fast-coordinator activity change.
+
+    The activity feed polls gently (30 min). To surface a fresh alert or a
+    regeneration transition promptly, this watches every fast-coordinator update
+    for a rise in the enriched alert badge count or a flip of the
+    "regeneration active" flag, and requests an out-of-band activity refresh when
+    it sees one. The remembered values are seeded from the fast coordinator's
+    first payload and updated on every callback, so the very first real change is
+    detected while a fresh setup never fires spuriously; a value that starts (or
+    becomes) unknown is never compared. The listener is sync, so the async
+    refresh is scheduled as a task, and is removed automatically on unload.
+    """
+    previous_badge = _alert_badge_count(fast.data)
+    previous_regen = _regen_active(fast.data)
+
+    @callback
+    def _handle_fast_update() -> None:
+        """Request an activity refresh when the badge rises or regen flips."""
+        nonlocal previous_badge, previous_regen
+        device = fast.data
+        badge = _alert_badge_count(device)
+        regen_active = _regen_active(device)
+        badge_increased = (
+            badge is not None and previous_badge is not None and badge > previous_badge
+        )
+        regen_flipped = (
+            regen_active is not None
+            and previous_regen is not None
+            and regen_active != previous_regen
+        )
+        previous_badge = badge
+        previous_regen = regen_active
+        if badge_increased or regen_flipped:
+            hass.async_create_task(activity.async_request_refresh())
+
+    entry.async_on_unload(fast.async_add_listener(_handle_fast_update))
+
+
+def _alert_badge_count(device: Device) -> int | None:
+    """Return the enriched alert badge count, or ``None`` when unavailable."""
+    enriched = device.enriched_data
+    if enriched is None or enriched.water_treatment_status is None:
+        return None
+    return enriched.water_treatment_status.alert_badge_count
+
+
+def _regen_active(device: Device) -> bool | None:
+    """Return whether a regeneration is currently running, ``None`` if unknown.
+
+    ``True`` when the ``recharge_ui`` tile reads ``regenerating`` or the enriched
+    ``regeneration`` block reports ``regeneration_status == "regenerating"``;
+    ``None`` only when neither source is present, so there is nothing to compare
+    a transition against.
+    """
+    enriched = device.enriched_data
+    if enriched is None:
+        return None
+    recharge_ui = enriched.recharge_ui
+    regeneration = enriched.regeneration
+    if recharge_ui is None and regeneration is None:
+        return None
+    if recharge_ui is not None and recharge_ui.state == _REGENERATING:
+        return True
+    return (
+        regeneration is not None and regeneration.regeneration_status == _REGENERATING
+    )
 
 
 async def _async_list_devices(
@@ -118,8 +238,19 @@ async def _async_list_devices(
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> bool:
-    """Unload a config entry and its forwarded platforms."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    """Unload a config entry and its forwarded platforms.
+
+    The fast-coordinator trigger listeners were registered through
+    ``entry.async_on_unload`` and are removed automatically. The activity
+    coordinators are shut down explicitly so their scheduled refresh and request
+    debouncer stop cleanly once the platforms (and their entity listeners) are
+    gone.
+    """
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        for activity in entry.runtime_data.activity_coordinators.values():
+            await activity.async_shutdown()
+    return unloaded
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> bool:
