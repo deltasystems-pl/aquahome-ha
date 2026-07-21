@@ -263,10 +263,22 @@ class WaterTreatmentStatus:
     water_to_drain_monitor_enabled: bool | None = None
     alarm_is_beeping: bool | None = None
     water_to_drain_alert: bool | None = None
+    error_codes: tuple[str, ...] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
-        """Parse a WaterTreatmentStatus payload."""
+        """Parse a WaterTreatmentStatus payload.
+
+        ``error_codes`` distinguishes an absent key (``None`` — the device does
+        not report the field, as on the dev unit) from a present-but-empty list
+        (``()`` — the field exists and no error is active).
+        """
+        raw_error_codes = data.get("error_codes")
+        error_codes = (
+            _as_str_tuple(raw_error_codes)
+            if isinstance(raw_error_codes, list)
+            else None
+        )
         return cls(
             alert_badge_count=_as_int(data.get("alert_badge_count")),
             salt_level_alert=_as_bool(data.get("salt_level_alert")),
@@ -281,6 +293,7 @@ class WaterTreatmentStatus:
             ),
             alarm_is_beeping=_as_bool(data.get("alarm_is_beeping")),
             water_to_drain_alert=_as_bool(data.get("water_to_drain_alert")),
+            error_codes=error_codes,
         )
 
 

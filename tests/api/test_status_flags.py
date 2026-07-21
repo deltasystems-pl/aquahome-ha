@@ -86,3 +86,34 @@ def test_enriched_fixture_omits_both_flags() -> None:
     # The six plain alert flags remain parsed from the same block.
     assert status.salt_level_alert is False
     assert status.alert_badge_count == 0
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (_ABSENT, None),
+        (None, None),
+        ([], ()),
+        (["E1"], ("E1",)),
+        (["E1", "E2"], ("E1", "E2")),
+        (["E1", 3, None], ("E1",)),
+        ("E1", None),
+        ({}, None),
+    ],
+)
+def test_error_codes_tolerant_parse(raw: Any, expected: tuple[str, ...] | None) -> None:
+    """``error_codes`` keeps absent (None) distinct from present-but-empty (())."""
+    payload: dict[str, Any] = {} if raw is _ABSENT else {"error_codes": raw}
+
+    status = WaterTreatmentStatus.from_dict(payload)
+
+    assert status.error_codes == expected
+
+
+def test_enriched_fixture_omits_error_codes() -> None:
+    """The captured dev-device status block has no error_codes key -> None."""
+    payload = load_fixture("enriched-data.json")["water_treatment"][
+        "water_treatment_status"
+    ]
+
+    assert WaterTreatmentStatus.from_dict(payload).error_codes is None
