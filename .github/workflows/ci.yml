@@ -60,4 +60,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          ignore: brands
+          # description/topics are GitHub repo metadata; drop them from the
+          # ignore list once the repository has both set.
+          ignore: brands description topics
