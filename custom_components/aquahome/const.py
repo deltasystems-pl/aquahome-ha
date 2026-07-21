@@ -12,8 +12,13 @@ MANUFACTURER: Final = "iQua"
 
 PLATFORMS: Final[list[Platform]] = [
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.EVENT,
+    Platform.NUMBER,
+    Platform.SELECT,
     Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.VALVE,
 ]
 
 # Fixed poll cadence with no user-facing knob: community evidence shows accounts

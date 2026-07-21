@@ -30,6 +30,7 @@ from tests.conftest import (
     devices_url,
     load_fixture,
     regen_events_url,
+    settings_url,
     setup_integration,
 )
 
@@ -43,9 +44,16 @@ if TYPE_CHECKING:
 SLUG = "7384243_20203_1120"
 
 #: Entities each platform creates from the captured dev-device fixtures.
+#: Buttons: the three regeneration commands, refresh-data, and the two
+#: advanced service buttons (silence-alarm and the WSOV reset are feature-gated
+#: off on the dev device). Selects: 17 select settings minus the two chem-feed
+#: settings conditionally hidden while ``aux_control_type`` is 0. The dev
+#: device has no valve, leak detectors, number settings, or switch settings.
 EXPECTED_SENSORS = 30
 EXPECTED_BINARY_SENSORS = 11
 EXPECTED_EVENTS = 1
+EXPECTED_BUTTONS = 6
+EXPECTED_SELECTS = 15
 
 #: The alert that "arrives" between the setup refresh and the next poll.
 FRESH_ALERT: dict[str, Any] = {
@@ -74,6 +82,7 @@ async def test_full_integration_alert_flow(
         payload=load_fixture("regeneration-events.json"),
         repeat=True,
     )
+    mock_api.get(settings_url(), payload=load_fixture("settings.json"), repeat=True)
     mock_api.get(alerts_url(), payload=load_fixture("alerts.json"))
     later_alerts = copy.deepcopy(load_fixture("alerts.json"))
     later_alerts["alerts"].insert(0, FRESH_ALERT)
@@ -99,6 +108,8 @@ async def test_full_integration_alert_flow(
         "sensor": EXPECTED_SENSORS,
         "binary_sensor": EXPECTED_BINARY_SENSORS,
         "event": EXPECTED_EVENTS,
+        "button": EXPECTED_BUTTONS,
+        "select": EXPECTED_SELECTS,
     }
 
     # Idle dev device: no regeneration in progress, countdown force-zeroed, and
