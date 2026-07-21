@@ -15,6 +15,15 @@ feature-gated binaries (audible alarm, water-to-drain) exist when the device
 advertises the matching feature or the field is present in the payload. On the
 dev device (features ``["regeneration"]``) this yields the online binary plus
 the six alert binaries; the two feature-gated binaries are absent.
+
+The Tier-2 binaries derive the softener's recharge mode from the enriched
+``recharge_ui`` state (with an ``iqua2`` fallback to the ``regeneration`` block on
+hosts that omit ``recharge_ui``). They obey an offline-honesty rule: a
+``recharge_ui`` whose ``state`` is ``"offline"`` — the cloud has lost the device —
+tells us nothing about the underlying mode, so every derived binary reports
+``unknown`` (``None``) in that case rather than a fabricated ``False``. The
+water-shutoff-valve binary is feature-gated on ``"wsov"`` and thus absent on the
+dev device, which advertises only ``["regeneration"]``.
 """
 
 from __future__ import annotations
@@ -30,7 +39,8 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.const import EntityCategory
 
-from .api import Device, WaterTreatmentStatus
+from .api import Device, RechargeUi, RegenerationInfo, WaterTreatmentStatus
+from .const import RECHARGE_STATE_OFFLINE
 from .coordinator import resolve_device_online
 from .entity import AquaHomeEntity
 
@@ -123,6 +133,105 @@ def _water_to_drain_exists(device: Device) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Recharge / regeneration mode accessors (Tier-2 derived binaries)
+# ---------------------------------------------------------------------------
+
+
+def _recharge_ui(device: Device) -> RechargeUi | None:
+    """Return the enriched ``recharge_ui`` block, or ``None`` when absent."""
+    enriched = device.enriched_data
+    return enriched.recharge_ui if enriched is not None else None
+
+
+def _regeneration(device: Device) -> RegenerationInfo | None:
+    """Return the enriched ``regeneration`` block, or ``None`` when absent."""
+    enriched = device.enriched_data
+    return enriched.regeneration if enriched is not None else None
+
+
+def _recharge_state(device: Device) -> str | None:
+    """Return the recharge-mode state string, honest about an offline tile.
+
+    Yields ``None`` when the ``recharge_ui`` block is absent, when it carries no
+    ``state``, or when the state is :data:`~.const.RECHARGE_STATE_OFFLINE` — an
+    offline tile means the cloud has lost the device and reveals nothing about the
+    underlying mode, so callers report ``unknown`` rather than a fabricated
+    ``False``.
+    """
+    recharge_ui = _recharge_ui(device)
+    if recharge_ui is None:
+        return None
+    state = recharge_ui.state
+    if state is None or state == RECHARGE_STATE_OFFLINE:
+        return None
+    return state
+
+
+def _regeneration_status(device: Device) -> str | None:
+    """Return the ``regeneration.regeneration_status`` string, or ``None``."""
+    regeneration = _regeneration(device)
+    return regeneration.regeneration_status if regeneration is not None else None
+
+
+def _recharge_state_is(target: str) -> Callable[[Device], bool | None]:
+    """Build a value function matching the recharge state against ``target``.
+
+    Returns ``None`` whenever :func:`_recharge_state` is ``None`` (block absent,
+    state absent, or offline) so the derived binary reports ``unknown`` instead of
+    an unfounded ``False``; otherwise the boolean equality.
+    """
+
+    def _value(device: Device) -> bool | None:
+        """Return whether the recharge state equals ``target``, None when unknown."""
+        state = _recharge_state(device)
+        return state == target if state is not None else None
+
+    return _value
+
+
+def _recharge_or_regeneration_state_is(
+    recharge_target: str, regeneration_target: str
+) -> Callable[[Device], bool | None]:
+    """Build a value function that falls back to the regeneration block.
+
+    When the ``recharge_ui`` block is present, the offline-honest
+    :func:`_recharge_state` drives the result. Only when ``recharge_ui`` is absent
+    entirely (an ``iqua2`` host) does the value fall back to
+    ``regeneration.regeneration_status``. Either source yields ``None`` when its
+    own state is unknown.
+    """
+
+    def _value(device: Device) -> bool | None:
+        """Match the recharge state, falling back to the regeneration status."""
+        if _recharge_ui(device) is not None:
+            state = _recharge_state(device)
+            return state == recharge_target if state is not None else None
+        status = _regeneration_status(device)
+        return status == regeneration_target if status is not None else None
+
+    return _value
+
+
+def _recharge_ui_present(device: Device) -> bool:
+    """Return whether the device carries a ``recharge_ui`` block."""
+    return _recharge_ui(device) is not None
+
+
+def _recharge_or_regeneration_present(device: Device) -> bool:
+    """Return whether the device carries a ``recharge_ui`` or ``regeneration`` block.
+
+    These are the two sources the ``iqua2`` fallback reads from; a binary that can
+    draw on either exists as soon as one is present.
+    """
+    return _recharge_ui(device) is not None or _regeneration(device) is not None
+
+
+def _wsov_exists(device: Device) -> bool:
+    """Return whether the water-shutoff-valve binary applies to this device."""
+    return _has_feature(device, "wsov")
+
+
+# ---------------------------------------------------------------------------
 # Entity description and table
 # ---------------------------------------------------------------------------
 
@@ -200,6 +309,39 @@ BINARY_SENSORS: tuple[AquaHomeBinarySensorDescription, ...] = (
         device_class=BinarySensorDeviceClass.MOISTURE,
         value_fn=_status_value(lambda status: status.water_to_drain_alert),
         exists_fn=_water_to_drain_exists,
+    ),
+    AquaHomeBinarySensorDescription(
+        key="regenerating",
+        translation_key="regenerating",
+        device_class=BinarySensorDeviceClass.RUNNING,
+        value_fn=_recharge_or_regeneration_state_is("regenerating", "regenerating"),
+        exists_fn=_recharge_or_regeneration_present,
+    ),
+    AquaHomeBinarySensorDescription(
+        key="vacation_mode",
+        translation_key="vacation_mode",
+        value_fn=_recharge_state_is("vacation_mode"),
+        exists_fn=_recharge_ui_present,
+    ),
+    AquaHomeBinarySensorDescription(
+        key="recharge_off",
+        translation_key="recharge_off",
+        value_fn=_recharge_state_is("recharge_off"),
+        exists_fn=_recharge_ui_present,
+    ),
+    AquaHomeBinarySensorDescription(
+        key="regeneration_suspended",
+        translation_key="regeneration_suspended",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_fn=_recharge_or_regeneration_state_is("suspended", "suspended"),
+        exists_fn=_recharge_or_regeneration_present,
+    ),
+    AquaHomeBinarySensorDescription(
+        key="wsov_closed",
+        translation_key="wsov_closed",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_fn=_recharge_state_is("wsov_closed"),
+        exists_fn=_wsov_exists,
     ),
 )
 

@@ -64,7 +64,8 @@ if TYPE_CHECKING:
 #: Slug of the captured device's serial ``7384243-20203-1120`` (see contract).
 SLUG = "7384243_20203_1120"
 
-#: The binaries created on the dev fixture: online plus the six plain alerts.
+#: The binaries created on the dev fixture: online, the six plain alerts, and
+#: the four recharge-state binaries (wsov_closed stays feature-gated out).
 EXPECTED_KEYS = (
     "online",
     "salt_level_alert",
@@ -73,6 +74,10 @@ EXPECTED_KEYS = (
     "connection_alert",
     "water_usage_alert",
     "resin_alert",
+    "regenerating",
+    "vacation_mode",
+    "recharge_off",
+    "regeneration_suspended",
 )
 
 
@@ -143,13 +148,13 @@ async def test_all_binary_sensors_snapshot(
     await snapshot_platform(hass, entity_registry, snapshot, mock_config_entry.entry_id)
 
 
-async def test_exactly_seven_binaries_on_dev_fixture(
+async def test_exact_binary_set_on_dev_fixture(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_api: aioresponses,
     entity_registry: er.EntityRegistry,
 ) -> None:
-    """The dev fixture creates exactly online + six alerts; the gated pair is absent."""
+    """The dev fixture creates exactly the expected set; gated binaries are absent."""
     add_device_routes(mock_api)
 
     assert await setup_integration(hass, mock_config_entry)
@@ -157,10 +162,11 @@ async def test_exactly_seven_binaries_on_dev_fixture(
     assert _created_keys(entity_registry, mock_config_entry.entry_id) == sorted(
         EXPECTED_KEYS
     )
-    # The two feature-gated binaries are never created for a regeneration-only
-    # device whose status block omits their fields.
+    # The feature-gated binaries are never created for a regeneration-only
+    # device: the two whose status fields are absent, and the wsov-gated one.
     assert _entity_id(entity_registry, "alarm_beeping") is None
     assert _entity_id(entity_registry, "water_to_drain_alert") is None
+    assert _entity_id(entity_registry, "wsov_closed") is None
 
 
 @pytest.mark.parametrize(
@@ -329,20 +335,32 @@ async def test_water_to_drain_created_via_feature_and_field(  # noqa: PLR0913
 # ---------------------------------------------------------------------------
 
 
-async def test_missing_status_block_creates_only_online(
+async def test_missing_status_block_drops_alert_binaries(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_api: aioresponses,
     entity_registry: er.EntityRegistry,
 ) -> None:
-    """Without a status block the alert binaries vanish but ``online`` survives."""
+    """Without a status block the alert binaries vanish but ``online`` survives.
+
+    The recharge-state binaries key off ``recharge_ui``/``regeneration`` — not
+    the status block — so they are unaffected by its absence.
+    """
     detail = _base_detail()
     del _water_treatment(detail)["water_treatment_status"]
     _register_detail(mock_api, detail)
 
     assert await setup_integration(hass, mock_config_entry)
 
-    assert _created_keys(entity_registry, mock_config_entry.entry_id) == ["online"]
+    assert _created_keys(entity_registry, mock_config_entry.entry_id) == sorted(
+        [
+            "online",
+            "regenerating",
+            "vacation_mode",
+            "recharge_off",
+            "regeneration_suspended",
+        ]
+    )
     online_id = _entity_id(entity_registry, "online")
     assert online_id is not None
     online_state = hass.states.get(online_id)
@@ -371,12 +389,12 @@ async def test_offline_device_keeps_alert_binaries_available(
     assert online_state is not None
     assert online_state.state == STATE_OFF
 
-    # No Phase-2 binary gates on device_online, so none goes unavailable when the
+    # No binary gates on device_online, so none goes unavailable when the
     # softener is offline — the alerts are precisely what matters during an outage.
     entries = er.async_entries_for_config_entry(
         entity_registry, mock_config_entry.entry_id
     )
-    assert len(entries) == 7
+    assert len(entries) == len(EXPECTED_KEYS)
     for registry_entry in entries:
         state = hass.states.get(registry_entry.entity_id)
         assert state is not None
