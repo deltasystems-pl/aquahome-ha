@@ -1,0 +1,623 @@
+# serializer version: 1
+# name: test_full_leak_entity_set_snapshot[binary_sensor.basement_connectivity-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
+    'entity_id': 'binary_sensor.basement_connectivity',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Connectivity',
+    'options': dict({
+    }),
+    'original_device_class': <BinarySensorDeviceClass.CONNECTIVITY: 'connectivity'>,
+    'original_icon': None,
+    'original_name': 'Connectivity',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_connectivity',
+    'unique_id': '7384243_20203_1120_leak_2_leak_connectivity',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.basement_connectivity-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'connectivity',
+      'friendly_name': 'Basement Connectivity',
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.basement_connectivity',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'on',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.basement_leak_detected-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': None,
+    'entity_id': 'binary_sensor.basement_leak_detected',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Leak detected',
+    'options': dict({
+    }),
+    'original_device_class': <BinarySensorDeviceClass.MOISTURE: 'moisture'>,
+    'original_icon': None,
+    'original_name': 'Leak detected',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_detected',
+    'unique_id': '7384243_20203_1120_leak_2_leak_detected',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.basement_leak_detected-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'moisture',
+      'friendly_name': 'Basement Leak detected',
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.basement_leak_detected',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'off',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.basement_low_battery-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
+    'entity_id': 'binary_sensor.basement_low_battery',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Low battery',
+    'options': dict({
+    }),
+    'original_device_class': <BinarySensorDeviceClass.BATTERY: 'battery'>,
+    'original_icon': None,
+    'original_name': 'Low battery',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_low_battery',
+    'unique_id': '7384243_20203_1120_leak_2_leak_low_battery',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.basement_low_battery-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'battery',
+      'friendly_name': 'Basement Low battery',
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.basement_low_battery',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'on',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.basement_tampered-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': None,
+    'entity_id': 'binary_sensor.basement_tampered',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Tampered',
+    'options': dict({
+    }),
+    'original_device_class': <BinarySensorDeviceClass.TAMPER: 'tamper'>,
+    'original_icon': None,
+    'original_name': 'Tampered',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_tampered',
+    'unique_id': '7384243_20203_1120_leak_2_leak_tampered',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.basement_tampered-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'tamper',
+      'friendly_name': 'Basement Tampered',
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.basement_tampered',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'off',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.kitchen_connectivity-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
+    'entity_id': 'binary_sensor.kitchen_connectivity',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Connectivity',
+    'options': dict({
+    }),
+    'original_device_class': <BinarySensorDeviceClass.CONNECTIVITY: 'connectivity'>,
+    'original_icon': None,
+    'original_name': 'Connectivity',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_connectivity',
+    'unique_id': '7384243_20203_1120_leak_1_leak_connectivity',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.kitchen_connectivity-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'connectivity',
+      'friendly_name': 'Kitchen Connectivity',
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.kitchen_connectivity',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'on',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.kitchen_leak_detected-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': None,
+    'entity_id': 'binary_sensor.kitchen_leak_detected',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Leak detected',
+    'options': dict({
+    }),
+    'original_device_class': <BinarySensorDeviceClass.MOISTURE: 'moisture'>,
+    'original_icon': None,
+    'original_name': 'Leak detected',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_detected',
+    'unique_id': '7384243_20203_1120_leak_1_leak_detected',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.kitchen_leak_detected-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'moisture',
+      'friendly_name': 'Kitchen Leak detected',
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.kitchen_leak_detected',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'on',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.kitchen_low_battery-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
+    'entity_id': 'binary_sensor.kitchen_low_battery',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Low battery',
+    'options': dict({
+    }),
+    'original_device_class': <BinarySensorDeviceClass.BATTERY: 'battery'>,
+    'original_icon': None,
+    'original_name': 'Low battery',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_low_battery',
+    'unique_id': '7384243_20203_1120_leak_1_leak_low_battery',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.kitchen_low_battery-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'battery',
+      'friendly_name': 'Kitchen Low battery',
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.kitchen_low_battery',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'off',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.kitchen_tampered-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': None,
+    'entity_id': 'binary_sensor.kitchen_tampered',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Tampered',
+    'options': dict({
+    }),
+    'original_device_class': <BinarySensorDeviceClass.TAMPER: 'tamper'>,
+    'original_icon': None,
+    'original_name': 'Tampered',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_tampered',
+    'unique_id': '7384243_20203_1120_leak_1_leak_tampered',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[binary_sensor.kitchen_tampered-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'tamper',
+      'friendly_name': 'Kitchen Tampered',
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.kitchen_tampered',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'off',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[sensor.basement_signal_strength-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
+    'entity_id': 'sensor.basement_signal_strength',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Signal strength',
+    'options': dict({
+    }),
+    'original_device_class': <SensorDeviceClass.SIGNAL_STRENGTH: 'signal_strength'>,
+    'original_icon': None,
+    'original_name': 'Signal strength',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_signal_strength',
+    'unique_id': '7384243_20203_1120_leak_2_leak_signal_strength',
+    'unit_of_measurement': 'dBm',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[sensor.basement_signal_strength-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'signal_strength',
+      'friendly_name': 'Basement Signal strength',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': 'dBm',
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.basement_signal_strength',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '-60',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[sensor.basement_temperature-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.basement_temperature',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Temperature',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 1,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
+    'original_icon': None,
+    'original_name': 'Temperature',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_temperature',
+    'unique_id': '7384243_20203_1120_leak_2_leak_temperature',
+    'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[sensor.basement_temperature-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'temperature',
+      'friendly_name': 'Basement Temperature',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.basement_temperature',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '20.0',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[sensor.kitchen_signal_strength-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
+    'entity_id': 'sensor.kitchen_signal_strength',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Signal strength',
+    'options': dict({
+    }),
+    'original_device_class': <SensorDeviceClass.SIGNAL_STRENGTH: 'signal_strength'>,
+    'original_icon': None,
+    'original_name': 'Signal strength',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_signal_strength',
+    'unique_id': '7384243_20203_1120_leak_1_leak_signal_strength',
+    'unit_of_measurement': 'dBm',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[sensor.kitchen_signal_strength-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'signal_strength',
+      'friendly_name': 'Kitchen Signal strength',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': 'dBm',
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.kitchen_signal_strength',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '-60',
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[sensor.kitchen_temperature-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.kitchen_temperature',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Temperature',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 1,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
+    'original_icon': None,
+    'original_name': 'Temperature',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_temperature',
+    'unique_id': '7384243_20203_1120_leak_1_leak_temperature',
+    'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
+  })
+# ---
+# name: test_full_leak_entity_set_snapshot[sensor.kitchen_temperature-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'temperature',
+      'friendly_name': 'Kitchen Temperature',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.kitchen_temperature',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '20.0',
+  })
+# ---
