@@ -1,0 +1,19 @@
+{
+  "$schema": "https://api.myiquaapp.com/v1/schemas/DeviceSummaryObject.json",
+  "id": "d32caa70-dca3-4cc9-bd3e-28b8c44df23c",
+  "thing_name": "e4d6349d-779f-42c8-b2d7-4eff4bc879a3",
+  "system_type": "demand softener",
+  "system_type_display": "Demand Softener",
+  "image_url": "https://app.myiquaapp.com/devices/watersofteners/Aquahome.png?v=1",
+  "serial_number": "7384243-20203-1120",
+  "nickname": "Dom",
+  "is_shared_with_dealer": false,
+  "is_rental": null,
+  "is_disabled": false,
+  "user": {
+    "id": "7f1e15b0-e9c7-44a1-8f0a-1844d67bf545",
+    "first_name": "Dev",
+    "last_name": "User",
+    "email": "dev@example.com"
+  }
+}
