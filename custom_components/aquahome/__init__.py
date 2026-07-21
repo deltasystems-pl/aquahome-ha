@@ -1,16 +1,17 @@
 """The AquaHome integration for iQua-cloud water treatment devices.
 
 Sets up, per cloud device, a fast :class:`~.coordinator.AquaHomeCoordinator`
-(telemetry) plus a gentle :class:`~.coordinator.AquaHomeActivityCoordinator`
-(alert + regeneration history) behind a shared authenticated
-:class:`~.api.AquaHomeClient`, stores them on ``entry.runtime_data``
-(:class:`~.coordinator.AquaHomeRuntimeData`), and forwards the sensor /
-binary-sensor / event platforms. A rising alert badge or a regeneration
-transition seen by the fast coordinator triggers an early activity refresh, and
-the activity feed is refreshed tolerantly at setup so it never blocks core
-telemetry. Rotated tokens are persisted back onto the config entry so the entry
-survives long Home Assistant downtime without forcing interactive
-reauthentication.
+(telemetry), a gentle :class:`~.coordinator.AquaHomeActivityCoordinator`
+(alert + regeneration history), and a gentle
+:class:`~.coordinator.AquaHomeSettingsCoordinator` (the rule-driven settings
+document) behind a shared authenticated :class:`~.api.AquaHomeClient`, stores
+them on ``entry.runtime_data`` (:class:`~.coordinator.AquaHomeRuntimeData`), and
+forwards the sensor / binary-sensor / event platforms. A rising alert badge or a
+regeneration transition seen by the fast coordinator triggers an early activity
+refresh, and both the activity feed and the settings document are refreshed
+tolerantly at setup so neither ever blocks core telemetry. Rotated tokens are
+persisted back onto the config entry so the entry survives long Home Assistant
+downtime without forcing interactive reauthentication.
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ from .coordinator import (
     AquaHomeConfigEntry,
     AquaHomeCoordinator,
     AquaHomeRuntimeData,
+    AquaHomeSettingsCoordinator,
 )
 
 if TYPE_CHECKING:
@@ -89,6 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
 
     coordinators: dict[str, AquaHomeCoordinator] = {}
     activity_coordinators: dict[str, AquaHomeActivityCoordinator] = {}
+    settings_coordinators: dict[str, AquaHomeSettingsCoordinator] = {}
     for device in devices:
         coordinator = AquaHomeCoordinator(hass, entry, client, device)
         await coordinator.async_config_entry_first_refresh()
@@ -104,6 +107,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         await _async_first_activity_refresh(activity)
         activity_coordinators[device.id] = activity
 
+        settings = AquaHomeSettingsCoordinator(
+            hass,
+            entry,
+            client,
+            device_id=device.id,
+            device_slug=coordinator.device_slug,
+        )
+        await _async_first_settings_refresh(settings)
+        settings_coordinators[device.id] = settings
+
         _async_wire_activity_triggers(hass, entry, coordinator, activity)
 
     entry.runtime_data = AquaHomeRuntimeData(
@@ -111,6 +124,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         auth=auth,
         coordinators=coordinators,
         activity_coordinators=activity_coordinators,
+        settings_coordinators=settings_coordinators,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -133,6 +147,27 @@ async def _async_first_activity_refresh(
             "AquaHome activity feed for %s did not load during setup; its entities "
             "will be unavailable until the next refresh",
             activity.device_slug,
+        )
+
+
+async def _async_first_settings_refresh(
+    settings: AquaHomeSettingsCoordinator,
+) -> None:
+    """Refresh the settings document once at setup, tolerating a failure.
+
+    The rule-driven settings document must never block core telemetry, so — like
+    the activity feed and unlike the fast coordinator's
+    ``async_config_entry_first_refresh`` — a failed first settings refresh does
+    not abort setup: it is logged and swallowed, and the settings entities stay
+    unavailable until the next 6-hour refresh (or a write) succeeds.
+    ``async_refresh`` never raises, so setup always continues past this point.
+    """
+    await settings.async_refresh()
+    if not settings.last_update_success:
+        _LOGGER.warning(
+            "AquaHome settings for %s did not load during setup; its entities "
+            "will be unavailable until the next refresh",
+            settings.device_slug,
         )
 
 
@@ -240,16 +275,18 @@ async def _async_list_devices(
 async def async_unload_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> bool:
     """Unload a config entry and its forwarded platforms.
 
-    The fast-coordinator trigger listeners were registered through
-    ``entry.async_on_unload`` and are removed automatically. The activity
-    coordinators are shut down explicitly so their scheduled refresh and request
-    debouncer stop cleanly once the platforms (and their entity listeners) are
-    gone.
+    The fast-coordinator trigger listeners (and the dynamic-platform capability
+    listeners) were registered through ``entry.async_on_unload`` and are removed
+    automatically. The activity and settings coordinators are shut down explicitly
+    so their scheduled refresh and request debouncer stop cleanly once the
+    platforms (and their entity listeners) are gone.
     """
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         for activity in entry.runtime_data.activity_coordinators.values():
             await activity.async_shutdown()
+        for settings in entry.runtime_data.settings_coordinators.values():
+            await settings.async_shutdown()
     return unloaded
 
 

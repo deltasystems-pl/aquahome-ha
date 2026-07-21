@@ -37,6 +37,7 @@ from .api import (
     AuthError,
     AuthManager,
     Device,
+    DeviceSettingsDocument,
     RateLimitError,
     RegenerationEvent,
 )
@@ -47,6 +48,8 @@ from .const import (
     DOMAIN,
     EVENT_AQUAHOME,
     MAX_STALE_SECONDS,
+    SETTINGS_MAX_STALE_SECONDS,
+    SETTINGS_UPDATE_INTERVAL,
     UPDATE_INTERVAL,
 )
 from .entity import device_slug
@@ -70,6 +73,7 @@ class AquaHomeRuntimeData:
     auth: AuthManager
     coordinators: dict[str, AquaHomeCoordinator]
     activity_coordinators: dict[str, AquaHomeActivityCoordinator]
+    settings_coordinators: dict[str, AquaHomeSettingsCoordinator]
 
 
 def resolve_device_online(device: Device) -> bool:
@@ -382,4 +386,123 @@ class AquaHomeActivityCoordinator(DataUpdateCoordinator[DeviceActivity]):
                 )
                 self._serving_stale = True
             return replace(cached, new_alerts=())
+        raise UpdateFailed(str(err)) from err
+
+
+class AquaHomeSettingsCoordinator(DataUpdateCoordinator[DeviceSettingsDocument]):
+    """Poll one device's rule-driven settings document (DeviceSettingsBody).
+
+    Runs on the gentle :data:`~.const.SETTINGS_UPDATE_INTERVAL`: the document only
+    changes when the owner reconfigures the device, so a slow cadence suffices.
+    :meth:`async_write_setting` PATCHes a single value and reconciles from the
+    fresh document the server echoes back in the same round-trip, independent of
+    the poll cadence — a write is authoritative and immediately heals staleness.
+
+    The serve-stale behaviour mirrors :class:`AquaHomeCoordinator` in spirit but
+    is implemented standalone: device configuration stays valid across long cloud
+    blips, so the grace window is the widest of the three,
+    :data:`~.const.SETTINGS_MAX_STALE_SECONDS`.
+    """
+
+    def __init__(  # noqa: PLR0913 - contract-fixed dependency-injection signature
+        self,
+        hass: HomeAssistant,
+        entry: AquaHomeConfigEntry,
+        client: AquaHomeClient,
+        *,
+        device_id: str,
+        device_slug: str,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
+        """Bind the coordinator to one device's settings document.
+
+        ``monotonic`` is injected so the serve-stale time-to-live can be driven
+        deterministically in tests.
+        """
+        self.device_id = device_id
+        self.device_slug = device_slug
+        self.client = client
+        self._monotonic = monotonic
+        self._last_good: float | None = None
+        self._serving_stale = False
+        super().__init__(
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name=f"{DOMAIN} {device_slug} settings",
+            update_interval=SETTINGS_UPDATE_INTERVAL,
+        )
+
+    async def _async_update_data(self) -> DeviceSettingsDocument:
+        """Fetch the settings document, serving cached data on transient errors.
+
+        Authentication failures raise :class:`ConfigEntryAuthFailed` (straight to
+        reauth). Rate limits and transient 5xx errors take the serve-stale path;
+        a non-transient 4xx is raised as :class:`UpdateFailed`.
+        """
+        try:
+            document = await self.client.async_get_settings(self.device_id)
+        except AuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except (RateLimitError, AquaHomeConnectionError) as err:
+            return self._serve_stale(err)
+        except ApiError as err:
+            if (
+                err.status is not None
+                and err.status >= HTTPStatus.INTERNAL_SERVER_ERROR
+            ):
+                return self._serve_stale(err)
+            raise UpdateFailed(str(err)) from err
+        self._last_good = self._monotonic()
+        if self._serving_stale:
+            _LOGGER.info(
+                "AquaHome device %s settings recovered; serving fresh data again",
+                self.device_slug,
+            )
+            self._serving_stale = False
+        return document
+
+    async def async_write_setting(
+        self, name: str, value: bool | int | float | str
+    ) -> None:
+        """PATCH a single setting and reconcile from the returned document.
+
+        Sends ``{name: value}`` and pushes the refreshed
+        :class:`~.api.DeviceSettingsDocument` the server echoes back to listeners
+        via :meth:`async_set_updated_data`. That document also counts as fresh
+        data — ``_last_good`` is advanced and any serve-stale state cleared — so a
+        successful write heals a coordinator that had gone stale, without waiting
+        for the next scheduled poll. API exceptions propagate raw; the entity
+        layer maps them onto user-facing :class:`HomeAssistantError` translations.
+        """
+        document = await self.client.async_update_settings(
+            self.device_id, {name: value}
+        )
+        self._last_good = self._monotonic()
+        self._serving_stale = False
+        self.async_set_updated_data(document)
+
+    def _serve_stale(self, err: AquaHomeError) -> DeviceSettingsDocument:
+        """Return the last-good document across a transient failure, or fail.
+
+        Within :data:`~.const.SETTINGS_MAX_STALE_SECONDS` of the last success the
+        cached document is returned so the settings entities keep their state; the
+        first stale poll logs one warning and subsequent ones stay quiet. Past the
+        grace period, or with no cached data yet, the failure is surfaced as
+        :class:`UpdateFailed`.
+        """
+        cached: DeviceSettingsDocument | None = self.data
+        if (
+            cached is not None
+            and self._last_good is not None
+            and self._monotonic() - self._last_good < SETTINGS_MAX_STALE_SECONDS
+        ):
+            if not self._serving_stale:
+                _LOGGER.warning(
+                    "AquaHome device %s settings poll failed (%s); serving cached data",
+                    self.device_slug,
+                    err,
+                )
+                self._serving_stale = True
+            return cached
         raise UpdateFailed(str(err)) from err
