@@ -34,6 +34,7 @@ from custom_components.aquahome.api.models import (
     CommandResult,
     DatapointGraph,
     Device,
+    DeviceSettingsDocument,
     DeviceSummary,
     LiveTicket,
     RegenerationEventsPage,
@@ -289,18 +290,21 @@ async def test_get_summary_parses_fixture(session: aiohttp.ClientSession) -> Non
     assert summary.user.email == "dev@example.com"
 
 
-async def test_get_settings_returns_raw_document(
+async def test_get_settings_returns_parsed_document(
     session: aiohttp.ClientSession,
 ) -> None:
-    """GET settings returns the raw document untouched."""
+    """GET settings returns a parsed DeviceSettingsDocument."""
     fixture = load_fixture("settings.json")
     with aioresponses() as mocked:
         mocked.get(_pattern(f"/devices/{DEVICE_ID}/settings"), payload=fixture)
         client = _make_client(session)
         settings = await client.async_get_settings(DEVICE_ID)
 
-    assert isinstance(settings, dict)
-    assert "settings" in settings
+    assert isinstance(settings, DeviceSettingsDocument)
+    assert len(settings.settings) == 18
+    inlet = settings.get("inlet_hardness")
+    assert inlet is not None
+    assert inlet.current_value == "25.7"
 
 
 async def test_get_alerts_parses_fixture(session: aiohttp.ClientSession) -> None:
@@ -719,7 +723,7 @@ async def test_iqua2_base_url_is_used_for_requests(
 async def test_update_settings_patches_and_returns_document(
     session: aiohttp.ClientSession,
 ) -> None:
-    """PATCH settings sends ``{settings: {...}}`` and returns the raw document."""
+    """PATCH settings sends ``{settings: {...}}`` and returns the parsed document."""
     fixture = load_fixture("settings.json")
     with aioresponses() as mocked:
         mocked.patch(_pattern(f"/devices/{DEVICE_ID}/settings"), payload=fixture)
@@ -730,9 +734,12 @@ async def test_update_settings_patches_and_returns_document(
 
         (call,) = _calls_for(mocked, "PATCH", f"/devices/{DEVICE_ID}/settings")
 
-    # The full DeviceSettingsBody document round-trips back untouched.
-    assert result == fixture
-    assert "settings" in result
+    # The refreshed DeviceSettingsBody document is parsed from the echoed body.
+    assert isinstance(result, DeviceSettingsDocument)
+    assert len(result.settings) == 18
+    inlet = result.get("inlet_hardness")
+    assert inlet is not None
+    assert inlet.current_value == "25.7"
     # The request wraps the update map under a single ``settings`` key.
     assert call.kwargs["json"] == {"settings": {"inlet_hardness": "7.0"}}
 

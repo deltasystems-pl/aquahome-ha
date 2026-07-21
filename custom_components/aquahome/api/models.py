@@ -391,6 +391,238 @@ class RechargeUi:
 
 
 @dataclass(frozen=True, slots=True)
+class WsovDialogButtons:
+    """Enabled-button flags of a WSOV dialog (WaterShutoffValveDialogButtons).
+
+    Each flag is ``True`` when the server offers that action, ``False`` when it
+    explicitly disables it, and ``None`` when the flag is absent. The valve
+    entity treats an explicit ``False`` on ``open``/``close`` as a hard block.
+    """
+
+    acknowledge: bool | None = None
+    cancel: bool | None = None
+    close: bool | None = None
+    open: bool | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a WaterShutoffValveDialogButtons payload."""
+        return cls(
+            acknowledge=_as_bool(data.get("acknowledge")),
+            cancel=_as_bool(data.get("cancel")),
+            close=_as_bool(data.get("close")),
+            open=_as_bool(data.get("open")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class WsovDialog:
+    """Confirmation-dialog state for a water-shutoff-valve action."""
+
+    button_disabled: bool | None = None
+    button_label: str | None = None
+    dialog_buttons: WsovDialogButtons | None = None
+    dialog_explanation: str | None = None
+    dialog_title: str | None = None
+    state_message: str | None = None
+    is_error: bool | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a WaterShutoffValveDialog payload."""
+        dialog_buttons = data.get("dialog_buttons")
+        return cls(
+            button_disabled=_as_bool(data.get("button_disabled")),
+            button_label=_as_str(data.get("button_label")),
+            dialog_buttons=WsovDialogButtons.from_dict(dialog_buttons)
+            if isinstance(dialog_buttons, dict)
+            else None,
+            dialog_explanation=_as_str(data.get("dialog_explanation")),
+            dialog_title=_as_str(data.get("dialog_title")),
+            state_message=_as_str(data.get("state_message")),
+            is_error=_as_bool(data.get("is_error")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class WaterShutoffValve:
+    """Water-shutoff-valve block of the enriched data (WaterShutoffValveStatus).
+
+    ``status`` is the enum ``open``/``close``/``manual``/``not_installed``/
+    ``unknown``/``error``; ``auto_shutoff_features`` lists the conditions the
+    valve can auto-close on (empty when absent or null).
+    """
+
+    status: str | None = None
+    is_installed: bool | None = None
+    auto_shutoff_supported: bool | None = None
+    auto_shutoff_features: tuple[str, ...] = ()
+    error_code: str | None = None
+    manual_override: bool | None = None
+    dialog: WsovDialog | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a WaterShutoffValveStatus payload."""
+        dialog = data.get("dialog")
+        return cls(
+            status=_as_str(data.get("status")),
+            is_installed=_as_bool(data.get("is_installed")),
+            auto_shutoff_supported=_as_bool(data.get("auto_shutoff_supported")),
+            auto_shutoff_features=_as_str_tuple(data.get("auto_shutoff_features")),
+            error_code=_as_str(data.get("error_code")),
+            manual_override=_as_bool(data.get("manual_override")),
+            dialog=WsovDialog.from_dict(dialog) if isinstance(dialog, dict) else None,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class LeakDetectorFlag:
+    """One boolean status item of a leak detector (StatusItemBool).
+
+    Pairs the boolean ``value`` with the ``updated_at`` timestamp the device
+    last reported it; either may be ``None`` when absent.
+    """
+
+    value: bool | None = None
+    updated_at: datetime | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a WaterTreatmentLeakDetectorStatusItemBool payload."""
+        return cls(
+            value=_as_bool(data.get("value")),
+            updated_at=_parse_datetime(data.get("updated_at")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class LeakDetectorTemperature:
+    """Temperature reading of a leak detector.
+
+    Only the numeric ``raw_value`` (native US unit) and ``converted_value``
+    (account-preference unit) are kept; the ``display`` TranslatableValue and
+    the nested ``status`` item are intentionally ignored — the entity layer
+    binds the raw value, never the account-following conversion.
+    """
+
+    raw_value: float | None = None
+    converted_value: float | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a WaterTreatmentLeakDetectorTemperature payload."""
+        return cls(
+            raw_value=_as_float(data.get("raw_value")),
+            converted_value=_as_float(data.get("converted_value")),
+        )
+
+
+def _leak_flag(value: Any) -> LeakDetectorFlag | None:
+    """Parse a nested StatusItemBool object, or ``None`` when it is absent."""
+    return LeakDetectorFlag.from_dict(value) if isinstance(value, dict) else None
+
+
+@dataclass(frozen=True, slots=True)
+class LeakDetectorStatus:
+    """Status block of a single leak detector (WaterTreatmentLeakDetectorStatus).
+
+    ``signal_strength`` is flattened out of its ``{"value": int}`` wrapper; the
+    four boolean flags carry their own timestamps via :class:`LeakDetectorFlag`.
+    """
+
+    in_alert_state: bool | None = None
+    is_connected: LeakDetectorFlag | None = None
+    leak_detected: LeakDetectorFlag | None = None
+    low_battery: LeakDetectorFlag | None = None
+    tampered: LeakDetectorFlag | None = None
+    signal_strength: int | None = None
+    temperature: LeakDetectorTemperature | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a WaterTreatmentLeakDetectorStatus payload."""
+        signal = data.get("signal_strength")
+        temperature = data.get("temperature")
+        return cls(
+            in_alert_state=_as_bool(data.get("in_alert_state")),
+            is_connected=_leak_flag(data.get("is_connected")),
+            leak_detected=_leak_flag(data.get("leak_detected")),
+            low_battery=_leak_flag(data.get("low_battery")),
+            tampered=_leak_flag(data.get("tampered")),
+            signal_strength=_as_int(signal.get("value"))
+            if isinstance(signal, dict)
+            else None,
+            temperature=LeakDetectorTemperature.from_dict(temperature)
+            if isinstance(temperature, dict)
+            else None,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class LeakDetector:
+    """A single leak detector's detail (WaterTreatmentLeakDetectorDetail)."""
+
+    detector_id: int
+    nickname: str | None = None
+    nickname_setting_key: str | None = None
+    status: LeakDetectorStatus | None = None
+    last_updated_at: datetime | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self | None:
+        """Parse a WaterTreatmentLeakDetectorDetail payload.
+
+        Returns ``None`` when the payload lacks the required integer
+        ``detector_id`` — such an entry cannot be addressed as an entity, so it
+        is dropped rather than parsed into an unusable object.
+        """
+        detector_id = _as_int(data.get("detector_id"))
+        if detector_id is None:
+            return None
+        status = data.get("status")
+        return cls(
+            detector_id=detector_id,
+            nickname=_as_str(data.get("nickname")),
+            nickname_setting_key=_as_str(data.get("nickname_setting_key")),
+            status=LeakDetectorStatus.from_dict(status)
+            if isinstance(status, dict)
+            else None,
+            last_updated_at=_parse_datetime(data.get("last_updated_at")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class LeakDetectors:
+    """Leak-detector collection of the enriched data (WaterTreatmentLeakDetectors).
+
+    ``is_scanning`` is flattened out of the nested ``scanning.is_scanning``
+    field; ``details`` drops any entry without a usable ``detector_id``.
+    """
+
+    details: tuple[LeakDetector, ...] = ()
+    is_scanning: bool | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a WaterTreatmentLeakDetectors payload."""
+        raw = data.get("details")
+        details: tuple[LeakDetector, ...] = ()
+        if isinstance(raw, list):
+            parsed = [
+                LeakDetector.from_dict(item) for item in raw if isinstance(item, dict)
+            ]
+            details = tuple(item for item in parsed if item is not None)
+        scanning = data.get("scanning")
+        is_scanning = (
+            _as_bool(scanning.get("is_scanning"))
+            if isinstance(scanning, dict)
+            else None
+        )
+        return cls(details=details, is_scanning=is_scanning)
+
+
+@dataclass(frozen=True, slots=True)
 class WaterTreatment:
     """Curated ``water_treatment`` object (the enriched device data).
 
@@ -420,6 +652,8 @@ class WaterTreatment:
     treated_water_available: ConvertedProperty | None = None
     wifi_ssid_name: str | None = None
     flow_monitor_status: FlowMonitorStatus | None = None
+    water_shutoff_valve: WaterShutoffValve | None = None
+    leak_detectors: LeakDetectors | None = None
     features: tuple[str, ...] = ()
 
     @classmethod
@@ -432,6 +666,8 @@ class WaterTreatment:
         total_water_used = data.get("total_water_used")
         treated_water_available = data.get("treated_water_available")
         flow_monitor_status = data.get("flow_monitor_status")
+        water_shutoff_valve = data.get("water_shutoff_valve")
+        leak_detectors = data.get("leak_detectors")
         return cls(
             treatment_system_type=_str_or_empty(data.get("treatment_system_type")),
             salt_level_percent=_as_float(data.get("salt_level_percent")),
@@ -469,6 +705,12 @@ class WaterTreatment:
             wifi_ssid_name=_as_str(data.get("wifi_ssid_name")),
             flow_monitor_status=FlowMonitorStatus.from_dict(flow_monitor_status)
             if isinstance(flow_monitor_status, dict)
+            else None,
+            water_shutoff_valve=WaterShutoffValve.from_dict(water_shutoff_valve)
+            if isinstance(water_shutoff_valve, dict)
+            else None,
+            leak_detectors=LeakDetectors.from_dict(leak_detectors)
+            if isinstance(leak_detectors, dict)
             else None,
             features=_as_str_tuple(data.get("features")),
         )
@@ -844,6 +1086,317 @@ class LiveTicket:
     def from_dict(cls, data: dict[str, Any]) -> Self:
         """Parse a GetDeviceLiveDataOutputBody payload."""
         return cls(websocket_uri=_as_str(data.get("websocket_uri")))
+
+
+# ---------------------------------------------------------------------------
+# Device settings document (DeviceSettingsBody / DeviceSettingItem)
+#
+# The settings endpoint returns a flat list of settings, each carrying a
+# component type, current value, and a rule block that describes the valid
+# values. A setting may also carry a ``conditional`` group that gates whether
+# it should be shown, evaluated against the *other* settings' current values —
+# so visibility is a document-level operation (:meth:`DeviceSettingsDocument.
+# setting_visible`), not a per-setting one.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class SelectOption:
+    """One option of a select/multiselect rule (SelectOption).
+
+    ``value`` is the raw value written back to the API; ``label`` is the
+    server-localized display string. Both are required — an option missing
+    either is dropped by :meth:`from_dict` since it cannot be presented or
+    written.
+    """
+
+    value: str
+    label: str
+    disabled: bool | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self | None:
+        """Parse a SelectOption payload, or ``None`` when value/label is missing."""
+        value = _as_str(data.get("value"))
+        label = _as_str(data.get("label"))
+        if value is None or label is None:
+            return None
+        return cls(value=value, label=label, disabled=_as_bool(data.get("disabled")))
+
+
+def _parse_options(raw: Any) -> tuple[SelectOption, ...]:
+    """Parse a list of SelectOption payloads, dropping malformed entries."""
+    if not isinstance(raw, list):
+        return ()
+    parsed = [SelectOption.from_dict(item) for item in raw if isinstance(item, dict)]
+    return tuple(item for item in parsed if item is not None)
+
+
+@dataclass(frozen=True, slots=True)
+class SelectRules:
+    """Rule block for a select setting (SelectRule)."""
+
+    options: tuple[SelectOption, ...] = ()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a SelectRule payload."""
+        return cls(options=_parse_options(data.get("options")))
+
+
+@dataclass(frozen=True, slots=True)
+class NumberRules:
+    """Rule block for a number setting (NumberRule).
+
+    Every bound is optional in the spec; the entity layer applies its own
+    ``precision``-scaled fallbacks when a bound is ``None``.
+    """
+
+    min: int | None = None
+    max: int | None = None
+    step: int | None = None
+    precision: int | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a NumberRule payload."""
+        return cls(
+            min=_as_int(data.get("min")),
+            max=_as_int(data.get("max")),
+            step=_as_int(data.get("step")),
+            precision=_as_int(data.get("precision")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TextRules:
+    """Rule block for a text setting (TextRule)."""
+
+    min_length: int | None = None
+    max_length: int | None = None
+    regex: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a TextRule payload."""
+        return cls(
+            min_length=_as_int(data.get("min_length")),
+            max_length=_as_int(data.get("max_length")),
+            regex=_as_str(data.get("regex")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class MultiSelectRules:
+    """Rule block for a multiselect setting (MultiSelectRule)."""
+
+    options: tuple[SelectOption, ...] = ()
+    required: bool | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a MultiSelectRule payload."""
+        return cls(
+            options=_parse_options(data.get("options")),
+            required=_as_bool(data.get("required")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionalRule:
+    """One clause of a setting's visibility condition (ConditionalRule).
+
+    ``field`` names another setting, ``comparison`` is the operator (only
+    ``eq`` is understood today), and ``value`` is the JSON scalar to compare
+    against that other setting's current value.
+    """
+
+    field: str
+    comparison: str
+    value: bool | int | float | str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self | None:
+        """Parse a ConditionalRule payload.
+
+        Returns ``None`` when either the ``field`` or the ``comparison`` string
+        is missing — such a clause cannot be evaluated, so it is dropped.
+        """
+        field_name = _as_str(data.get("field"))
+        comparison = _as_str(data.get("comparison"))
+        if field_name is None or comparison is None:
+            return None
+        return cls(
+            field=field_name,
+            comparison=comparison,
+            value=_as_scalar(data.get("value")),
+        )
+
+
+def _parse_conditional_rules(raw: Any) -> tuple[ConditionalRule, ...]:
+    """Parse a list of ConditionalRule payloads, dropping unparseable clauses."""
+    if not isinstance(raw, list):
+        return ()
+    parsed = [ConditionalRule.from_dict(item) for item in raw if isinstance(item, dict)]
+    return tuple(item for item in parsed if item is not None)
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionalRuleGroup:
+    """Visibility condition of a setting (ConditionalRuleGroup).
+
+    ``and_rules`` (all must hold) come from the ``and`` key, ``or_rules`` (any
+    must hold) from the ``or`` key. Either group may be empty.
+    """
+
+    and_rules: tuple[ConditionalRule, ...] = ()
+    or_rules: tuple[ConditionalRule, ...] = ()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a ConditionalRuleGroup payload."""
+        return cls(
+            and_rules=_parse_conditional_rules(data.get("and")),
+            or_rules=_parse_conditional_rules(data.get("or")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SettingRules:
+    """The rule block of a setting (DeviceSettingRule) — one shape per type."""
+
+    select_rules: SelectRules | None = None
+    number_rules: NumberRules | None = None
+    text_rules: TextRules | None = None
+    multiselect_rules: MultiSelectRules | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a DeviceSettingRule payload."""
+        select_rules = data.get("select_rules")
+        number_rules = data.get("number_rules")
+        text_rules = data.get("text_rules")
+        multiselect_rules = data.get("multiselect_rules")
+        return cls(
+            select_rules=SelectRules.from_dict(select_rules)
+            if isinstance(select_rules, dict)
+            else None,
+            number_rules=NumberRules.from_dict(number_rules)
+            if isinstance(number_rules, dict)
+            else None,
+            text_rules=TextRules.from_dict(text_rules)
+            if isinstance(text_rules, dict)
+            else None,
+            multiselect_rules=MultiSelectRules.from_dict(multiselect_rules)
+            if isinstance(multiselect_rules, dict)
+            else None,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceSetting:
+    """One configurable setting of a device (DeviceSettingItem).
+
+    ``current_value`` is the raw, precision-expanded scalar the server returns
+    (a number setting's ``12.5`` grains arrives as ``125``); the entity layer
+    applies the ``NumberRule.precision`` scaling before display.
+    """
+
+    component_type: str
+    name: str
+    label: str
+    current_value: bool | int | float | str | None = None
+    description: str | None = None
+    rules: SettingRules | None = None
+    conditional: ConditionalRuleGroup | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a DeviceSettingItem payload."""
+        rules = data.get("rules")
+        conditional = data.get("conditional")
+        return cls(
+            component_type=_str_or_empty(data.get("component_type")),
+            name=_str_or_empty(data.get("name")),
+            label=_str_or_empty(data.get("label")),
+            current_value=_as_scalar(data.get("current_value")),
+            description=_as_str(data.get("description")),
+            rules=SettingRules.from_dict(rules) if isinstance(rules, dict) else None,
+            conditional=ConditionalRuleGroup.from_dict(conditional)
+            if isinstance(conditional, dict)
+            else None,
+        )
+
+
+#: Comparison operator understood by :meth:`DeviceSettingsDocument.setting_visible`.
+#: Any other operator fails open (the setting stays visible) — see that method.
+_CONDITIONAL_EQ = "eq"
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceSettingsDocument:
+    """Parsed device settings document (DeviceSettingsBody)."""
+
+    settings: tuple[DeviceSetting, ...] = ()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Parse a DeviceSettingsBody payload."""
+        raw = data.get("settings")
+        settings = (
+            tuple(
+                DeviceSetting.from_dict(item) for item in raw if isinstance(item, dict)
+            )
+            if isinstance(raw, list)
+            else ()
+        )
+        return cls(settings=settings)
+
+    def get(self, name: str) -> DeviceSetting | None:
+        """Return the setting named ``name``, or ``None`` when it is absent."""
+        for setting in self.settings:
+            if setting.name == name:
+                return setting
+        return None
+
+    def setting_visible(self, setting: DeviceSetting) -> bool:
+        """Return whether ``setting`` should be shown given the document state.
+
+        A setting without a ``conditional`` is always visible. Otherwise each
+        clause references another setting by name and is evaluated as
+        ``str(other.current_value) == str(rule.value)`` for the ``eq`` operator;
+        a clause whose referenced setting does not exist is ``False``. Both
+        groups gate together — all ``and`` clauses must hold *and* at least one
+        ``or`` clause must hold — with an empty group ignored.
+
+        **Unknown comparison operators fail open (evaluate ``True``).** We never
+        hide a setting on a guess: if the guess is wrong the server rejects the
+        write and the entity surfaces that, whereas a wrongly-hidden setting is
+        silently unreachable. Only ``eq`` is confirmed live.
+        """
+        conditional = setting.conditional
+        if conditional is None:
+            return True
+        results: list[bool] = []
+        if conditional.and_rules:
+            results.append(
+                all(self._evaluate_rule(rule) for rule in conditional.and_rules)
+            )
+        if conditional.or_rules:
+            results.append(
+                any(self._evaluate_rule(rule) for rule in conditional.or_rules)
+            )
+        return all(results)
+
+    def _evaluate_rule(self, rule: ConditionalRule) -> bool:
+        """Evaluate one conditional clause against the document's settings."""
+        other = self.get(rule.field)
+        if other is None:
+            return False
+        if rule.comparison == _CONDITIONAL_EQ:
+            return str(other.current_value) == str(rule.value)
+        # Unknown operator: fail open (see setting_visible docstring).
+        return True
 
 
 # ---------------------------------------------------------------------------

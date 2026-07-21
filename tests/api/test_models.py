@@ -7,6 +7,8 @@ scaling table.
 
 from __future__ import annotations
 
+import copy
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -21,6 +23,7 @@ from custom_components.aquahome.api.models import (
     ConvertedProperty,
     DatapointGraph,
     Device,
+    DeviceSettingsDocument,
     DeviceSummary,
     LiveTicket,
     LoginResult,
@@ -28,6 +31,7 @@ from custom_components.aquahome.api.models import (
     RateLimitStatus,
     RegenerationEventsPage,
     SaltLevel,
+    SelectRules,
     WaterTreatment,
     scaled_value,
 )
@@ -530,3 +534,482 @@ def test_unknown_keys_are_ignored() -> None:
     assert device.enriched_data is not None
     assert device.enriched_data.treatment_system_type == "softener"
     assert device.properties["salt_level_tenths"].value == 30
+
+
+# ---------------------------------------------------------------------------
+# Device settings document — real fixture parse
+# ---------------------------------------------------------------------------
+
+
+def _settings_doc(*items: Mapping[str, object]) -> DeviceSettingsDocument:
+    """Build a settings document from raw setting dicts."""
+    return DeviceSettingsDocument.from_dict({"settings": list(items)})
+
+
+def test_settings_document_parses_real_fixture() -> None:
+    """Parse the real 55 KB settings fixture: 18 items, 17 selects, 434 zones."""
+    doc = DeviceSettingsDocument.from_dict(load_fixture("settings.json"))
+
+    assert len(doc.settings) == 18
+    selects = [s for s in doc.settings if s.component_type == "select"]
+    assert len(selects) == 17
+
+    timezone = doc.get("timezone")
+    assert timezone is not None
+    assert timezone.rules is not None
+    assert timezone.rules.select_rules is not None
+    assert len(timezone.rules.select_rules.options) == 434
+
+    inlet = doc.get("inlet_hardness")
+    assert inlet is not None
+    assert inlet.current_value == "25.7"
+    assert inlet.rules is not None
+    assert inlet.rules.select_rules is not None
+    first_option = inlet.rules.select_rules.options[0]
+    assert first_option.value == "1.2"
+    assert first_option.label == "20 PPM (1 dH/2 fH)"
+    assert first_option.disabled is None
+
+
+def test_settings_document_text_and_select_rules_are_typed() -> None:
+    """The text setting exposes text_rules; a select exposes select_rules only."""
+    doc = DeviceSettingsDocument.from_dict(load_fixture("settings.json"))
+
+    nickname = doc.get("nickname")
+    assert nickname is not None
+    assert nickname.component_type == "text"
+    assert nickname.rules is not None
+    assert nickname.rules.text_rules is not None
+    assert nickname.rules.text_rules.min_length == 1
+    assert nickname.rules.text_rules.max_length == 50
+    assert nickname.rules.select_rules is None
+
+    volume = doc.get("volume_units")
+    assert volume is not None
+    assert volume.rules is not None
+    assert volume.rules.select_rules is not None
+    assert volume.rules.text_rules is None
+
+
+def test_settings_document_get_missing_is_none() -> None:
+    """Look up an absent setting name and get None back."""
+    doc = DeviceSettingsDocument.from_dict(load_fixture("settings.json"))
+    assert doc.get("does_not_exist") is None
+
+
+# ---------------------------------------------------------------------------
+# Conditional visibility
+# ---------------------------------------------------------------------------
+
+
+def test_conditional_hidden_against_fixture_and_visible_when_driver_matches() -> None:
+    """chem_feed_volume is hidden while aux_control_type is 0, visible at "4"."""
+    fixture = load_fixture("settings.json")
+    doc = DeviceSettingsDocument.from_dict(fixture)
+
+    chem = doc.get("chem_feed_volume")
+    assert chem is not None
+    assert chem.conditional is not None
+    assert chem.conditional.and_rules == ()
+    (rule,) = chem.conditional.or_rules
+    assert rule.field == "aux_control_type"
+    assert rule.comparison == "eq"
+    assert rule.value == "4"
+
+    # aux_control_type is "0" in the captured fixture -> the or-clause is False.
+    assert doc.setting_visible(chem) is False
+    # A driver setting with no conditional is always visible.
+    aux = doc.get("aux_control_type")
+    assert aux is not None
+    assert doc.setting_visible(aux) is True
+
+    # Flip the driver to "4" in a modified document -> the setting becomes visible.
+    modified = copy.deepcopy(fixture)
+    for setting in modified["settings"]:
+        if setting["name"] == "aux_control_type":
+            setting["current_value"] = "4"
+    doc_visible = DeviceSettingsDocument.from_dict(modified)
+    chem_visible = doc_visible.get("chem_feed_volume")
+    assert chem_visible is not None
+    assert doc_visible.setting_visible(chem_visible) is True
+
+
+def test_setting_visible_no_conditional() -> None:
+    """A setting without a conditional group is always visible."""
+    doc = _settings_doc(
+        {"component_type": "select", "name": "x", "label": "X", "current_value": "1"}
+    )
+    setting = doc.get("x")
+    assert setting is not None
+    assert doc.setting_visible(setting) is True
+
+
+def test_setting_visible_eq_true_and_false() -> None:
+    """The eq operator toggles visibility with the referenced value."""
+    dep = {
+        "component_type": "select",
+        "name": "dep",
+        "label": "Dep",
+        "current_value": "1",
+        "conditional": {"or": [{"field": "driver", "comparison": "eq", "value": "4"}]},
+    }
+    visible = _settings_doc(
+        {
+            "component_type": "select",
+            "name": "driver",
+            "label": "D",
+            "current_value": "4",
+        },
+        dep,
+    )
+    dep_visible = visible.get("dep")
+    assert dep_visible is not None
+    assert visible.setting_visible(dep_visible) is True
+
+    hidden = _settings_doc(
+        {
+            "component_type": "select",
+            "name": "driver",
+            "label": "D",
+            "current_value": "0",
+        },
+        dep,
+    )
+    dep_hidden = hidden.get("dep")
+    assert dep_hidden is not None
+    assert hidden.setting_visible(dep_hidden) is False
+
+
+def test_setting_visible_eq_is_string_normalized() -> None:
+    """An integer current value equals a string rule value after str()."""
+    doc = _settings_doc(
+        {
+            "component_type": "number",
+            "name": "driver",
+            "label": "D",
+            "current_value": 4,
+        },
+        {
+            "component_type": "select",
+            "name": "dep",
+            "label": "Dep",
+            "current_value": "1",
+            "conditional": {
+                "or": [{"field": "driver", "comparison": "eq", "value": "4"}]
+            },
+        },
+    )
+    dep = doc.get("dep")
+    assert dep is not None
+    assert doc.setting_visible(dep) is True
+
+
+def test_setting_visible_missing_referenced_field_is_hidden() -> None:
+    """A clause referencing a non-existent setting evaluates False."""
+    doc = _settings_doc(
+        {
+            "component_type": "select",
+            "name": "dep",
+            "label": "Dep",
+            "current_value": "1",
+            "conditional": {
+                "or": [{"field": "ghost", "comparison": "eq", "value": "4"}]
+            },
+        }
+    )
+    dep = doc.get("dep")
+    assert dep is not None
+    assert doc.setting_visible(dep) is False
+
+
+def test_setting_visible_unknown_comparison_fails_open() -> None:
+    """An unknown comparison operator keeps the setting visible (fail open)."""
+    doc = _settings_doc(
+        {
+            "component_type": "select",
+            "name": "driver",
+            "label": "D",
+            "current_value": "1",
+        },
+        {
+            "component_type": "select",
+            "name": "dep",
+            "label": "Dep",
+            "current_value": "1",
+            "conditional": {
+                "and": [{"field": "driver", "comparison": "gte", "value": "4"}]
+            },
+        },
+    )
+    dep = doc.get("dep")
+    assert dep is not None
+    assert doc.setting_visible(dep) is True
+
+
+def test_setting_visible_and_or_groups_gate_together() -> None:
+    """Both groups must hold: all ``and`` clauses and any ``or`` clause."""
+    conditional = {
+        "and": [{"field": "a", "comparison": "eq", "value": "1"}],
+        "or": [
+            {"field": "b", "comparison": "eq", "value": "9"},
+            {"field": "b", "comparison": "eq", "value": "2"},
+        ],
+    }
+    doc = _settings_doc(
+        {"component_type": "select", "name": "a", "label": "A", "current_value": "1"},
+        {"component_type": "select", "name": "b", "label": "B", "current_value": "2"},
+        {
+            "component_type": "select",
+            "name": "dep",
+            "label": "Dep",
+            "current_value": "0",
+            "conditional": conditional,
+        },
+    )
+    dep = doc.get("dep")
+    assert dep is not None
+    # and: a==1 True; or: b==9 False but b==2 True -> both groups hold.
+    assert doc.setting_visible(dep) is True
+
+    # Break the and-group: now a must equal "5", which it does not.
+    broken = copy.deepcopy(conditional)
+    broken["and"][0]["value"] = "5"
+    doc_hidden = _settings_doc(
+        {"component_type": "select", "name": "a", "label": "A", "current_value": "1"},
+        {"component_type": "select", "name": "b", "label": "B", "current_value": "2"},
+        {
+            "component_type": "select",
+            "name": "dep",
+            "label": "Dep",
+            "current_value": "0",
+            "conditional": broken,
+        },
+    )
+    dep_hidden = doc_hidden.get("dep")
+    assert dep_hidden is not None
+    assert doc_hidden.setting_visible(dep_hidden) is False
+
+
+# ---------------------------------------------------------------------------
+# Water-shutoff valve — synthetic payload
+# ---------------------------------------------------------------------------
+
+
+def test_water_shutoff_valve_parses_synthetic_payload() -> None:
+    """Parse a synthetic WSOV block, including the nested dialog buttons."""
+    payload = {
+        "treatment_system_type": "softener",
+        "water_shutoff_valve": {
+            "status": "close",
+            "is_installed": True,
+            "auto_shutoff_supported": True,
+            "auto_shutoff_features": ["leak_detected", "low_temperature"],
+            "error_code": "open_switch_error",
+            "manual_override": False,
+            "dialog": {
+                "button_disabled": False,
+                "button_label": "Open valve",
+                "dialog_explanation": "Water will flow again.",
+                "dialog_title": "Open the valve?",
+                "state_message": "Valve is closed",
+                "is_error": False,
+                "dialog_buttons": {
+                    "acknowledge": True,
+                    "cancel": True,
+                    "close": False,
+                    "open": True,
+                },
+            },
+        },
+    }
+    valve = WaterTreatment.from_dict(payload).water_shutoff_valve
+
+    assert valve is not None
+    assert valve.status == "close"
+    assert valve.is_installed is True
+    assert valve.auto_shutoff_supported is True
+    assert valve.auto_shutoff_features == ("leak_detected", "low_temperature")
+    assert valve.error_code == "open_switch_error"
+    assert valve.manual_override is False
+
+    dialog = valve.dialog
+    assert dialog is not None
+    assert dialog.button_disabled is False
+    assert dialog.button_label == "Open valve"
+    assert dialog.dialog_title == "Open the valve?"
+    assert dialog.state_message == "Valve is closed"
+    assert dialog.is_error is False
+
+    buttons = dialog.dialog_buttons
+    assert buttons is not None
+    assert buttons.acknowledge is True
+    assert buttons.cancel is True
+    assert buttons.close is False
+    assert buttons.open is True
+
+
+def test_water_treatment_without_wsov_or_leak_blocks_is_none() -> None:
+    """Both new optional blocks are None when absent from the payload."""
+    treatment = WaterTreatment.from_dict({"treatment_system_type": "softener"})
+    assert treatment.water_shutoff_valve is None
+    assert treatment.leak_detectors is None
+
+
+# ---------------------------------------------------------------------------
+# Leak detectors — synthetic payload with flattening
+# ---------------------------------------------------------------------------
+
+
+def test_leak_detectors_parse_synthetic_payload_with_flattening() -> None:
+    """Parse leak detectors: flatten scanning + signal_strength, skip id-less."""
+    payload = {
+        "treatment_system_type": "softener",
+        "leak_detectors": {
+            "details": [
+                {
+                    "detector_id": 7,
+                    "nickname": "Basement",
+                    "nickname_setting_key": "leak_7_nickname",
+                    "last_updated_at": "2026-07-20T10:00:00Z",
+                    "status": {
+                        "in_alert_state": True,
+                        "is_connected": {
+                            "value": True,
+                            "updated_at": "2026-07-20T09:00:00Z",
+                        },
+                        "leak_detected": {
+                            "value": True,
+                            "updated_at": "2026-07-20T09:30:00Z",
+                        },
+                        "low_battery": {"value": False},
+                        "tampered": {
+                            "value": False,
+                            "updated_at": "2026-07-20T08:00:00Z",
+                        },
+                        "signal_strength": {"value": -55},
+                        "temperature": {
+                            "raw_value": 71,
+                            "converted_value": 22,
+                            "display": {"value": "22 C", "translated": True},
+                            "status": {"value": True, "updated_at": "bogus"},
+                        },
+                    },
+                },
+                {"nickname": "no id — dropped"},
+            ],
+            "scanning": {"is_scanning": True},
+        },
+    }
+    detectors = WaterTreatment.from_dict(payload).leak_detectors
+
+    assert detectors is not None
+    # Flattened out of ``scanning.is_scanning``.
+    assert detectors.is_scanning is True
+    # The id-less entry is dropped, leaving a single addressable detector.
+    assert len(detectors.details) == 1
+
+    detector = detectors.details[0]
+    assert detector.detector_id == 7
+    assert detector.nickname == "Basement"
+    assert detector.nickname_setting_key == "leak_7_nickname"
+    assert detector.last_updated_at == datetime(2026, 7, 20, 10, 0, tzinfo=UTC)
+
+    status = detector.status
+    assert status is not None
+    assert status.in_alert_state is True
+    assert status.leak_detected is not None
+    assert status.leak_detected.value is True
+    assert status.leak_detected.updated_at == datetime(2026, 7, 20, 9, 30, tzinfo=UTC)
+    assert status.low_battery is not None
+    assert status.low_battery.value is False
+    assert status.low_battery.updated_at is None
+    # Flattened out of ``signal_strength.value``.
+    assert status.signal_strength == -55
+
+    temperature = status.temperature
+    assert temperature is not None
+    assert temperature.raw_value == 71
+    assert temperature.converted_value == 22
+
+
+# ---------------------------------------------------------------------------
+# Tolerance of garbage in the new models
+# ---------------------------------------------------------------------------
+
+
+def test_settings_document_tolerates_garbage() -> None:
+    """Wrong-typed settings payloads never raise and collapse to safe defaults."""
+    assert DeviceSettingsDocument.from_dict({}).settings == ()
+    assert DeviceSettingsDocument.from_dict({"settings": "nope"}).settings == ()
+
+    doc = DeviceSettingsDocument.from_dict(
+        {
+            "settings": [
+                {
+                    "component_type": 5,
+                    "name": None,
+                    "label": [],
+                    "current_value": {"nested": 1},
+                    "rules": "not a dict",
+                    "conditional": 12,
+                },
+                "not a dict",
+            ]
+        }
+    )
+    assert len(doc.settings) == 1
+    setting = doc.settings[0]
+    assert setting.component_type == ""
+    assert setting.name == ""
+    assert setting.label == ""
+    assert setting.current_value is None
+    assert setting.rules is None
+    assert setting.conditional is None
+    # A setting with no conditional is visible even after garbage parsing.
+    assert doc.setting_visible(setting) is True
+
+
+def test_select_rules_drop_options_missing_value_or_label() -> None:
+    """Options without both a value and a label are dropped, never raised on."""
+    rules = SelectRules.from_dict(
+        {
+            "options": [
+                {"value": "1", "label": "One"},
+                {"value": "2"},  # missing label
+                {"label": "no value"},  # missing value
+                "not a dict",
+                {"value": 3, "label": "wrong-typed value"},  # non-string value
+            ]
+        }
+    )
+    assert len(rules.options) == 1
+    assert rules.options[0].value == "1"
+    assert rules.options[0].label == "One"
+
+
+def test_wsov_and_leak_blocks_tolerate_garbage() -> None:
+    """Wrong-typed WSOV/leak blocks parse to safe empty structures."""
+    treatment = WaterTreatment.from_dict(
+        {
+            "treatment_system_type": "softener",
+            "water_shutoff_valve": {
+                "status": 5,
+                "is_installed": "yes",
+                "auto_shutoff_features": "not a list",
+                "dialog": 7,
+            },
+            "leak_detectors": {"details": "not a list", "scanning": "not a dict"},
+        }
+    )
+
+    valve = treatment.water_shutoff_valve
+    assert valve is not None
+    assert valve.status is None
+    assert valve.is_installed is None
+    assert valve.auto_shutoff_features == ()
+    assert valve.dialog is None
+
+    detectors = treatment.leak_detectors
+    assert detectors is not None
+    assert detectors.details == ()
+    assert detectors.is_scanning is None

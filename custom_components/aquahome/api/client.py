@@ -45,6 +45,7 @@ from .models import (
     CommandResult,
     DatapointGraph,
     Device,
+    DeviceSettingsDocument,
     DeviceSummary,
     LiveTicket,
     PropertyValue,
@@ -203,19 +204,20 @@ class AquaHomeClient:
         body = await self._request("GET", f"/devices/{device_id}/summary")
         return DeviceSummary.from_dict(body)
 
-    async def async_get_settings(self, device_id: str) -> dict[str, Any]:
-        """Return the raw settings document (typed in a later phase)."""
-        return await self._request("GET", f"/devices/{device_id}/settings")
+    async def async_get_settings(self, device_id: str) -> DeviceSettingsDocument:
+        """Return the parsed device settings document (DeviceSettingsBody)."""
+        body = await self._request("GET", f"/devices/{device_id}/settings")
+        return DeviceSettingsDocument.from_dict(body)
 
     async def async_update_settings(
         self, device_id: str, settings: Mapping[str, Any]
-    ) -> dict[str, Any]:
+    ) -> DeviceSettingsDocument:
         """Update device settings and return the refreshed settings document.
 
         Sends ``PATCH /devices/{id}/settings`` with a
         ``{"settings": {name: value}}`` body (spec ``DeviceSettingsUpdateBody``)
-        and returns the raw ``DeviceSettingsBody`` document the server echoes
-        back (typed in a later phase).
+        and returns the parsed ``DeviceSettingsBody`` document the server echoes
+        back, so a write and its reconcile happen in a single round-trip.
 
         The client is a thin transport: it forwards ``settings`` verbatim.
         Validating each value against the setting's own ``select_rules`` /
@@ -223,11 +225,12 @@ class AquaHomeClient:
         grains -> ``125``) — is the responsibility of the Phase-4 entity layer,
         NOT this method.
         """
-        return await self._request(
+        body = await self._request(
             "PATCH",
             f"/devices/{device_id}/settings",
             json_body={"settings": dict(settings)},
         )
+        return DeviceSettingsDocument.from_dict(body)
 
     async def async_get_alerts(
         self, device_id: str, *, page: int = 1, per_page: int = 20
