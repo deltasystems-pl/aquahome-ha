@@ -12,6 +12,7 @@ MANUFACTURER: Final = "iQua"
 
 PLATFORMS: Final[list[Platform]] = [
     Platform.BINARY_SENSOR,
+    Platform.EVENT,
     Platform.SENSOR,
 ]
 
