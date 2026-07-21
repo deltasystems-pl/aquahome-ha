@@ -1,0 +1,63 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "A",     # builtins shadowing
+    "ASYNC", # async correctness
+    "B",     # bugbear
+    "C4",    # comprehensions
+    "D",     # docstrings
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "G",     # logging format
+    "I",     # isort
+    "LOG",   # logging
+    "N",     # naming
+    "PIE",
+    "PL",    # pylint
+    "PT",    # pytest style
+    "RET",   # return statements
+    "RUF",
+    "S",     # bandit security
+    "SIM",   # simplify
+    "T20",   # no print
+    "TID",   # tidy imports
+    "TRY",   # exception handling
+    "UP",    # pyupgrade
+    "W",
+]
+ignore = [
+    "D203", # incompatible with D211
+    "D213", # incompatible with D212
+    "E501", # line length handled by the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",    # assert is the point of tests
+    "S105",    # hard-coded fake credentials in tests
+    "S106",
+    "PLR2004", # magic values are expected in assertions
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.mypy]
+python_version = "3.13"
+explicit_package_bases = true
+strict = true
+warn_unreachable = true
+show_error_codes = true
+exclude = ["\\.venv"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q"

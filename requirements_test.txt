@@ -1,0 +1,7 @@
+# Test / lint toolchain. pytest-homeassistant-custom-component pins the
+# matching homeassistant version and pytest plugins itself.
+pytest-homeassistant-custom-component==0.13.316
+aioresponses==0.7.9
+ruff==0.15.22
+mypy==2.3.0
+pre-commit==4.6.0

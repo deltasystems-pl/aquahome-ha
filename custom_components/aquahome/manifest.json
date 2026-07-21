@@ -1,0 +1,11 @@
+{
+  "domain": "aquahome",
+  "name": "AquaHome",
+  "codeowners": ["@deltasystems-pl"],
+  "documentation": "https://github.com/deltasystems-pl/aquahome",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/deltasystems-pl/aquahome/issues",
+  "requirements": [],
+  "version": "0.0.1"
+}
