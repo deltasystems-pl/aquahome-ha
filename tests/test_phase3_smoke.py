@@ -15,6 +15,7 @@ import copy
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import STATE_OFF, STATE_UNKNOWN
+from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
@@ -79,7 +80,13 @@ async def test_full_integration_alert_flow(
     mock_api.get(alerts_url(), payload=later_alerts, repeat=True)
 
     bus_events: list[Event[Any]] = []
-    hass.bus.async_listen(EVENT_AQUAHOME, bus_events.append)
+
+    @callback
+    def _capture(event: Event[Any]) -> None:
+        """Collect fired bus events synchronously, preserving fire order."""
+        bus_events.append(event)
+
+    hass.bus.async_listen(EVENT_AQUAHOME, _capture)
 
     assert await setup_integration(hass, mock_config_entry)
 

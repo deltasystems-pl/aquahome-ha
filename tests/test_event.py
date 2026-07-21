@@ -26,6 +26,7 @@ from unittest.mock import patch
 
 from homeassistant.components.event import ATTR_EVENT_TYPE, ATTR_EVENT_TYPES
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
+from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
@@ -33,6 +34,7 @@ from custom_components.aquahome.const import (
     ACTIVITY_UPDATE_INTERVAL,
     ALERT_EVENT_TYPE_OTHER,
     DOMAIN,
+    EVENT_AQUAHOME,
     KNOWN_ALERT_TYPES,
 )
 from tests.conftest import (
@@ -250,10 +252,20 @@ async def test_two_new_alerts_in_one_refresh_end_on_newest(
         alerts_first=load_fixture("alerts.json"),
         alerts_rest=_alerts_with(older, newer),
     )
+    bus_events: list[Any] = []
+
+    @callback
+    def _capture(event: Any) -> None:
+        """Collect fired bus events synchronously, preserving fire order."""
+        bus_events.append(event)
+
+    hass.bus.async_listen(EVENT_AQUAHOME, _capture)
     with _ONLY_EVENT:
         await setup_integration(hass, mock_config_entry)
         await _advance_activity(hass, freezer)
 
+    # Both alerts fanned out, oldest first — not only the final resting state.
+    assert [event.data["alert_id"] for event in bus_events] == ["new-A", "new-B"]
     state = hass.states.get(_entity_id(hass))
     assert state is not None
     assert state.attributes["alert_id"] == "new-B"
@@ -289,6 +301,51 @@ async def test_refresh_without_new_alerts_does_not_retrigger(
         triggered = _entity_state(hass)
         assert triggered not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
 
+        await _advance_activity(hass, freezer)
+
+    state = hass.states.get(_entity_id(hass))
+    assert state is not None
+    assert state.state == triggered
+    assert state.attributes["alert_id"] == "new-alert-known"
+
+
+async def test_serve_stale_refresh_does_not_refire_fired_alert(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A 429 poll right after a fired alert must not re-trigger the entity.
+
+    The coordinator notifies listeners even when serving cached data; the
+    cached view carries ``new_alerts=()`` so the entity's recorded trigger
+    timestamp stays put across the stale cycle (adversarial-review finding:
+    without the clear, every transient throttle re-fired the last alert and
+    re-ran user automations).
+    """
+    freezer.move_to(FROZEN_INSTANT)
+    mock_api.get(devices_url(), payload=load_fixture("devices-list.json"), repeat=True)
+    mock_api.get(device_url(), payload=load_fixture("device-detail.json"), repeat=True)
+    mock_api.get(
+        regen_events_url(),
+        payload=load_fixture("regeneration-events.json"),
+        repeat=True,
+    )
+    mock_api.get(alerts_url(), payload=load_fixture("alerts.json"))
+    mock_api.get(alerts_url(), payload=_alerts_with(NEW_KNOWN_ALERT))
+    mock_api.get(
+        alerts_url(),
+        status=429,
+        payload={"code": "ThrottleLimitExceeded", "detail": "slow down"},
+        repeat=True,
+    )
+    with _ONLY_EVENT:
+        await setup_integration(hass, mock_config_entry)
+        await _advance_activity(hass, freezer)
+        triggered = _entity_state(hass)
+        assert triggered not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+
+        # The next poll 429s: the coordinator serves stale and still notifies.
         await _advance_activity(hass, freezer)
 
     state = hass.states.get(_entity_id(hass))

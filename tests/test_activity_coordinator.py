@@ -284,6 +284,86 @@ async def test_duplicate_ids_across_refreshes_never_refire(
     assert data.new_alerts == ()
 
 
+async def test_serve_stale_clears_previously_fired_new_alerts(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+) -> None:
+    """A stale poll right after a fired alert must not present it as new again.
+
+    The base coordinator notifies listeners even when serving cached data, so a
+    429 immediately after a real alert would re-trigger the alert event entity
+    if ``new_alerts`` survived on the cached view (adversarial-review finding).
+    """
+    mock_config_entry.add_to_hass(hass)
+    first = load_fixture("alerts.json")
+    second = copy.deepcopy(first)
+    second["alerts"].insert(0, copy.deepcopy(NEW_ALERT))
+    mock_api.get(
+        regen_events_url(),
+        payload=load_fixture("regeneration-events.json"),
+        repeat=True,
+    )
+    mock_api.get(alerts_url(), payload=first)
+    mock_api.get(alerts_url(), payload=second)
+    mock_api.get(
+        alerts_url(),
+        status=429,
+        payload={"code": "ThrottleLimitExceeded", "detail": "slow down"},
+        repeat=True,
+    )
+    coordinator = _activity_coordinator(hass, mock_config_entry)
+    events = _capture_events(hass)
+
+    await coordinator.async_refresh()  # seeds the watermark
+    await coordinator.async_refresh()  # fires the new alert once
+    await coordinator.async_refresh()  # 429 -> serve-stale
+    await hass.async_block_till_done()
+
+    assert len(events) == 1
+    data = coordinator.data
+    assert data is not None
+    assert data.new_alerts == ()
+    assert data.alerts[0].id == "new-alert-0001"
+
+
+async def test_empty_page_glitch_never_replays_backlog(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+) -> None:
+    """A successful-but-empty page must not make old alerts look new afterwards.
+
+    Seen ids accumulate instead of being replaced by the current page, so even
+    a server glitch returning an empty ``alerts`` array cannot cause the next
+    full page to re-fire the whole backlog as new alerts.
+    """
+    mock_config_entry.add_to_hass(hass)
+    full = load_fixture("alerts.json")
+    empty = copy.deepcopy(full)
+    empty["alerts"] = []
+    mock_api.get(
+        regen_events_url(),
+        payload=load_fixture("regeneration-events.json"),
+        repeat=True,
+    )
+    mock_api.get(alerts_url(), payload=full)
+    mock_api.get(alerts_url(), payload=empty)
+    mock_api.get(alerts_url(), payload=full, repeat=True)
+    coordinator = _activity_coordinator(hass, mock_config_entry)
+    events = _capture_events(hass)
+
+    await coordinator.async_refresh()  # seeds from the full page
+    await coordinator.async_refresh()  # glitched empty page
+    await coordinator.async_refresh()  # full page again
+    await hass.async_block_till_done()
+
+    assert events == []
+    data = coordinator.data
+    assert data is not None
+    assert data.new_alerts == ()
+
+
 async def test_alerts_sorted_newest_first_tolerating_undated(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -347,13 +427,19 @@ async def test_serve_stale_on_rate_limit_within_ttl_keeps_data(
     )
 
     result = await coordinator._async_update_data()
-    assert result is good
+    # The cached history survives, but new_alerts is cleared: a failed poll
+    # observed nothing new, and replaying the previous cycle's batch would
+    # re-trigger the alert event entity (adversarial-review finding).
+    assert result.alerts == good.alerts
+    assert result.regeneration_events == good.regeneration_events
+    assert result.new_alerts == ()
     assert coordinator._serving_stale is True
 
     # A scheduled refresh over the same failure keeps the entity available.
     await coordinator.async_refresh()
     assert coordinator.last_update_success is True
-    assert coordinator.data is good
+    assert coordinator.data is not None
+    assert coordinator.data.alerts == good.alerts
 
 
 async def test_past_ttl_raises_update_failed(
@@ -487,6 +573,42 @@ async def test_badge_count_increase_triggers_early_activity_refresh(
         await _fire_next_poll(hass, freezer)
 
     assert spy.call_count == 1
+
+
+async def test_badge_count_decrease_does_not_trigger_refresh(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A falling badge (alerts read in the app) must not spend an early refresh.
+
+    The trigger is increase-only: a decrease carries no new-alert information,
+    so reacting to any change would waste the throttled cloud budget on every
+    read-in-app action (kills the ``>`` -> ``!=`` mutation).
+    """
+    freezer.move_to(FROZEN_INSTANT)
+    high = copy.deepcopy(load_fixture("device-detail.json"))
+    high["enriched_data"]["water_treatment"]["water_treatment_status"][
+        "alert_badge_count"
+    ] = 2
+    low = copy.deepcopy(load_fixture("device-detail.json"))
+    low["enriched_data"]["water_treatment"]["water_treatment_status"][
+        "alert_badge_count"
+    ] = 0
+    mock_api.get(devices_url(), payload=load_fixture("devices-list.json"), repeat=True)
+    mock_api.get(device_url(), payload=high)
+    mock_api.get(device_url(), payload=low, repeat=True)
+    add_activity_routes(mock_api)
+
+    with _limit_platforms():
+        assert await setup_integration(hass, mock_config_entry)
+
+    activity = mock_config_entry.runtime_data.activity_coordinators[TEST_DEVICE_ID]
+    with patch.object(activity, "async_request_refresh", new_callable=AsyncMock) as spy:
+        await _fire_next_poll(hass, freezer)
+
+    assert spy.call_count == 0
 
 
 async def test_regen_active_flip_triggers_early_activity_refresh(

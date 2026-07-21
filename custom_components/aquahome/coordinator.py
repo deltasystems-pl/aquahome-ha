@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -315,12 +315,14 @@ class AquaHomeActivityCoordinator(DataUpdateCoordinator[DeviceActivity]):
         )
 
     def _diff_new_alerts(self, alerts: tuple[Alert, ...]) -> tuple[Alert, ...]:
-        """Return alerts unseen on the previous refresh, ordered oldest-to-newest.
+        """Return alerts unseen on any previous refresh, ordered oldest-to-newest.
 
         The first successful refresh only establishes the watermark (returns no
-        new alerts). Afterwards any alert whose id was absent from the previous
-        page is new; the watermark is then reset to the current ids, so a shrunk
-        or empty page never re-fires a backlog.
+        new alerts). Afterwards any alert whose id has never been seen is new.
+        Seen ids accumulate (union, not replacement) so even a glitched shrunk
+        or empty page can never make old alerts look new again on the page
+        after it; growth is bounded in practice by the account's alert rate
+        (tens of ids per year) and resets on restart.
         """
         current_ids = frozenset(alert.id for alert in alerts if alert.id)
         seen = self._seen_alert_ids
@@ -330,7 +332,7 @@ class AquaHomeActivityCoordinator(DataUpdateCoordinator[DeviceActivity]):
         new = tuple(
             alert for alert in reversed(alerts) if alert.id and alert.id not in seen
         )
-        self._seen_alert_ids = current_ids
+        self._seen_alert_ids = seen | current_ids
         return new
 
     def _fire_alert_event(self, alert: Alert) -> None:
@@ -360,6 +362,11 @@ class AquaHomeActivityCoordinator(DataUpdateCoordinator[DeviceActivity]):
         stale poll logs one warning and subsequent ones stay quiet. Past the
         grace period, or with no cached data yet, the failure is surfaced as
         :class:`UpdateFailed`.
+
+        The cached view is returned with ``new_alerts`` cleared: a failed poll
+        observed nothing new, and the base coordinator notifies listeners even
+        for stale data, so replaying the previous cycle's ``new_alerts`` would
+        re-trigger the alert event entity for alerts it already fired.
         """
         cached: DeviceActivity | None = self.data
         if (
@@ -374,5 +381,5 @@ class AquaHomeActivityCoordinator(DataUpdateCoordinator[DeviceActivity]):
                     err,
                 )
                 self._serving_stale = True
-            return cached
+            return replace(cached, new_alerts=())
         raise UpdateFailed(str(err)) from err
