@@ -110,19 +110,59 @@ def device_url(
     return re.compile(rf"^{re.escape(host)}/devices/{re.escape(device_id)}\?.*$")
 
 
-def add_device_routes(
+def alerts_url(
+    device_id: str = TEST_DEVICE_ID, host: str = API_BASE_URL
+) -> re.Pattern[str]:
+    """Match the paginated ``GET /devices/{id}/alerts`` URL on ``host``."""
+    return re.compile(rf"^{re.escape(host)}/devices/{re.escape(device_id)}/alerts\?.*$")
+
+
+def regen_events_url(
+    device_id: str = TEST_DEVICE_ID, host: str = API_BASE_URL
+) -> re.Pattern[str]:
+    """Match the ``GET /devices/{id}/regeneration-events`` URL on ``host``."""
+    return re.compile(
+        rf"^{re.escape(host)}/devices/{re.escape(device_id)}/regeneration-events\?.*$"
+    )
+
+
+def add_activity_routes(
+    mock: aioresponses,
+    *,
+    host: str = API_BASE_URL,
+    alerts: dict[str, Any] | None = None,
+    regeneration_events: dict[str, Any] | None = None,
+    repeat: bool = True,
+) -> None:
+    """Register the activity-coordinator read routes from the real fixtures."""
+    mock.get(
+        alerts_url(host=host),
+        payload=alerts or load_fixture("alerts.json"),
+        repeat=repeat,
+    )
+    mock.get(
+        regen_events_url(host=host),
+        payload=regeneration_events or load_fixture("regeneration-events.json"),
+        repeat=repeat,
+    )
+
+
+def add_device_routes(  # noqa: PLR0913 - a keyword-only per-fixture override per route
     mock: aioresponses,
     *,
     host: str = API_BASE_URL,
     devices_list: dict[str, Any] | None = None,
     device_detail: dict[str, Any] | None = None,
+    alerts: dict[str, Any] | None = None,
+    regeneration_events: dict[str, Any] | None = None,
     repeat: bool = True,
 ) -> None:
-    """Register the two read routes a normal entry setup hits, from real fixtures.
+    """Register every read route a normal entry setup hits, from real fixtures.
 
-    Tests that need failure sequences register their own (non-``repeat``) routes
-    before calling this, or skip it entirely — aioresponses matches registrations
-    in order.
+    Covers the device list/detail polls plus the activity-coordinator routes
+    (alert feed + regeneration history). Tests that need failure sequences
+    register their own (non-``repeat``) routes before calling this, or skip it
+    entirely — aioresponses matches registrations in order.
     """
     mock.get(
         devices_url(host),
@@ -132,6 +172,13 @@ def add_device_routes(
     mock.get(
         device_url(host=host),
         payload=device_detail or load_fixture("device-detail.json"),
+        repeat=repeat,
+    )
+    add_activity_routes(
+        mock,
+        host=host,
+        alerts=alerts,
+        regeneration_events=regeneration_events,
         repeat=repeat,
     )
 

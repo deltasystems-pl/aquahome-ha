@@ -80,6 +80,84 @@
       },
       "wifi_module_version": {
         "name": "Wi-Fi module firmware"
+      },
+      "regeneration_status": {
+        "name": "Regeneration status",
+        "state": {
+          "regenerating": "Regenerating",
+          "scheduled": "Scheduled",
+          "none": "Idle",
+          "unknown": "Unknown",
+          "disabled": "Disabled",
+          "suspended": "Suspended",
+          "error": "Error",
+          "wsov_disabled": "Disabled (shutoff valve)"
+        }
+      },
+      "regeneration_time_remaining": {
+        "name": "Regeneration time remaining"
+      },
+      "next_regeneration": {
+        "name": "Next regeneration"
+      },
+      "last_regeneration": {
+        "name": "Last regeneration"
+      },
+      "average_daily_use_day_1": {
+        "name": "Average use Sunday"
+      },
+      "average_daily_use_day_2": {
+        "name": "Average use Monday"
+      },
+      "average_daily_use_day_3": {
+        "name": "Average use Tuesday"
+      },
+      "average_daily_use_day_4": {
+        "name": "Average use Wednesday"
+      },
+      "average_daily_use_day_5": {
+        "name": "Average use Thursday"
+      },
+      "average_daily_use_day_6": {
+        "name": "Average use Friday"
+      },
+      "average_daily_use_day_7": {
+        "name": "Average use Saturday"
+      },
+      "capacity_remaining": {
+        "name": "Capacity remaining"
+      },
+      "hardness_setting": {
+        "name": "Hardness setting"
+      },
+      "total_salt_used": {
+        "name": "Total salt used"
+      },
+      "total_rock_removed": {
+        "name": "Total hardness removed"
+      },
+      "error_codes": {
+        "name": "Error codes"
+      },
+      "latest_alert": {
+        "name": "Latest alert"
+      }
+    },
+    "event": {
+      "alert": {
+        "name": "Alert",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "connection_status_offline": "Disconnected",
+              "connection_status_online": "Connected",
+              "excessive_water_use_alert": "Excessive water use",
+              "water_shutoff_valve_opened": "Shutoff valve opened",
+              "salt_level_2": "Low salt",
+              "other": "Other"
+            }
+          }
+        }
       }
     },
     "binary_sensor": {
@@ -109,6 +187,21 @@
       },
       "water_to_drain_alert": {
         "name": "Water-to-drain alert"
+      },
+      "regenerating": {
+        "name": "Regenerating"
+      },
+      "vacation_mode": {
+        "name": "Vacation mode"
+      },
+      "recharge_off": {
+        "name": "Recharge off"
+      },
+      "regeneration_suspended": {
+        "name": "Regeneration suspended"
+      },
+      "wsov_closed": {
+        "name": "Shutoff valve closed"
       }
     }
   },
