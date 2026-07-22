@@ -51,7 +51,7 @@ ACTIVITY_PAGE_SIZE: Final = 20
 # convention, like zha_event).
 EVENT_AQUAHOME: Final = "aquahome_event"
 
-# Alert types observed on the live feed (knowledge/api samples). The event
+# Alert types observed on the live feed (private/knowledge/api samples). The event
 # entity declares exactly these plus the catch-all; unknown vendor strings map
 # to ALERT_EVENT_TYPE_OTHER with the raw type preserved in the attributes.
 KNOWN_ALERT_TYPES: Final[tuple[str, ...]] = (

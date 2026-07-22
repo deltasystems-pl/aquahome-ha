@@ -13,15 +13,16 @@ the same iQua cloud API the official Android app uses (`api.myiquaapp.com`).
   available, regeneration status and history, device diagnostics.
 - Long-term statistics backfill (usage history in the Energy dashboard).
 - Salt-consumption intelligence and water-usage analytics (leak detection,
-  vacation detection) — see the research reports in `knowledge/research/`.
+  vacation detection) — see the research reports in `private/knowledge/research/`.
 - Controls: regenerate now/schedule/cancel, alarm silence; water shutoff valve
   and leak detectors on hardware that has them (feature-gated).
 
 ## Repository layout
 
 - `custom_components/aquahome/` — the integration.
-- `knowledge/` — verified API reference, device facts, and research reports the
-  implementation is grounded in.
+- `private/` — private git submodule with the verified API reference, device
+  facts, research reports, and entity analysis the implementation is grounded
+  in (`private/knowledge/`, `private/docs/`). Access is restricted.
 - `tests/` — test suite (fixtures are real, redacted API payloads).
 
 ## Disclaimer
