@@ -3,10 +3,10 @@
   "name": "AquaHome",
   "codeowners": ["@deltasystems-pl"],
   "config_flow": true,
-  "documentation": "https://github.com/deltasystems-pl/aquahome",
+  "documentation": "https://github.com/deltasystems-pl/aquahome-ha",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/deltasystems-pl/aquahome/issues",
+  "issue_tracker": "https://github.com/deltasystems-pl/aquahome-ha/issues",
   "requirements": [],
   "version": "0.0.1"
 }
