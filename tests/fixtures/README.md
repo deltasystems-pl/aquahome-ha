@@ -1,7 +1,7 @@
 # Test fixtures
 
 Real API payloads captured 2026-07-21 from the reference device (AquaHome 20
-Smart, features `["regeneration"]` only), copied from `private/knowledge/api/samples/`.
+Smart, features `["regeneration"]` only), copied from `reverse-engineering/knowledge/api/samples/`.
 
 Modifications relative to the raw captures:
 

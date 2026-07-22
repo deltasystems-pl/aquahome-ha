@@ -204,7 +204,7 @@ same ref cancel each other. The workflow has five independent jobs:
 - `custom_components/aquahome/` — the integration (API client, coordinators,
   config flow, and entity platforms).
 - `tests/` — the test suite.
-- `private/` — maintainer-only git submodule (restricted access). It is **not**
+- `reverse-engineering/` — maintainer-only git submodule (restricted access). It is **not**
   required to build, run, install, or contribute to the integration; a normal
   clone works without it.
 

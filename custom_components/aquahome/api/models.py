@@ -1469,7 +1469,7 @@ class RateLimitStatus:
 #
 # Many raw properties are integer-scaled; the divisors below are verified
 # against the device's own converted values (see
-# private/knowledge/device/aquahome-20-smart.md, "Raw property scaling factors").
+# reverse-engineering/knowledge/device/aquahome-20-smart.md, "Raw property scaling factors").
 # ---------------------------------------------------------------------------
 
 #: Sentinel value that means "feature disabled" for ``service_reminder_months``.
