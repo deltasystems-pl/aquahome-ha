@@ -174,15 +174,19 @@ def day_total_liters(
     the difference of the two counter readings in effect at those instants — so
     water that flowed while the device was silent is still counted, exactly as
     the meter recorded it. ``None`` when the series does not reach back to the
-    opening boundary. Whether that difference is *trustworthy* is a separate
-    question answered by :func:`bounded`: a long gap before the opening
-    boundary makes this total honest arithmetic over dishonest coverage.
+    opening boundary — and ``None``, not a clamped zero, when the counter runs
+    *backwards* across the day: a genuine 0.0 is strong positive evidence
+    downstream (a certainly-empty house, a leak-free night), and corruption
+    must never masquerade as it. Whether a valid difference is *trustworthy*
+    is a separate question answered by :func:`bounded`: a long gap before the
+    opening boundary makes this total honest arithmetic over dishonest
+    coverage.
     """
     opening = counter_at(readings, _noon(day - _ONE_DAY, tz))
     closing = counter_at(readings, _noon(day, tz))
-    if opening is None or closing is None:
+    if opening is None or closing is None or closing < opening:
         return None
-    return max(closing - opening, 0.0) * LITERS_PER_GALLON
+    return (closing - opening) * LITERS_PER_GALLON
 
 
 def largest_event_liters(

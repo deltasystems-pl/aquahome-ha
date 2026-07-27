@@ -536,8 +536,15 @@ def cusum_alarm(values: FloatSeries) -> bool:
     Hampel-cleaned series with the standard design (slack ``k`` at half a sigma,
     decision interval ``h`` at five sigma). Only the upward side is watched: a
     sustained *drop* in usage is the vacation detector's domain, and reporting
-    it as drift would raise a "problem" flag on every absence. A series without
-    a usable scale estimate never alarms.
+    it as drift would raise a "problem" flag on every absence.
+
+    The batch chart needs one guard the sequential original does not: its
+    target is the in-sample mean, so a series that *dropped* mid-window leaves
+    its earlier, higher prefix reading as a sustained positive excursion and
+    the upper sum alarms on the mirror image of what it watches for. An alarm
+    therefore only counts when the window's trailing level actually sits above
+    the target — the shift is upward *and still in force*. A series without a
+    usable scale estimate never alarms.
     """
     data = hampel_clean(values)
     if data.size < _DRIFT_MIN_VALUES:
@@ -548,11 +555,16 @@ def cusum_alarm(values: FloatSeries) -> bool:
     slack = CUSUM_K_SIGMA * sigma
     limit = CUSUM_H_SIGMA * sigma
     high = 0.0
+    crossed = False
     for raw in data:
         high = max(0.0, high + (float(raw) - target) - slack)
         if high > limit:
-            return True
-    return False
+            crossed = True
+            break
+    if not crossed:
+        return False
+    trailing = data[-min(_EWMA_BURN_IN, data.size) :]
+    return float(np.mean(trailing)) > target
 
 
 def ewma_alarm(values: FloatSeries) -> bool:
@@ -633,10 +645,15 @@ def _occupancy(  # noqa: PLR0911 - one verdict per distinct evidence situation
        average is below the vacation ratio was an absence even though no
        single day inside it can be totalled. (A device-offline-at-home gap
        fails this — the return delta carries days of normal usage.)
-    3. A day after the last reading (trailing silence) is a certain zero —
-       *provided* the device is currently online (an offline device pushes
-       nothing regardless of usage) and the statistics import is known
-       current (otherwise silence may just be import lag).
+    3. A day lying wholly after the *last reading of the series* (trailing
+       silence) is a certain zero — *provided* the device is currently online
+       (an offline device pushes nothing regardless of usage) and the
+       statistics import is known current (otherwise silence may just be
+       import lag). A day that merely lacks its closing bound while holding
+       readings — the still-settling newest noon-day of a live household — is
+       NOT silence: it plainly had usage, and judging it would hand every
+       afternoon run a free "unoccupied" day at the head of the streak
+       (observed on the real replay: 49 L across four draws read as empty).
 
     Every path needs a positive resolved expectation to compare against.
     """
@@ -655,6 +672,8 @@ def _occupancy(  # noqa: PLR0911 - one verdict per distinct evidence situation
     after = bisect_left(readings, end, key=itemgetter(0))
     if after >= len(readings):
         if not device_online or not statistics_fresh:
+            return None
+        if readings and readings[-1][0] > start:
             return None
         allocated = 0.0
     else:
@@ -710,10 +729,13 @@ def vacation_state(
 
     consecutive = len(streak)
     active = device_online and consecutive >= VACATION_MIN_DAYS
+    # ``since`` names the head of the current streak whenever one exists, not
+    # only once the verdict fires — a building two-day streak with no start
+    # date would leave the entity's attributes internally inconsistent.
     return VacationState(
         active=active,
         consecutive_days=consecutive,
-        since=streak[-1] if active else None,
+        since=streak[-1] if streak else None,
     )
 
 
