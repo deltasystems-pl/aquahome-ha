@@ -26,6 +26,7 @@ from .const import (
     SALT_DAYS_HYSTERESIS,
     SALT_DAYS_WARNING_THRESHOLD,
 )
+from .entity import device_display_name
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -53,13 +54,6 @@ def _out_of_salt_days(device: Device) -> float | None:
     """Return the device's scaled out-of-salt countdown, or ``None``."""
     prop = device.properties.get("out_of_salt_estimate_days")
     return scaled_value(prop) if prop is not None else None
-
-
-def _device_display_name(device: Device) -> str:
-    """Return the human-facing device name used in the issue text."""
-    enriched = device.enriched_data
-    model = enriched.model if enriched is not None else None
-    return device.nickname or model or "AquaHome"
 
 
 def _next_tier(current: _Tier, days: float | None) -> _Tier:
@@ -112,10 +106,13 @@ def async_setup_salt_issues(
         days = _out_of_salt_days(device) if device is not None else None
         new_tier = _next_tier(tier, days)
         # ``days``/``device`` cannot be None below: _next_tier maps None to
-        # NONE — the extra checks narrow the types without an assert.
+        # NONE — the extra checks narrow the types without an assert. The
+        # delete is deliberately unconditional (a no-op when absent): the tier
+        # is closure-local and resets on reload, so gating it on the tracked
+        # tier would leave a pre-reload issue standing after the salt was
+        # refilled while the entry was unloaded.
         if new_tier is _Tier.NONE or days is None or device is None:
-            if tier is not _Tier.NONE:
-                ir.async_delete_issue(hass, DOMAIN, issue_id)
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
             tier = _Tier.NONE
             reported_days = None
             return
@@ -132,12 +129,24 @@ def async_setup_salt_issues(
             severity=severity,
             translation_key=translation_key,
             translation_placeholders={
-                "device": _device_display_name(device),
+                "device": device_display_name(device),
                 "days": str(new_days),
             },
         )
         tier = new_tier
         reported_days = new_days
 
+    @callback
+    def _delete_on_unload() -> None:
+        """Drop the issue when the entry unloads.
+
+        A Repairs issue outlives its config entry unless deleted explicitly, so
+        without this an uninstalled integration would keep nagging until the
+        next restart. On a plain reload the setup path re-evaluates immediately
+        and re-creates the issue if the salt is still low.
+        """
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+
     _evaluate()
     entry.async_on_unload(coordinator.async_add_listener(_evaluate))
+    entry.async_on_unload(_delete_on_unload)
