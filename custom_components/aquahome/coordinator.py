@@ -57,6 +57,8 @@ from .entity import device_slug
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
+    from .statistics import AquaHomeStatisticsCoordinator
+
 _LOGGER = logging.getLogger(__name__)
 
 type AquaHomeConfigEntry = ConfigEntry[AquaHomeRuntimeData]
@@ -74,6 +76,7 @@ class AquaHomeRuntimeData:
     coordinators: dict[str, AquaHomeCoordinator]
     activity_coordinators: dict[str, AquaHomeActivityCoordinator]
     settings_coordinators: dict[str, AquaHomeSettingsCoordinator]
+    statistics_coordinators: dict[str, AquaHomeStatisticsCoordinator]
 
 
 def resolve_device_online(device: Device) -> bool:

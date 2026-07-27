@@ -1,6 +1,7 @@
 {
   "domain": "aquahome",
   "name": "AquaHome",
+  "after_dependencies": ["recorder"],
   "codeowners": ["@deltasystems-pl"],
   "config_flow": true,
   "documentation": "https://github.com/deltasystems-pl/aquahome-ha",

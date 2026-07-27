@@ -2,9 +2,12 @@
 
 Sets up, per cloud device, a fast :class:`~.coordinator.AquaHomeCoordinator`
 (telemetry), a gentle :class:`~.coordinator.AquaHomeActivityCoordinator`
-(alert + regeneration history), and a gentle
+(alert + regeneration history), a gentle
 :class:`~.coordinator.AquaHomeSettingsCoordinator` (the rule-driven settings
-document) behind a shared authenticated :class:`~.api.AquaHomeClient`, stores
+document), and a slow :class:`~.statistics.AquaHomeStatisticsCoordinator`
+(external water-usage statistics backfilled from the cloud datapoint history,
+first run as a background task) behind a shared authenticated
+:class:`~.api.AquaHomeClient`, stores
 them on ``entry.runtime_data`` (:class:`~.coordinator.AquaHomeRuntimeData`), and
 forwards the sensor / binary-sensor / event platforms. A rising alert badge or a
 regeneration transition seen by the fast coordinator triggers an early activity
@@ -38,13 +41,17 @@ from .api import (
     Device,
     RateLimitError,
 )
-from .const import CONF_REFRESH_TOKEN, CONFIG_VERSION, PLATFORMS
+from .const import CONF_REFRESH_TOKEN, CONFIG_VERSION, DOMAIN, PLATFORMS
 from .coordinator import (
     AquaHomeActivityCoordinator,
     AquaHomeConfigEntry,
     AquaHomeCoordinator,
     AquaHomeRuntimeData,
     AquaHomeSettingsCoordinator,
+)
+from .statistics import (
+    AquaHomeStatisticsCoordinator,
+    async_clear_device_statistics,
 )
 
 if TYPE_CHECKING:
@@ -92,6 +99,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
     coordinators: dict[str, AquaHomeCoordinator] = {}
     activity_coordinators: dict[str, AquaHomeActivityCoordinator] = {}
     settings_coordinators: dict[str, AquaHomeSettingsCoordinator] = {}
+    statistics_coordinators: dict[str, AquaHomeStatisticsCoordinator] = {}
     for device in devices:
         coordinator = AquaHomeCoordinator(hass, entry, client, device)
         await coordinator.async_config_entry_first_refresh()
@@ -117,6 +125,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         await _async_first_settings_refresh(settings)
         settings_coordinators[device.id] = settings
 
+        statistics_coordinators[device.id] = AquaHomeStatisticsCoordinator(
+            hass,
+            entry,
+            client,
+            device_id=device.id,
+            device_slug=coordinator.device_slug,
+            device_name=_device_display_name(device),
+            tz_id=_device_tz_id(device),
+        )
+
         _async_wire_activity_triggers(hass, entry, coordinator, activity)
 
     entry.runtime_data = AquaHomeRuntimeData(
@@ -125,8 +143,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         coordinators=coordinators,
         activity_coordinators=activity_coordinators,
         settings_coordinators=settings_coordinators,
+        statistics_coordinators=statistics_coordinators,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # The history backfill talks to a throttled cloud and the recorder; it must
+    # never delay entity setup, so its first run happens as a background task
+    # (which also arms the 12-hour cadence). Failures log via the coordinator.
+    for statistics in statistics_coordinators.values():
+        entry.async_create_background_task(
+            hass,
+            statistics.async_refresh(),
+            name=f"{DOMAIN} statistics backfill {statistics.device_slug}",
+        )
     return True
 
 
@@ -215,6 +243,25 @@ def _async_wire_activity_triggers(
     entry.async_on_unload(fast.async_add_listener(_handle_fast_update))
 
 
+def _device_display_name(device: Device) -> str:
+    """Return the human-facing device name for statistics metadata.
+
+    Mirrors the fallback chain of :func:`~.entity.build_device_info` so the
+    external statistic is listed under the same name as the device card.
+    """
+    enriched = device.enriched_data
+    model = enriched.model if enriched is not None else None
+    return device.nickname or model or "AquaHome"
+
+
+def _device_tz_id(device: Device) -> str | None:
+    """Return the device's IANA timezone property value, if it carries one."""
+    prop = device.properties.get("tz_id")
+    if prop is not None and isinstance(prop.value, str) and prop.value:
+        return prop.value
+    return None
+
+
 def _alert_badge_count(device: Device) -> int | None:
     """Return the enriched alert badge count, or ``None`` when unavailable."""
     enriched = device.enriched_data
@@ -287,7 +334,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) ->
             await activity.async_shutdown()
         for settings in entry.runtime_data.settings_coordinators.values():
             await settings.async_shutdown()
+        for statistics in entry.runtime_data.statistics_coordinators.values():
+            await statistics.async_shutdown()
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> None:
+    """Clean up when a config entry is permanently removed.
+
+    External statistics are not tied to entities, so Home Assistant does not
+    delete them with the entry — without this hook every ``aquahome:*`` series
+    would survive an uninstall as orphaned recorder data.
+    """
+    await async_clear_device_statistics(hass, entry)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> bool:
