@@ -26,7 +26,9 @@ Covered here:
   sends nothing at all;
 * ``set_vacation_mode``: the scheduler state, the switch it re-renders, and the
   options it persists;
-* the wrong-target refusal of every one of the four.
+* the wrong-target refusal of every one of the four;
+* the device target both fanning-out actions have to survive: one command for
+  the whole device, and one analytics answer from the sensor that can give it.
 
 The clock is frozen before setup and the stored access token re-minted against
 it, so nothing depends on wall time. No recorder is loaded: the engine's own
@@ -48,6 +50,7 @@ from homeassistant.components.button.const import DOMAIN as BUTTON_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.switch.const import DOMAIN as SWITCH_DOMAIN
 from homeassistant.const import (
+    ATTR_DEVICE_ID,
     ATTR_ENTITY_ID,
     CONF_ACCESS_TOKEN,
     STATE_OFF,
@@ -111,6 +114,7 @@ if TYPE_CHECKING:
     from aioresponses import aioresponses
     from freezegun.api import FrozenDateTimeFactory
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers import device_registry as dr
     from homeassistant.helpers import entity_registry as er
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -1360,3 +1364,94 @@ async def test_schedule_regeneration_refuses_a_device_without_the_control(
         "expected": services_module._EXPECTED_REGEN_BUTTON
     }
     assert command_bodies(mock_api) == []
+
+
+# ---------------------------------------------------------------------------
+# Device targets
+# ---------------------------------------------------------------------------
+
+
+async def test_schedule_regeneration_sends_one_command_for_a_device_target(  # noqa: PLR0913 - the standard platform fixture set plus the device registry
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+    entity_registry: er.EntityRegistry,
+    device_registry: dr.DeviceRegistry,
+) -> None:
+    """A device target resolves to exactly one command, and ``mode`` still decides it.
+
+    Picking the softener itself is the obvious way to ask for a regeneration
+    from the UI, and it reaches every regeneration button that device has —
+    three of them here, each of which would send the very same payload. One
+    request must not become three on a throttled cloud, so exactly one
+    designated button acts for the whole device; the action the device receives
+    still comes from ``mode``, never from the key of whichever button that
+    turned out to be.
+    """
+    await boot(hass, mock_config_entry, mock_api, freezer)
+    device_entry = device_registry.async_get_device(identifiers={(DOMAIN, SLUG)})
+    assert device_entry is not None
+
+    # The premise of the fan-out: all three regeneration buttons belong to this
+    # device and none of them is categorised, so an indirect target reaches
+    # every one of them rather than being filtered down to a single survivor.
+    for key in ("regenerate_now", "schedule_regeneration", "cancel_regeneration"):
+        registered = entity_registry.async_get(
+            entity_id_of(entity_registry, BUTTON_DOMAIN, key)
+        )
+        assert registered is not None
+        assert registered.device_id == device_entry.id
+        assert registered.entity_category is None
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_SCHEDULE_REGENERATION,
+        {ATTR_DEVICE_ID: device_entry.id, ATTR_MODE: REGEN_MODE_SCHEDULE},
+        blocking=True,
+    )
+
+    assert command_bodies(mock_api) == [
+        {"function": "regenerate", "action": "schedule"}
+    ]
+
+
+async def test_analyze_usage_answers_a_device_target_from_the_analytics_sensor(  # noqa: PLR0913 - the standard platform fixture set plus the device registry
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+    entity_registry: er.EntityRegistry,
+    device_registry: dr.DeviceRegistry,
+) -> None:
+    """A device target is answered by the one sensor that can, not refused wholesale.
+
+    The device carries three dozen sensors and only the analytics ones can serve
+    this action, so a device target has to pass the bystanders over one by one:
+    refusing the first telemetry sensor it reached would abort the call and
+    throw away the analysis the analytics sensor did produce. The night-flow
+    sensor is diagnostic and Home Assistant never hands it an indirect target,
+    which leaves the usage forecast as the single entity that answers — under
+    its own entity id, exactly as an explicitly targeted call would.
+    """
+    await boot(hass, mock_config_entry, mock_api, freezer)
+    await push(hass, mock_config_entry, rich_result())
+    device_entry = device_registry.async_get_device(identifiers={(DOMAIN, SLUG)})
+    assert device_entry is not None
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_ANALYZE_USAGE,
+        {ATTR_DEVICE_ID: device_entry.id},
+        blocking=True,
+        return_response=True,
+    )
+
+    assert isinstance(response, dict)
+    forecast_sensor = entity_id_of(entity_registry, SENSOR_DOMAIN, "usage_forecast")
+    assert {
+        entity_id: payload
+        for entity_id, payload in response.items()
+        if payload is not None
+    } == {forecast_sensor: RICH_RESPONSE}
+    assert entity_id_of(entity_registry, SENSOR_DOMAIN, "night_flow") not in response

@@ -23,14 +23,17 @@ What each group pins:
   exact event payload, the strict ``<`` at the reserve boundary, and the
   ordering rule that the day latch is checked *before* the capacity comparison;
 * the **deferral enforcement** — the budget-free first cancel, the three-cancel
-  daily budget, and the resin-hygiene cap that announces itself once and then
-  deliberately lets the device's regeneration through;
-* the **catch-up** on a deferral ending with a nearly exhausted resin bed, and
-  its silence (an untouched ``last_decision``) when the capacity still covers
-  the forecast;
-* the **auto-vacation follower**, including the two rules that make it safe: a
-  manual deferral is never auto-released and an unassessable (``None``) verdict
-  moves nothing in either direction;
+  daily budget over sent cancels and the matching bound on refused ones, and
+  the resin-hygiene cap that announces itself once and then deliberately lets
+  the device's regeneration through;
+* the **catch-up** on a deferral ending with a nearly exhausted resin bed, its
+  silence (an untouched ``last_decision``) when the capacity still covers the
+  forecast, its once-per-device-local-day bound and the sent cancel that
+  re-opens that bound the same day;
+* the **auto-vacation follower**, including the three rules that make it safe:
+  a manual deferral is never auto-released, an ``auto`` one releases itself
+  whatever the follower flag says, and an unassessable (``None``) verdict moves
+  nothing in either direction;
 * **persistence** — the opt-ins and the deferral bookkeeping survive a
   scheduler rebuilt from the same entry while the runtime-only decision resets,
   and writing them never reloads the entry.
@@ -992,6 +995,45 @@ async def test_failed_cancel_is_recorded_without_consuming_budget(
     assert scheduler.state.last_decision == DECISION_DEFERRED
 
 
+async def test_refused_cancels_are_bounded_for_the_device_local_day(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A cloud that refuses every cancel is asked at most three times a day.
+
+    A refusal must not eat one of the three *sent* cancels — that is what keeps
+    a single flake from disarming the deferral — but it cannot be free either:
+    a cloud refusing every attempt would otherwise be re-asked on every
+    telemetry poll for the rest of the day, ten minutes apart, for a
+    regeneration the device keeps regardless. The refusals therefore carry a
+    bound of their own, counted on the same device-local day, and the verdict
+    goes on saying which of the two ways the enforcement fell silent.
+    """
+    mock_api.put(command_url(), status=422, payload={"detail": "no"}, repeat=True)
+    await _boot(hass, mock_config_entry, mock_api, freezer)
+    scheduler = _scheduler(mock_config_entry)
+    await scheduler.async_set_vacation_deferral(True, source=DEFERRAL_SOURCE_MANUAL)
+    assert _commands(mock_api) == []
+
+    for _ in range(REGEN_CANCEL_DAILY_BUDGET * 3):
+        await _push_device(
+            hass, mock_config_entry, _detail(tile_state=RECHARGE_STATE_SCHEDULED)
+        )
+
+    assert _commands(mock_api) == [CANCEL_COMMAND] * REGEN_CANCEL_DAILY_BUDGET
+    assert scheduler.state.last_decision == DECISION_SKIPPED_COMMAND_FAILED
+
+    # A new UTC day inside the same device-local day: still spent.
+    freezer.move_to(SAME_LOCAL_DAY)
+    await _push_device(
+        hass, mock_config_entry, _detail(tile_state=RECHARGE_STATE_SCHEDULED)
+    )
+
+    assert _commands(mock_api) == [CANCEL_COMMAND] * REGEN_CANCEL_DAILY_BUDGET
+
+
 async def test_deferral_past_the_hygiene_cap_announces_once_and_lets_it_through(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -1122,6 +1164,84 @@ async def test_ending_a_deferral_on_ample_capacity_leaves_the_decision_untouched
     assert scheduler.state.last_decision == DECISION_DEFERRED
 
 
+async def test_catch_up_is_bounded_to_one_per_device_local_day(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Repeated deferral toggles inside one device-local day yield one catch-up.
+
+    The device view only refreshes on the telemetry poll, so a second deferral
+    ending minutes after the first still reads the same nearly exhausted
+    capacity and would order a recharge the device has already been told to
+    run. The catch-up therefore honours the same once-per-device-local-day bound
+    the nightly decision sets — and on the device's own calendar, so the second
+    toggle here (a new UTC day, the same Warsaw day) is still latched.
+    """
+    await _boot(hass, mock_config_entry, mock_api, freezer)
+    scheduler = _scheduler(mock_config_entry)
+    await _push_device(hass, mock_config_entry, _detail(capacity=CAPACITY_LOW))
+    await _push_result(hass, mock_config_entry, _result())
+
+    await scheduler.async_set_vacation_deferral(True, source=DEFERRAL_SOURCE_MANUAL)
+    await scheduler.async_set_vacation_deferral(False, source=DEFERRAL_SOURCE_MANUAL)
+
+    assert _commands(mock_api) == [SCHEDULE_COMMAND]
+    assert scheduler.state.last_decision == DECISION_CATCH_UP
+
+    freezer.move_to(SAME_LOCAL_DAY)
+    await scheduler.async_set_vacation_deferral(True, source=DEFERRAL_SOURCE_MANUAL)
+    await scheduler.async_set_vacation_deferral(False, source=DEFERRAL_SOURCE_MANUAL)
+
+    # Latched: the deferral came and went again without a second command, and
+    # left the verdict its own transition recorded.
+    assert _commands(mock_api) == [SCHEDULE_COMMAND]
+    assert scheduler.state.last_decision == DECISION_DEFERRED
+
+
+async def test_a_sent_cancel_reopens_the_catch_up_for_the_same_day(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A cancelled regeneration restores the day's catch-up.
+
+    The daily bound is there to stop a *repeated* command, not to spend the
+    day's only recharge on one the deferral then took away again: a household
+    that leaves, has the device's own regeneration cancelled under it and comes
+    back the same day must still get its make-up recharge. So a cancel that
+    reached the cloud re-opens the latch, and the return home is served.
+    """
+    await _boot(hass, mock_config_entry, mock_api, freezer)
+    scheduler = _scheduler(mock_config_entry)
+    await _push_device(hass, mock_config_entry, _detail(capacity=CAPACITY_LOW))
+    await _push_result(hass, mock_config_entry, _result())
+    await scheduler.async_set_vacation_deferral(True, source=DEFERRAL_SOURCE_MANUAL)
+    await scheduler.async_set_vacation_deferral(False, source=DEFERRAL_SOURCE_MANUAL)
+    assert _commands(mock_api) == [SCHEDULE_COMMAND]
+
+    # The device schedules a regeneration of its own; starting the deferral
+    # again cancels it, which undoes the recharge the catch-up just ordered.
+    await _push_device(
+        hass,
+        mock_config_entry,
+        _detail(capacity=CAPACITY_LOW, tile_state=RECHARGE_STATE_SCHEDULED),
+    )
+    await scheduler.async_set_vacation_deferral(True, source=DEFERRAL_SOURCE_MANUAL)
+
+    assert _commands(mock_api) == [SCHEDULE_COMMAND, CANCEL_COMMAND]
+
+    # The next poll shows the device resting again, and the household returns
+    # the same device-local day to a resin bed that is still nearly spent.
+    await _push_device(hass, mock_config_entry, _detail(capacity=CAPACITY_LOW))
+    await scheduler.async_set_vacation_deferral(False, source=DEFERRAL_SOURCE_MANUAL)
+
+    assert _commands(mock_api) == [SCHEDULE_COMMAND, CANCEL_COMMAND, SCHEDULE_COMMAND]
+    assert scheduler.state.last_decision == DECISION_CATCH_UP
+
+
 async def test_setting_the_deferral_to_its_current_value_does_nothing(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -1217,6 +1337,37 @@ async def test_a_manual_deferral_is_never_auto_released(
 
     assert scheduler.state.vacation_deferral is True
     assert scheduler.state.deferral_source == DEFERRAL_SOURCE_MANUAL
+
+
+async def test_an_auto_deferral_releases_itself_with_the_follower_off(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """An ``auto`` deferral ends when the household returns, follower flag or not.
+
+    Arming is the follower's decision, releasing is the deferral's own: a
+    vacation-defer suggestion the user confirmed starts an ``auto`` deferral
+    without ever touching the ``auto_vacation`` opt-in, and it is confirmed on
+    the promise that it lifts again when water use returns. Gating the release
+    on the flag as well would leave exactly that deferral holding the resin bed
+    until someone went looking for a switch they never turned on.
+    """
+    await _boot(hass, mock_config_entry, mock_api, freezer)
+    scheduler = _scheduler(mock_config_entry)
+    assert scheduler.state.auto_vacation is False
+
+    await scheduler.async_set_vacation_deferral(True, source=DEFERRAL_SOURCE_AUTO)
+    away = scheduler.state
+    assert away.vacation_deferral is True
+
+    await _push_result(hass, mock_config_entry, _result(vacation_active=False))
+
+    home = scheduler.state
+    assert home.vacation_deferral is False
+    assert home.deferral_source is None
+    assert home.deferral_started is None
 
 
 async def test_enabling_auto_vacation_while_already_away_defers_immediately(

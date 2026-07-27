@@ -14,7 +14,8 @@ purpose-written message; anything else — the cloud alert events, and any type 
 future version adds — falls back to a generic message naming the raw type. Every
 payload field is read through a type-checking accessor and every message reads
 correctly with all of them absent, because a logbook describer runs inside the
-history query: raising there breaks the whole page, not just one row.
+history query: the processor catches a describer exception and silently drops
+the row, so anything less than total rendering makes events vanish unlabeled.
 
 The two entry keys come from the logbook component's ``const`` module rather
 than its package root — the same constants, imported from where they are
