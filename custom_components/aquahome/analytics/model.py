@@ -65,6 +65,10 @@ class AnalyticsInputs:
     tz_key: str
     now: datetime
     device_online: bool
+    #: Whether the statistics import succeeded on its most recent run. Trailing
+    #: silence in the readings only counts as "no water moved" when the import
+    #: is known current — otherwise it may simply be lag.
+    statistics_fresh: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,13 +115,19 @@ class LeakState:
 
 @dataclass(frozen=True, slots=True)
 class AnomalyState:
-    """The usage-anomaly detector's aggregate verdict."""
+    """The usage-anomaly detector's aggregate verdict.
+
+    ``drift_alarm`` is the user-facing consensus verdict (both charts agree);
+    ``drift_cusum`` / ``drift_ewma`` expose each chart's individual vote.
+    """
 
     active: bool | None
     reasons: tuple[str, ...]
     day: DayAssessment | None
     point_hours: int
     drift_alarm: bool
+    drift_cusum: bool
+    drift_ewma: bool
 
 
 @dataclass(frozen=True, slots=True)

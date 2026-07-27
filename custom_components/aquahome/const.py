@@ -263,12 +263,17 @@ RATIO_LOW: Final = 0.70
 RATIO_EXCESS: Final = 1.30
 
 # Vacation detection [55][47]: sustained multi-day low usage only (water alone
-# cannot resolve short absences), each day below VACATION_RATIO of expectation
-# with no single discrete event larger than a shower-scale draw (REU fixture
-# volumes: toilet 1.6 gal, dishwasher 4-6 gal, shower 15-20 gal).
+# cannot resolve short absences). An unoccupied day needs BOTH stage-1 features
+# of the occupancy research [55]: consumption below VACATION_RATIO of
+# expectation AND at most VACATION_MAX_EVENTS distinct draws (an empty house
+# shows zero; a frugal occupied morning shows several — live-verified on the
+# owner's own return morning, 3 draws totalling just 34 L). No single event may
+# exceed a shower-scale draw either (REU fixture volumes: toilet 1.6 gal,
+# dishwasher 4-6 gal, shower 15-20 gal).
 VACATION_RATIO: Final = 0.30
 VACATION_MIN_DAYS: Final = 3
 VACATION_LARGE_EVENT_GALLONS: Final = 10.0
+VACATION_MAX_EVENTS: Final = 1
 
 # Robust-statistics band multiplier (k ~ 3 on 1.4826*MAD) [31][45], the number
 # of anomalous hours within a day required to call a point anomaly, and the
@@ -287,12 +292,20 @@ WEEKDAY_SLOT_FRESHNESS_DAYS: Final = 14
 
 # Drift detection on daily totals: standard CUSUM design (k = 0.5 sigma,
 # h = 5 sigma) [35] with an EWMA control chart complement [36]; the input
-# series is Hampel-cleaned (local median replacement) first [32].
+# series is Hampel-cleaned (local median replacement) first [32]. Both charts
+# watch the UPWARD side only (a sustained drop is the vacation detector's
+# domain, and flagging it as a "problem" would fire on every absence), run
+# over a bounded trailing window (a batch CUSUM over an ever-growing window
+# crosses any finite decision interval eventually — measured 41-85 % false
+# alarms at 60-182 days on stationary synthetic households), and the
+# user-facing drift reason requires BOTH charts to agree; each chart alone is
+# exposed as an attribute.
 CUSUM_K_SIGMA: Final = 0.5
 CUSUM_H_SIGMA: Final = 5.0
 EWMA_LAMBDA: Final = 0.2
 EWMA_L: Final = 3.0
 HAMPEL_WINDOW: Final = 7
+DRIFT_WINDOW_DAYS: Final = 60
 
 # A night or noon-day is assessable only when meter readings bound it within
 # this many hours on both sides — otherwise the silence is indistinguishable
