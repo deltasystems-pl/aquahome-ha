@@ -1,0 +1,203 @@
+blueprint:
+  name: AquaHome smart regeneration companion
+  description: >-
+    Keep an eye on what the softener's smart regeneration scheduler decides —
+    and stay able to overrule it.
+
+
+    With the *Smart regeneration scheduling* switch on, the integration compares
+    the remaining soft-water capacity against tomorrow's forecast every night
+    and schedules a regeneration when the reserve runs thin. With *Vacation
+    deferral* on it cancels scheduled regenerations while you are away. Each of
+    those actions fires an event; this automation turns them into a plain
+    notification:
+
+
+    - **Regeneration scheduled** — includes the reason and, where known, the
+      remaining capacity against tomorrow's forecast. The notification carries a
+      "Cancel tonight's regeneration" button.
+
+    - **Regeneration deferred** — a scheduled regeneration was cancelled because
+      vacation deferral is active.
+
+    - **Deferral limit reached** — the deferral has run past the built-in
+      resin-protection limit, so the next scheduled regeneration is allowed
+      through even though you are still away.
+
+
+    The cancel button requires the Home Assistant Companion app; with any other
+    notification service the messages still arrive and the button is ignored.
+  domain: automation
+  homeassistant:
+    min_version: "2026.2.0"
+  input:
+    aquahome_device:
+      name: Water softener
+      description: >-
+        The AquaHome device to follow. Only scheduler events for this device
+        trigger the automation.
+      selector:
+        device:
+          filter:
+            - integration: aquahome
+    notify_service:
+      name: Notification service
+      description: >-
+        The notification service to call, written in full — for example
+        `notify.mobile_app_my_phone`. Use a Companion-app service to get the
+        cancel button.
+      selector:
+        text:
+    regeneration_button:
+      name: Regeneration button
+      description: >-
+        Any of the softener's regeneration buttons — *Regenerate now*, *Schedule
+        regeneration* or *Cancel regeneration*. It only tells the **Schedule
+        regeneration** action which device to address; the action itself always
+        cancels.
+      selector:
+        entity:
+          filter:
+            - domain: button
+              integration: aquahome
+    response_timeout:
+      name: Cancel window
+      description: >-
+        How long the "Cancel tonight's regeneration" button stays live after the
+        notification is sent.
+      default:
+        hours: 1
+        minutes: 0
+        seconds: 0
+      selector:
+        duration:
+mode: restart
+variables:
+  aquahome_device: !input aquahome_device
+  regen_reason_text: >-
+    {% set reason = trigger.event.data.get('reason') %}
+    {%- if reason == 'low_capacity' %}the remaining soft-water capacity no
+    longer covers tomorrow's expected use with a reserve
+    {%- elif reason == 'catch_up' %}it is catching up after a vacation deferral
+    {%- else %}the scheduler asked for it
+    {%- endif %}
+  regen_numbers_text: >-
+    {% set capacity = trigger.event.data.get('capacity_gallons') %}
+    {%- set forecast = trigger.event.data.get('forecast_gallons') %}
+    {%- if capacity is not none and forecast is not none %}
+    About {{ capacity | round | int }} gal of treated water left against a
+    forecast of {{ forecast | round | int }} gal for tomorrow.
+    {%- elif capacity is not none %}
+    About {{ capacity | round | int }} gal of treated water left.
+    {%- endif %}
+  deferral_source_text: >-
+    {{ 'you turned deferral on'
+       if trigger.event.data.get('deferral_source') == 'manual'
+       else 'deferral was turned on automatically' }}
+  deferral_days_text: >-
+    {% set days = trigger.event.data.get('days_deferred') %}
+    {%- if days is not none %}for {{ days }} days
+    {%- else %}long enough{% endif %}
+triggers:
+  - trigger: event
+    event_type: aquahome_event
+    event_data:
+      type: regen_scheduled
+    id: regen_scheduled
+  - trigger: event
+    event_type: aquahome_event
+    event_data:
+      type: regen_deferred
+    id: regen_deferred
+  - trigger: event
+    event_type: aquahome_event
+    event_data:
+      type: regen_deferral_expired
+    id: regen_deferral_expired
+conditions:
+  # Events carry the device's registry *identifier* in `device`, while the
+  # device selector yields a registry id, so the two are matched through the
+  # device's `aquahome` identifier tuple rather than compared directly.
+  - alias: Only react to the selected softener
+    condition: template
+    value_template: >-
+      {{ trigger.event.data.device in
+         ((device_attr(aquahome_device, 'identifiers') or [])
+          | map(attribute=1) | list) }}
+actions:
+  - choose:
+      - alias: A regeneration was scheduled
+        conditions:
+          - condition: trigger
+            id: regen_scheduled
+        sequence:
+          - alias: Announce the scheduled regeneration
+            action: !input notify_service
+            data:
+              title: Water softener — regeneration scheduled
+              message: >-
+                A regeneration is scheduled for the next regeneration time
+                because {{ regen_reason_text }}. {{ regen_numbers_text }}
+              data:
+                # A shared tag keeps the scheduler's messages collapsed into one
+                # entry instead of stacking up night after night.
+                tag: aquahome_regeneration
+                actions:
+                  - action: AQUAHOME_REGEN_CANCEL
+                    title: Cancel tonight's regeneration
+          - alias: Wait for a cancel request
+            wait_for_trigger:
+              - trigger: event
+                event_type: mobile_app_notification_action
+                event_data:
+                  action: AQUAHOME_REGEN_CANCEL
+            timeout: !input response_timeout
+            continue_on_timeout: true
+          - alias: Leave the regeneration alone when no cancel was requested
+            condition: template
+            value_template: "{{ wait.trigger is not none }}"
+          - alias: Cancel the scheduled regeneration
+            action: aquahome.schedule_regeneration
+            target:
+              entity_id: !input regeneration_button
+            data:
+              mode: cancel
+          - alias: Confirm the cancellation
+            action: !input notify_service
+            data:
+              title: Water softener — regeneration cancelled
+              message: >-
+                The scheduled regeneration has been cancelled. The softener will
+                schedule a new one once its capacity runs low again.
+              data:
+                tag: aquahome_regeneration
+      - alias: A regeneration was deferred
+        conditions:
+          - condition: trigger
+            id: regen_deferred
+        sequence:
+          - alias: Report the deferral
+            action: !input notify_service
+            data:
+              title: Water softener — regeneration deferred
+              message: >-
+                A scheduled regeneration was cancelled because {{
+                deferral_source_text }}. No salt or water is being spent while
+                the house is empty.
+              data:
+                tag: aquahome_regeneration
+      - alias: The deferral limit was reached
+        conditions:
+          - condition: trigger
+            id: regen_deferral_expired
+        sequence:
+          - alias: Report the resin-protection limit
+            action: !input notify_service
+            data:
+              title: Water softener — deferral limit reached
+              message: >-
+                Vacation deferral has been running {{ deferral_days_text }}, and
+                skipping another regeneration would start to risk the resin bed.
+                The next scheduled regeneration will be allowed to run.
+              data:
+                tag: aquahome_regeneration

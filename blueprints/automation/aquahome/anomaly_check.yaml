@@ -1,0 +1,147 @@
+blueprint:
+  name: AquaHome usage anomaly check
+  description: >-
+    Ask before assuming the worst when the softener sees an unusual amount of
+    water going through it.
+
+
+    The integration's daily analysis learns what your household normally uses,
+    per weekday and per hour, and fires a `usage_anomaly` event when a day
+    clearly steps out of that pattern — a much higher daily total, a single hour
+    far above normal, or a slow upward drift over several days. Guests, a
+    filled paddling pool or a new appliance all look exactly like that, so this
+    automation asks first.
+
+
+    Answer "yes, that was us" and nothing further happens. Answer "no" and you
+    get a second notification with a short checklist and the current reading of
+    the softener's leak watch, so you know whether the overnight analysis has
+    already seen something. Silence is treated as "probably us" — unlike the
+    leak blueprint, an unanswered anomaly never escalates.
+
+
+    The reply buttons require the Home Assistant Companion app; with any other
+    notification service the question still arrives, but only the buttons can
+    trigger the follow-up.
+  domain: automation
+  homeassistant:
+    min_version: "2026.2.0"
+  input:
+    aquahome_device:
+      name: Water softener
+      description: >-
+        The AquaHome device to watch. Only anomalies for this device trigger the
+        automation.
+      selector:
+        device:
+          filter:
+            - integration: aquahome
+    notify_service:
+      name: Notification service
+      description: >-
+        The notification service to call, written in full — for example
+        `notify.mobile_app_my_phone`. Use a Companion-app service to get the
+        reply buttons.
+      selector:
+        text:
+    leak_sensor:
+      name: Leak watch sensor
+      description: >-
+        The softener's leak-watch binary sensor. Its current state is quoted in
+        the follow-up message so you know whether the nightly analysis has
+        already found continuous flow.
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+              integration: aquahome
+    response_timeout:
+      name: Reply window
+      description: >-
+        How long the reply buttons stay live. No answer within this window is
+        taken as "that was us" and the run ends quietly.
+      default:
+        hours: 0
+        minutes: 30
+        seconds: 0
+      selector:
+        duration:
+mode: restart
+variables:
+  aquahome_device: !input aquahome_device
+  leak_sensor: !input leak_sensor
+  anomaly_reason_text: >-
+    {% set labels = {'daily_high': 'the daily total was well above what this
+    weekday normally uses', 'point': 'one or more hours used far more water than
+    normal', 'drift': 'daily usage has been drifting upwards for several days'}
+    %}
+    {%- set reasons = trigger.event.data.get('reasons') or [] %}
+    {%- set described = labels.items() | selectattr(0, 'in', reasons)
+    | map(attribute=1) | list %}
+    {{- described | join('; ') if described else
+    'the daily analysis flagged the usage pattern' }}
+triggers:
+  - trigger: event
+    event_type: aquahome_event
+    event_data:
+      type: usage_anomaly
+    id: usage_anomaly
+conditions:
+  # Events carry the device's registry *identifier* in `device`, while the
+  # device selector yields a registry id, so the two are matched through the
+  # device's `aquahome` identifier tuple rather than compared directly.
+  - alias: Only react to the selected softener
+    condition: template
+    value_template: >-
+      {{ trigger.event.data.device in
+         ((device_attr(aquahome_device, 'identifiers') or [])
+          | map(attribute=1) | list) }}
+actions:
+  - alias: Ask whether the extra water use was expected
+    action: !input notify_service
+    data:
+      title: Water softener — unusual water use
+      message: >-
+        Unusual water use: {{ anomaly_reason_text }}. Was this you?
+      data:
+        # A shared tag keeps repeated anomaly questions collapsed into one entry.
+        tag: aquahome_usage_anomaly
+        actions:
+          - action: AQUAHOME_ANOMALY_EXPECTED
+            title: Yes, that was us
+          - action: AQUAHOME_ANOMALY_UNEXPECTED
+            title: "No, that was not us"
+  - alias: Wait for the answer
+    wait_for_trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: AQUAHOME_ANOMALY_EXPECTED
+        id: expected
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: AQUAHOME_ANOMALY_UNEXPECTED
+        id: unexpected
+    timeout: !input response_timeout
+    continue_on_timeout: true
+  - alias: Follow up only on an explicit "no"
+    condition: template
+    value_template: >-
+      {{ wait.trigger is not none and wait.trigger.id == 'unexpected' }}
+  - alias: Advise a leak check
+    action: !input notify_service
+    data:
+      title: Water softener — worth a leak check
+      message: >-
+        Since nobody claims the extra water, walk the usual suspects: a toilet
+        that keeps refilling, a dripping outside tap, an appliance or filter
+        stuck in a flush cycle, or an irrigation valve that never closed. The
+        softener's leak watch is currently {{ 'flagging continuous flow — treat
+        this as urgent' if is_state(leak_sensor, 'on') else 'clear, but it needs
+        a full quiet night before it can judge' }}.
+      data:
+        tag: aquahome_usage_anomaly
+        # Companion-app delivery hints; other notification platforms ignore them.
+        ttl: 0
+        priority: high

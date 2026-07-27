@@ -1,0 +1,116 @@
+blueprint:
+  name: AquaHome auto vacation
+  description: >-
+    Put the water softener into vacation deferral automatically while the
+    household is away, and take it out again the moment someone comes back.
+
+
+    Point this at any entity that reports presence — a `person`, a group of
+    people, or a `binary_sensor` from your alarm or presence system. Once that
+    entity has been away for the configured time, the automation calls the
+    **Set vacation mode** action on the softener's *Vacation deferral* switch.
+
+
+    Vacation deferral cancels scheduled regenerations while you are away and
+    schedules a catch-up regeneration on your return when the remaining capacity
+    is low. It has a built-in resin-protection limit, so a very long trip still
+    lets a regeneration through. It does **not** change the vacation tile in the
+    iQua app.
+
+
+    Both away conventions are handled: `not_home`/`home` (used by `person` and
+    person groups) and `on`/`off` (used by an "away"/"nobody home" binary
+    sensor). Pick an entity that reports one of those pairs — a person sitting
+    in a named zone such as Work counts as neither away nor back, so nothing
+    changes until they are properly gone or properly home.
+  domain: automation
+  homeassistant:
+    min_version: "2026.2.0"
+  input:
+    away_entity:
+      name: Away indicator
+      description: >-
+        The entity that tells the automation nobody is home. It must read
+        `not_home` (person or person group) or `on` (binary sensor) while the
+        household is away, and `home` or `off` once somebody is back.
+      selector:
+        entity:
+          filter:
+            - domain: person
+            - domain: group
+            - domain: binary_sensor
+    away_duration:
+      name: Away for
+      description: >-
+        How long the household has to be away before the softener is put into
+        vacation deferral. Short trips are not worth deferring a regeneration
+        for.
+      default:
+        hours: 24
+        minutes: 0
+        seconds: 0
+      selector:
+        duration:
+    vacation_switch:
+      name: Vacation deferral switch
+      description: >-
+        The softener's *Vacation deferral* switch. The **Set vacation mode**
+        action is called on this entity.
+      selector:
+        entity:
+          filter:
+            - domain: switch
+              integration: aquahome
+# Single: the two service calls are instant, and the sustained-absence check is
+# handled by the trigger's own `for:` timer rather than by a delay in the run.
+mode: single
+max_exceeded: silent
+triggers:
+  - alias: Nobody home long enough (person or group)
+    trigger: state
+    entity_id: !input away_entity
+    to: "not_home"
+    for: !input away_duration
+    id: away
+  - alias: Nobody home long enough (binary sensor)
+    trigger: state
+    entity_id: !input away_entity
+    to: "on"
+    for: !input away_duration
+    id: away
+  # The return triggers mirror the away states exactly rather than firing on
+  # "no longer away": a person entering a named zone such as Work leaves
+  # `not_home` without being home, and must not release the deferral.
+  - alias: Someone came back (person or group)
+    trigger: state
+    entity_id: !input away_entity
+    to: "home"
+    id: home
+  - alias: Someone came back (binary sensor)
+    trigger: state
+    entity_id: !input away_entity
+    to: "off"
+    id: home
+conditions: []
+actions:
+  - choose:
+      - alias: Start deferring regenerations
+        conditions:
+          - condition: trigger
+            id: away
+        sequence:
+          - action: aquahome.set_vacation_mode
+            target:
+              entity_id: !input vacation_switch
+            data:
+              vacation: true
+      - alias: Stop deferring and catch up if needed
+        conditions:
+          - condition: trigger
+            id: home
+        sequence:
+          - action: aquahome.set_vacation_mode
+            target:
+              entity_id: !input vacation_switch
+            data:
+              vacation: false

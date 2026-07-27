@@ -1,0 +1,201 @@
+blueprint:
+  name: AquaHome leak alert
+  description: >-
+    Turn an AquaHome leak verdict into a "Was this you?" conversation instead of
+    a silent alarm.
+
+
+    The integration's nightly analysis fires a `leak_suspected` event when the
+    softener keeps measuring water while the household is asleep, and a
+    `leak_while_away` event when the same happens while nobody is home. This
+    automation notifies you with two buttons — one to confirm the water use was
+    expected, one to say it was not.
+
+
+    If you confirm the use, nothing else happens. If you answer "no" — or do not
+    answer at all within the reply window — a second, high-priority notification
+    is sent. When a water shutoff valve is configured, that escalation also
+    carries a "Close water supply" button. **The valve is only ever closed after
+    you tap that button**; this automation never shuts the water off by itself.
+
+
+    The interactive buttons require the Home Assistant Companion app. With any
+    other notification service the messages still arrive, the buttons are simply
+    ignored and the escalation happens on the timeout.
+  domain: automation
+  homeassistant:
+    min_version: "2026.2.0"
+  input:
+    aquahome_device:
+      name: Water softener
+      description: >-
+        The AquaHome device to watch. Only leak verdicts for this device trigger
+        the automation.
+      selector:
+        device:
+          filter:
+            - integration: aquahome
+    notify_service:
+      name: Notification service
+      description: >-
+        The notification service to call, written in full — for example
+        `notify.mobile_app_my_phone`. Use a Companion-app service to get the
+        interactive buttons.
+      selector:
+        text:
+    response_timeout:
+      name: Reply window
+      description: >-
+        How long to wait for an answer before treating the silence as "this was
+        not us" and escalating.
+      default:
+        hours: 0
+        minutes: 10
+        seconds: 0
+      selector:
+        duration:
+    shutoff_valve:
+      name: Water shutoff valve
+      description: >-
+        Optional. Leave empty unless your softener reports a motorised shutoff
+        valve. When set, the escalation notification gains a "Close water
+        supply" button that closes this valve on tap — never automatically.
+      default: []
+      selector:
+        entity:
+          filter:
+            - domain: valve
+              integration: aquahome
+mode: restart
+variables:
+  aquahome_device: !input aquahome_device
+  shutoff_valve: !input shutoff_valve
+  leak_scope: >-
+    {{ 'while nobody was home' if trigger.id == 'leak_while_away'
+       else 'overnight' }}
+  leak_tier: "{{ trigger.event.data.get('tier') or 'unknown' }}"
+  leak_rate_text: >-
+    {% set rate = trigger.event.data.get('rate_liters_per_hour') %}
+    {%- set per_day = trigger.event.data.get('implied_liters_per_day') %}
+    {%- if rate is none %}the flow rate could not be measured
+    {%- else %}about {{ '%.1f' | format(rate) }} L/h
+    {%- if per_day is not none %}, roughly {{ per_day | round | int }} L per day
+    {%- endif %}
+    {%- endif %}
+triggers:
+  - trigger: event
+    event_type: aquahome_event
+    event_data:
+      type: leak_suspected
+    id: leak_suspected
+  - trigger: event
+    event_type: aquahome_event
+    event_data:
+      type: leak_while_away
+    id: leak_while_away
+conditions:
+  # Events carry the device's registry *identifier* in `device`, while the
+  # device selector yields a registry id, so the two are matched through the
+  # device's `aquahome` identifier tuple rather than compared directly.
+  - alias: Only react to the selected softener
+    condition: template
+    value_template: >-
+      {{ trigger.event.data.device in
+         ((device_attr(aquahome_device, 'identifiers') or [])
+          | map(attribute=1) | list) }}
+actions:
+  - alias: Ask whether the water use was expected
+    action: !input notify_service
+    data:
+      title: Water softener — possible leak
+      message: >-
+        Continuous water flow was detected {{ leak_scope }} ({{ leak_rate_text
+        }}; severity {{ leak_tier }}). Was this you?
+      data:
+        # A shared tag keeps repeated leak alerts collapsed into one entry.
+        tag: aquahome_leak_alert
+        actions:
+          - action: AQUAHOME_LEAK_EXPECTED
+            title: Yes, that was us
+          - action: AQUAHOME_LEAK_UNEXPECTED
+            title: "No, nobody used water"
+  - alias: Wait for the answer
+    wait_for_trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: AQUAHOME_LEAK_EXPECTED
+        id: expected
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: AQUAHOME_LEAK_UNEXPECTED
+        id: unexpected
+    timeout: !input response_timeout
+    continue_on_timeout: true
+  - alias: Stop when the household confirms the water use
+    condition: template
+    value_template: "{{ wait.trigger is none or wait.trigger.id != 'expected' }}"
+  - alias: Escalate the unconfirmed leak
+    choose:
+      - alias: A shutoff valve is available — offer to close it
+        conditions:
+          - condition: template
+            value_template: "{{ shutoff_valve | count > 0 }}"
+        sequence:
+          - alias: Send the high-priority alert with a shutoff button
+            action: !input notify_service
+            data:
+              title: Water softener — leak not confirmed
+              message: >-
+                Water is still being measured with nobody using it ({{
+                leak_rate_text }}; severity {{ leak_tier }}). Check for a running
+                toilet, a dripping outlet or a burst line. You can close the
+                water supply from here.
+              data:
+                tag: aquahome_leak_alert
+                # Delivery hints: Android honours ttl/priority/channel, iOS
+                # honours push.interruption-level, and every other notification
+                # platform ignores them. `alarm_stream` plays the alert on the
+                # alarm volume; drop it for a quieter notification.
+                ttl: 0
+                priority: high
+                channel: alarm_stream
+                push:
+                  interruption-level: time-sensitive
+                actions:
+                  - action: AQUAHOME_LEAK_SHUTOFF
+                    title: Close water supply
+          - alias: Wait for an explicit shutoff request
+            wait_for_trigger:
+              - trigger: event
+                event_type: mobile_app_notification_action
+                event_data:
+                  action: AQUAHOME_LEAK_SHUTOFF
+            timeout: !input response_timeout
+            continue_on_timeout: true
+          - alias: Do nothing when the shutoff was not requested
+            condition: template
+            value_template: "{{ wait.trigger is not none }}"
+          - alias: Close the water supply
+            action: valve.close
+            target:
+              entity_id: !input shutoff_valve
+    default:
+      - alias: Send the high-priority alert
+        action: !input notify_service
+        data:
+          title: Water softener — leak not confirmed
+          message: >-
+            Water is still being measured with nobody using it ({{
+            leak_rate_text }}; severity {{ leak_tier }}). Check for a running
+            toilet, a dripping outlet or a burst line.
+          data:
+            tag: aquahome_leak_alert
+            # See the note above: these keys are Companion-app delivery hints
+            # and are ignored by other notification platforms.
+            ttl: 0
+            priority: high
+            channel: alarm_stream
+            push:
+              interruption-level: time-sensitive

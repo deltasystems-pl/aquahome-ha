@@ -23,6 +23,7 @@ extra hardware required.
 - [How it works](#how-it-works)
 - [Entities](#entities)
 - [Example automations](#example-automations)
+- [Blueprints](#blueprints)
 - [Development](#development)
 - [Continuous integration](#continuous-integration)
 - [Repository layout](#repository-layout)
@@ -168,6 +169,25 @@ automation:
           message: "Alert: {{ trigger.to_state.attributes.event_type }}"
 ```
 
+## Blueprints
+
+Four ready-made automation blueprints ship with the integration. They build on
+the daily water-usage analysis and the opt-in automation switches, and they all
+follow the same rule: **nothing that affects the device happens without your
+confirmation.** Click a badge to import a blueprint straight into your Home
+Assistant, then create an automation from it.
+
+| Blueprint | What it does |
+| --- | --- |
+| [![Import the AquaHome leak alert blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fdeltasystems-pl%2Faquahome-ha%2Fmain%2Fblueprints%2Fautomation%2Faquahome%2Fleak_alert.yaml) **Leak alert** | Asks "was this you?" when the nightly analysis suspects a leak, escalates to a high-priority alert on "no" or on silence, and offers to close a shutoff valve — only ever on an explicit tap. |
+| [![Import the AquaHome auto vacation blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fdeltasystems-pl%2Faquahome-ha%2Fmain%2Fblueprints%2Fautomation%2Faquahome%2Fauto_vacation_presence.yaml) **Auto vacation** | Turns vacation deferral on once your presence entity has been away long enough, and off again the moment someone returns. |
+| [![Import the AquaHome smart regeneration companion blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fdeltasystems-pl%2Faquahome-ha%2Fmain%2Fblueprints%2Fautomation%2Faquahome%2Fsmart_regeneration_companion.yaml) **Smart regeneration companion** | Reports every scheduling decision — regeneration scheduled, deferred, or deferral limit reached — with a one-tap "cancel tonight's regeneration" button. |
+| [![Import the AquaHome usage anomaly check blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fdeltasystems-pl%2Faquahome-ha%2Fmain%2Fblueprints%2Fautomation%2Faquahome%2Fanomaly_check.yaml) **Usage anomaly check** | Asks whether an unusually high water day was yours; a "no" gets a short leak-check list and the current leak-watch reading. |
+
+The interactive buttons need the Home Assistant Companion app. With any other
+notification service the messages still arrive — the buttons are simply
+ignored, and each blueprint documents what happens then.
+
 ## Development
 
 Requires Python **3.13**.
@@ -203,6 +223,7 @@ same ref cancel each other. The workflow has five independent jobs:
 
 - `custom_components/aquahome/` — the integration (API client, coordinators,
   config flow, and entity platforms).
+- `blueprints/automation/aquahome/` — the bundled automation blueprints.
 - `tests/` — the test suite.
 - `reverse-engineering/` — maintainer-only git submodule (restricted access). It is **not**
   required to build, run, install, or contribute to the integration; a normal
