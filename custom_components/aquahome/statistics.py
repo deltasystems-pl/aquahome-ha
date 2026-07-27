@@ -430,6 +430,16 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
             _LOGGER.debug("No new water statistics rows for %s", self.statistic_id)
             return
         async_add_external_statistics(self.hass, self._metadata(), rows)
+        # The call above only QUEUES the import on the recorder's task thread,
+        # while readers (the analytics engine, this coordinator's own anchor
+        # lookup) go through the recorder's executor pool, which is not
+        # ordered behind that queue. Drain here so every refresh completes
+        # with its rows actually readable. NB async_block_till_done() is NOT
+        # a usable barrier: the recorder dequeues a job before running it, so
+        # the queue reads empty for the whole duration of the import and the
+        # coroutine returns immediately (measured 20 % missed reads); the
+        # synchronous block_till_done queues its wait marker unconditionally.
+        await self.hass.async_add_executor_job(get_instance(self.hass).block_till_done)
         _LOGGER.debug(
             "Imported %s water statistics rows for %s (%s to %s)",
             len(rows),

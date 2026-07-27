@@ -34,7 +34,6 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.recorder import get_instance
 from homeassistant.helpers.start import async_at_started
 
 from .analytics.engine import AquaHomeAnalyticsEngine
@@ -186,9 +185,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         for device_id, statistics in statistics_coordinators.items():
             entry.async_create_background_task(
                 hass,
-                _async_run_startup_pipeline(
-                    hass, statistics, analytics_engines[device_id]
-                ),
+                _async_run_startup_pipeline(statistics, analytics_engines[device_id]),
                 name=f"{DOMAIN} statistics backfill {statistics.device_slug}",
             )
 
@@ -204,7 +201,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
 
 
 async def _async_run_startup_pipeline(
-    hass: HomeAssistant,
     statistics: AquaHomeStatisticsCoordinator,
     engine: AquaHomeAnalyticsEngine,
 ) -> None:
@@ -213,17 +209,13 @@ async def _async_run_startup_pipeline(
     Strictly ordered so the analytics engine's first pass sees the imported
     history (the Phase-5 backfill is the analytics tier's explicit
     prerequisite — detectors work from day one over replayed nights). The
-    ordering needs a real barrier: ``async_add_external_statistics`` only
-    *queues* the import on the recorder's task queue, while the engine reads
-    through the recorder's executor pool, which is not ordered behind that
-    queue — without draining it, a fresh install's first pass races the import
-    and can see an empty series. Neither refresh raises (``async_refresh``
-    swallows failures into coordinator state), so the daily schedule is always
-    armed.
+    statistics coordinator itself drains the recorder behind its import, so a
+    completed refresh means the rows are readable — no barrier is needed here,
+    and the same guarantee covers the engine's daily trigger and the 12-hour
+    cadence. Neither refresh raises (``async_refresh`` swallows failures into
+    coordinator state), so the daily schedule is always armed.
     """
     await statistics.async_refresh()
-    if "recorder" in hass.config.components:
-        await get_instance(hass).async_block_till_done()
     await engine.async_refresh()
     await engine.async_schedule()
 
