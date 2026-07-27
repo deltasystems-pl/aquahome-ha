@@ -31,6 +31,7 @@ Every function is None-safe: a missing or physically impossible input yields
 
 from __future__ import annotations
 
+import math
 from typing import Final
 
 #: mg/L of CaCO₃ per grain-per-US-gallon: 1 grain = 0.06479891 g over one US
@@ -78,6 +79,17 @@ EFFICIENCY_SOURCE_TOTALS: Final = "totals"
 def _valid_efficiency(candidate: float) -> bool:
     """Return whether an efficiency value is physically possible."""
     return 0.0 < candidate <= STOICHIOMETRIC_MAX_MOL_PER_KG
+
+
+def _all_finite(*values: float) -> bool:
+    """Return whether every value is a finite number.
+
+    ``json.loads`` accepts bare ``NaN``/``Infinity`` literals, and NaN slips
+    through ordinary ``<``/``<=`` guards (every comparison is ``False``), so a
+    malformed cloud payload would otherwise surface as a ``nan`` sensor state
+    instead of an honest ``None``.
+    """
+    return all(math.isfinite(value) for value in values)
 
 
 def efficiency_mol_per_kg_with_source(
@@ -135,12 +147,15 @@ def daily_salt_grams(
 
     ``liters_per_day x (dh_in - dh_out) x DH_MMOL_PER_L`` is the daily hardness
     load in mmol; divided by the efficiency (mol/kg) that is grams of salt.
-    ``None`` when an input is missing, the volume is negative, the hardness
-    differential is not positive, or the efficiency is not positive.
+    ``None`` when an input is missing or non-finite, the volume or outlet
+    hardness is negative, the hardness differential is not positive, or the
+    efficiency is not positive.
     """
     if liters_per_day is None or dh_in is None or e_mol_per_kg is None:
         return None
-    if liters_per_day < 0 or dh_in <= dh_out or e_mol_per_kg <= 0:
+    if not _all_finite(liters_per_day, dh_in, dh_out, e_mol_per_kg):
+        return None
+    if liters_per_day < 0 or dh_out < 0 or dh_in <= dh_out or e_mol_per_kg <= 0:
         return None
     return liters_per_day * (dh_in - dh_out) * DH_MMOL_PER_L / e_mol_per_kg
 
@@ -153,10 +168,12 @@ def device_daily_salt_grams(
 
     The softener's own long-run averages — salt dose per regeneration over the
     average regeneration interval — form the independent baseline the chemistry
-    estimate is cross-checked against. ``None`` unless both are present and
-    positive.
+    estimate is cross-checked against. ``None`` unless both are present,
+    finite, and positive.
     """
     if avg_salt_per_regen_lb is None or avg_days_between_regens is None:
+        return None
+    if not _all_finite(avg_salt_per_regen_lb, avg_days_between_regens):
         return None
     if avg_salt_per_regen_lb <= 0 or avg_days_between_regens <= 0:
         return None
@@ -175,14 +192,17 @@ def cross_check_days(
     chemistry rate gives an independent estimate that reacts to *current* water
     usage and hardness settings faster than the device's long-run model. This
     is deliberately anchored to the device's own countdown (the PRIMARY
-    signal) — it is a cross-check, not a replacement. ``None`` unless the
-    countdown is non-negative and both rates are positive.
+    signal) — it is a cross-check, not a replacement. ``None`` unless every
+    input is finite, the countdown is non-negative, and both rates are
+    positive.
     """
     if (
         device_estimate_days is None
         or device_daily_g is None
         or chemistry_daily_g is None
     ):
+        return None
+    if not _all_finite(device_estimate_days, device_daily_g, chemistry_daily_g):
         return None
     if device_estimate_days < 0 or device_daily_g <= 0 or chemistry_daily_g <= 0:
         return None
