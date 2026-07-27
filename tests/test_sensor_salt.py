@@ -283,6 +283,32 @@ async def test_daily_salt_usage_falls_back_to_hardness_property(
     assert attributes["inlet_hardness_dh"] == round(INLET_DH_FALLBACK, 2)
 
 
+async def test_non_finite_salt_type_property_falls_back_to_the_setting(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A non-finite ``salt_type_enum`` never crashes the attribute render.
+
+    ``int(inf)`` raises OverflowError, so without the finiteness guard a
+    corrupted raw property would blow up ``extra_state_attributes`` on every
+    poll. Instead the lookup falls through to the settings document's
+    ``salt_type`` and the sensor keeps its value untouched.
+    """
+    freezer.move_to(FROZEN_INSTANT)
+    detail = load_fixture("device-detail.json")
+    detail["properties"]["salt_type_enum"]["value"] = float("inf")
+    add_device_routes(mock_api, device_detail=detail)
+    with _ONLY_SENSOR:
+        await setup_integration(hass, mock_config_entry)
+
+    assert _native(hass, "daily_salt_usage") == pytest.approx(
+        DAILY_SALT_SETTINGS, abs=0.1
+    )
+    assert _attributes(hass, "daily_salt_usage")["salt_type"] == "NaCl"
+
+
 @pytest.mark.parametrize(
     "malformed",
     ["Infinity", "-Infinity", "NaN", "not-a-number", "0"],
