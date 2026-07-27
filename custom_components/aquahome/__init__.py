@@ -31,6 +31,7 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.start import async_at_started
 
 from .api import (
     ApiError,
@@ -150,15 +151,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         statistics_coordinators=statistics_coordinators,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    @callback
+    def _async_start_backfills(_hass: HomeAssistant) -> None:
+        """Kick off every device's first backfill as a background task."""
+        for statistics in statistics_coordinators.values():
+            entry.async_create_background_task(
+                hass,
+                statistics.async_refresh(),
+                name=f"{DOMAIN} statistics backfill {statistics.device_slug}",
+            )
+
     # The history backfill talks to a throttled cloud and the recorder; it must
     # never delay entity setup, so its first run happens as a background task
-    # (which also arms the 12-hour cadence). Failures log via the coordinator.
-    for statistics in statistics_coordinators.values():
-        entry.async_create_background_task(
-            hass,
-            statistics.async_refresh(),
-            name=f"{DOMAIN} statistics backfill {statistics.device_slug}",
-        )
+    # (which also arms the 12-hour cadence) — and only once Home Assistant has
+    # fully started: at boot the entry can be set up while the recorder is still
+    # bringing its database online, and a backfill launched into that window
+    # skips itself until the next 12-hour pass (observed live, 2026-07-27). On a
+    # reload the started event has long fired and the callback runs immediately.
+    entry.async_on_unload(async_at_started(hass, _async_start_backfills))
     return True
 
 
