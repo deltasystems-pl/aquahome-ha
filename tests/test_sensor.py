@@ -151,7 +151,10 @@ async def test_all_sensor_entities(
             assert entry.disabled_by is not None
             registry.async_update_entity(entity_id, disabled_by=None)
         await hass.config_entries.async_reload(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
+        # The reload restarts the backfill-then-analytics pipeline; settle it
+        # so the analytics rows are deterministic, not a race (frozen clock
+        # keeps their values stable).
+        await hass.async_block_till_done(wait_background_tasks=True)
 
     await snapshot_platform(
         hass, er.async_get(hass), snapshot, mock_config_entry.entry_id

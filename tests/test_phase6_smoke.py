@@ -8,8 +8,9 @@ integration exactly as Home Assistant would — every platform forwarded, the re
 captured cloud payloads behind ``aioresponses`` — and checks that the salt layer
 hangs together with everything else:
 
-* all five salt sensors materialise beside the pre-existing inventory (35
-  sensors in total) and carry the ground-truth values computed from first
+* all five salt sensors materialise beside the pre-existing inventory (37
+  sensors in total once the Phase-7 analytics pair joined) and carry the
+  ground-truth values computed from first
   principles against the very same fixtures — 254.6 g/d of salt, a 155-day
   cross-check of the device's own 167-day countdown, 3.07 mol/kg of measured
   efficiency and the 3.8281 lb per-regeneration dose rendered in kilograms;

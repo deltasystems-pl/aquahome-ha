@@ -1066,8 +1066,10 @@
     'attributes': ReadOnlyDict({
       'device_class': 'volume_flow_rate',
       'friendly_name': 'Dom Night flow',
+      'night': None,
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolumeFlowRate.LITERS_PER_HOUR: 'L/h'>,
+      'verdict': None,
     }),
     'context': <ANY>,
     'entity_id': 'sensor.dom_night_flow',
@@ -1974,17 +1976,22 @@
 # name: test_all_sensor_entities[sensor.dom_usage_forecast-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
+      'band_liters': 114,
       'device_class': 'volume_storage',
       'friendly_name': 'Dom Usage forecast',
+      'liters': 174,
+      'persons': None,
+      'source': 'device_average',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
+      'weekday': 'wednesday',
     }),
     'context': <ANY>,
     'entity_id': 'sensor.dom_usage_forecast',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': 'unknown',
+    'state': '174.128942064',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_water_used_today-entry]
