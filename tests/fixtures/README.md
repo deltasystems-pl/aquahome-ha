@@ -15,3 +15,25 @@ Modifications relative to the raw captures:
   paginated `GetDevicesOutputBody` shape of `GET /devices`.
 
 Everything else is byte-for-byte the captured payload.
+
+## Datapoint graph captures (2026-07-27, same reference device)
+
+Real responses from `GET /devices/{id}/datapoints/total_outlet_water_gals/graph`,
+captured for the statistics backfill. The `graph-meter-*` files use
+`value_type=max` (raw lifetime-counter readings per bucket; `0` = no reading in
+that bucket — responses are always zero-filled, never empty):
+
+- `graph-meter-yearly.json` — `period_type=year`, 2015→2027 depth-probe sweep.
+- `graph-meter-monthly.json` — `period_type=month`, 2020→2026-08.
+- `graph-meter-daily.json` — `period_type=day`, 2025-09-01→2026-07-27 (the full
+  retention window; readings start 2025-09-14).
+- `graph-meter-hourly.json` — `period_type=hour`, 2026-07-01→2026-07-27T12:00.
+- `graph-meter-hourly-empty.json` — `period_type=hour` for 2025-10-13, a day
+  older than the hourly retention floor: all-zero rows despite daily data
+  existing there (the zero-filled "no data" shape).
+- `graph-usage-daily-pl.json` — `period_type=day`, `value_type=max_diff`,
+  requested with `accept-language: pl`: documents that the `units` string is
+  server-localized (`"Litry"`) — the PAIN#5 guard fixture.
+
+`graph-daily-usage.json` (2026-07-21) predates these and remains the
+`value_type=max_diff` client/model fixture.

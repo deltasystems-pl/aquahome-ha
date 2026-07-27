@@ -1,0 +1,46 @@
+{
+  "$schema": "https://api.myiquaapp.com/v1/schemas/DeviceGetDatapointGraphBody.json",
+  "units": "Litry",
+  "data": [
+    {
+      "label": "2026-07-20T00:00:00+02:00",
+      "display_label": "20/07/2026",
+      "value": 113
+    },
+    {
+      "label": "2026-07-21T00:00:00+02:00",
+      "display_label": "21/07/2026",
+      "value": 181
+    },
+    {
+      "label": "2026-07-22T00:00:00+02:00",
+      "display_label": "22/07/2026",
+      "value": 227
+    },
+    {
+      "label": "2026-07-23T00:00:00+02:00",
+      "display_label": "23/07/2026",
+      "value": 242
+    },
+    {
+      "label": "2026-07-24T00:00:00+02:00",
+      "display_label": "24/07/2026",
+      "value": 113
+    },
+    {
+      "label": "2026-07-25T00:00:00+02:00",
+      "display_label": "25/07/2026",
+      "value": 0
+    },
+    {
+      "label": "2026-07-26T00:00:00+02:00",
+      "display_label": "26/07/2026",
+      "value": 26
+    },
+    {
+      "label": "2026-07-27T00:00:00+02:00",
+      "display_label": "27/07/2026",
+      "value": 18
+    }
+  ]
+}

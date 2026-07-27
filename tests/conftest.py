@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from aioresponses import aioresponses
+from aioresponses import CallbackResult, aioresponses
 from homeassistant.const import (
     CONF_ACCESS_TOKEN,
     CONF_EMAIL,
@@ -36,9 +36,10 @@ from custom_components.aquahome.const import (
 from tests.api.conftest import make_jwt
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Mapping
 
     from homeassistant.core import HomeAssistant
+    from yarl import URL
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -139,6 +140,67 @@ def settings_url(
 def command_url(device_id: str = TEST_DEVICE_ID, host: str = API_BASE_URL) -> str:
     """Return the exact ``PUT /devices/{id}/command`` URL on ``host``."""
     return f"{host}/devices/{device_id}/command"
+
+
+def graph_url(
+    device_id: str = TEST_DEVICE_ID,
+    property_name: str = "total_outlet_water_gals",
+    host: str = API_BASE_URL,
+) -> re.Pattern[str]:
+    """Match the ``GET .../datapoints/{property}/graph`` URL on ``host``."""
+    return re.compile(
+        rf"^{re.escape(host)}/devices/{re.escape(device_id)}"
+        rf"/datapoints/{re.escape(property_name)}/graph\?.*$"
+    )
+
+
+def add_datapoint_graph_routes(  # noqa: PLR0913 - keyword-only per-test knobs
+    mock: aioresponses,
+    *,
+    by_period: Mapping[str, Any],
+    host: str = API_BASE_URL,
+    device_id: str = TEST_DEVICE_ID,
+    property_name: str = "total_outlet_water_gals",
+    seen_requests: list[tuple[dict[str, str], dict[str, str]]] | None = None,
+) -> None:
+    """Register one dispatching route for the datapoint graph endpoint.
+
+    The backfill hits the same URL with different ``period_type`` queries, so a
+    single callback route dispatches on it. ``by_period`` maps a period type
+    (``year``/``month``/``day``/``hour``) to a static payload dict, a list of
+    payloads consumed in request order (the last one repeats — the natural shape
+    for walk-backward chunk sequences), or a callable receiving the parsed query
+    mapping and returning a payload. An unmapped period type fails the test
+    loudly with a 500 instead of silently zero-filling. ``seen_requests``, when
+    given, collects ``(query, request headers)`` per call for header assertions.
+    """
+    queues: dict[str, list[dict[str, Any]]] = {
+        period: list(payloads)
+        for period, payloads in by_period.items()
+        if isinstance(payloads, list)
+    }
+
+    def _callback(url: URL, **kwargs: Any) -> CallbackResult:
+        query = dict(url.query.items())
+        if seen_requests is not None:
+            headers = dict(kwargs.get("headers") or {})
+            seen_requests.append((query, headers))
+        period = query.get("period_type", "")
+        source = by_period.get(period)
+        if source is None:
+            return CallbackResult(
+                status=500,
+                payload={"detail": f"unmapped period_type {period!r}"},
+            )
+        if isinstance(source, list):
+            queue = queues[period]
+            payload = queue.pop(0) if len(queue) > 1 else queue[0]
+            return CallbackResult(payload=payload)
+        if callable(source):
+            return CallbackResult(payload=source(query))
+        return CallbackResult(payload=source)
+
+    mock.get(graph_url(device_id, property_name, host), callback=_callback, repeat=True)
 
 
 def add_settings_routes(
