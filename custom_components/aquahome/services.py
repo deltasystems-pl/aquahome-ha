@@ -42,7 +42,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Final
 
 import voluptuous as vol
-from homeassistant.const import Platform
+from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import SupportsResponse, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
@@ -124,6 +124,14 @@ _REGEN_ACTIONS: Final = {
 _REGEN_BUTTON_KEYS: Final = frozenset(
     {"regenerate_now", "schedule_regeneration", "cancel_regeneration"}
 )
+
+#: The regeneration button that acts on an *indirect* (device/area/label)
+#: target. Such a target expands to all three regeneration buttons and each
+#: invocation would send the same cloud command; exactly one must act.
+#: ``cancel_regeneration`` is the one regeneration button with no
+#: ``available_fn``, so it survives whatever the ``can_schedule`` /
+#: ``can_recharge`` hints say and every mode keeps working on a device target.
+_REGEN_FANOUT_KEY: Final = "cancel_regeneration"
 
 #: Plain-English targets named in the wrong-entity error.
 _EXPECTED_ANALYTICS_SENSOR: Final = "an AquaHome usage analytics sensor"
@@ -344,13 +352,34 @@ def _wrong_entity(expected: str) -> ServiceValidationError:
     )
 
 
-def _analytics_sensor(entity: Entity) -> AquaHomeAnalyticsSensor:
-    """Return the targeted entity as an analytics sensor, or refuse the call."""
+def _explicitly_targeted(entity: Entity, call: ServiceCall) -> bool:
+    """Return whether the call named this entity itself.
+
+    Only ``entity_id`` names an entity; a device, area, floor or label target
+    reaches it indirectly, which is the case Home Assistant's own
+    entity-service filters skip rather than refuse.
+    """
+    named = call.data.get(ATTR_ENTITY_ID)
+    return isinstance(named, list) and entity.entity_id in named
+
+
+def _analytics_sensor(
+    entity: Entity, call: ServiceCall
+) -> AquaHomeAnalyticsSensor | None:
+    """Return the targeted entity as an analytics sensor, or ``None`` to skip it.
+
+    A device or area target expands to every AquaHome sensor; refusing one of
+    them would abort the whole call and throw away the answers the analytics
+    sensors did produce, so an indirectly reached bystander is skipped instead.
+    An explicitly named wrong entity is still refused.
+    """
     from .sensor import AquaHomeAnalyticsSensor  # noqa: PLC0415
 
-    if not isinstance(entity, AquaHomeAnalyticsSensor):
+    if isinstance(entity, AquaHomeAnalyticsSensor):
+        return entity
+    if _explicitly_targeted(entity, call):
         raise _wrong_entity(_EXPECTED_ANALYTICS_SENSOR)
-    return entity
+    return None
 
 
 def _vacation_switch(entity: Entity) -> AquaHomeVacationDeferralSwitch:
@@ -404,7 +433,10 @@ async def _async_analyze_usage(entity: Entity, call: ServiceCall) -> ServiceResp
     engine that has never completed a pass has no result to serialize, which is
     reported as a validation error rather than as an empty payload.
     """
-    engine = _analytics_sensor(entity).coordinator
+    sensor = _analytics_sensor(entity, call)
+    if sensor is None:
+        return None
+    engine = sensor.coordinator
     if call.data[ATTR_REFRESH]:
         await engine.async_refresh()
     result: AnalyticsResult | None = engine.data
@@ -425,7 +457,10 @@ async def _async_get_usage_forecast(
     read this needs is the one failure mode: it arrives as ``UpdateFailed`` and
     is re-raised as a user-facing error carrying the same cause.
     """
-    engine = _analytics_sensor(entity).coordinator
+    sensor = _analytics_sensor(entity, call)
+    if sensor is None:
+        return None
+    engine = sensor.coordinator
     try:
         forecasts = await engine.async_compute_forecasts(call.data[ATTR_DAYS])
     except UpdateFailed as err:
@@ -460,6 +495,14 @@ async def _async_schedule_regeneration(entity: Entity, call: ServiceCall) -> Non
     the same reading the regeneration buttons apply to their availability.
     """
     button = _regeneration_button(entity)
+    if (
+        not _explicitly_targeted(entity, call)
+        and button.entity_description.key != _REGEN_FANOUT_KEY
+    ):
+        # A device/area/label target expands to every regeneration button of
+        # the device; letting each of them act would triple the command on a
+        # throttled cloud. Exactly one designated button acts per device.
+        return
     device = button.coordinator.data
     mode: str = call.data[ATTR_MODE]
     blocked = (mode == REGEN_MODE_SCHEDULE and _can_schedule(device) is False) or (
