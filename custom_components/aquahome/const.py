@@ -84,18 +84,20 @@ REGENERATION_STATUS_OPTIONS: Final[tuple[str, ...]] = (
 # binaries must report unknown (None) in that state, never a fabricated False.
 RECHARGE_STATE_OFFLINE: Final = "offline"
 
-# Weekday carried by each avg_daily_use_day_N slot (slot 1 first). Map A
-# (day_1=Sunday, US firmware convention) — user-confirmed default 2026-07-21,
-# not yet live-verified. Display-only: entity identities are slot-based, so a
-# future correction changes labels, never unique IDs.
+# Weekday carried by each avg_daily_use_day_N slot (slot 1 first). Map B
+# (day_1=Saturday) — flipped from the Map A default on 2026-07-27 after live
+# correlation against 8 weeks of daily-usage graphs (r ≈ +0.73 for Saturday vs
+# ≈ 0 for Sunday across 28/42/56-day windows; owner-approved). Display-only:
+# entity identities are slot-based, so a future correction changes labels,
+# never unique IDs.
 WEEKDAY_SLOTS: Final[tuple[str, ...]] = (
+    "saturday",
     "sunday",
     "monday",
     "tuesday",
     "wednesday",
     "thursday",
     "friday",
-    "saturday",
 )
 
 # Cadence of the per-device settings coordinator. The rule-driven settings

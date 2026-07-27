@@ -103,25 +103,25 @@
         "name": "Last regeneration"
       },
       "average_daily_use_day_1": {
-        "name": "Average use Sunday"
+        "name": "Average use Saturday"
       },
       "average_daily_use_day_2": {
-        "name": "Average use Monday"
+        "name": "Average use Sunday"
       },
       "average_daily_use_day_3": {
-        "name": "Average use Tuesday"
+        "name": "Average use Monday"
       },
       "average_daily_use_day_4": {
-        "name": "Average use Wednesday"
+        "name": "Average use Tuesday"
       },
       "average_daily_use_day_5": {
-        "name": "Average use Thursday"
+        "name": "Average use Wednesday"
       },
       "average_daily_use_day_6": {
-        "name": "Average use Friday"
+        "name": "Average use Thursday"
       },
       "average_daily_use_day_7": {
-        "name": "Average use Saturday"
+        "name": "Average use Friday"
       },
       "capacity_remaining": {
         "name": "Capacity remaining"

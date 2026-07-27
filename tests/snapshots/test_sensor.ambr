@@ -98,8 +98,8 @@
     'previous_unique_id': None,
     'suggested_object_id': None,
     'supported_features': 0,
-    'translation_key': 'average_daily_use_day_6',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_6',
+    'translation_key': 'average_daily_use_day_7',
+    'unique_id': '7384243_20203_1120_average_daily_use_day_7',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
@@ -108,7 +108,7 @@
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
       'friendly_name': 'Dom Average use Friday',
-      'reported': '2026-07-17T00:01:02+00:00',
+      'reported': '2026-06-14T02:53:37+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
@@ -117,7 +117,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '151.41647136',
+    'state': '37.85411784',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_average_use_monday-entry]
@@ -159,8 +159,8 @@
     'previous_unique_id': None,
     'suggested_object_id': None,
     'supported_features': 0,
-    'translation_key': 'average_daily_use_day_2',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_2',
+    'translation_key': 'average_daily_use_day_3',
+    'unique_id': '7384243_20203_1120_average_daily_use_day_3',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
@@ -169,7 +169,7 @@
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
       'friendly_name': 'Dom Average use Monday',
-      'reported': '2026-07-20T00:01:02+00:00',
+      'reported': '2026-07-21T00:01:03+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
@@ -178,7 +178,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '215.768471688',
+    'state': '162.772706712',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_average_use_saturday-entry]
@@ -220,8 +220,8 @@
     'previous_unique_id': None,
     'suggested_object_id': None,
     'supported_features': 0,
-    'translation_key': 'average_daily_use_day_7',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_7',
+    'translation_key': 'average_daily_use_day_1',
+    'unique_id': '7384243_20203_1120_average_daily_use_day_1',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
@@ -230,7 +230,7 @@
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
       'friendly_name': 'Dom Average use Saturday',
-      'reported': '2026-06-14T02:53:37+00:00',
+      'reported': '2026-07-19T00:01:01+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
@@ -239,7 +239,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '37.85411784',
+    'state': '155.201883144',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_average_use_sunday-entry]
@@ -281,8 +281,8 @@
     'previous_unique_id': None,
     'suggested_object_id': None,
     'supported_features': 0,
-    'translation_key': 'average_daily_use_day_1',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_1',
+    'translation_key': 'average_daily_use_day_2',
+    'unique_id': '7384243_20203_1120_average_daily_use_day_2',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
@@ -291,7 +291,7 @@
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
       'friendly_name': 'Dom Average use Sunday',
-      'reported': '2026-07-19T00:01:01+00:00',
+      'reported': '2026-07-20T00:01:02+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
@@ -300,7 +300,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '155.201883144',
+    'state': '215.768471688',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_average_use_thursday-entry]
@@ -342,8 +342,8 @@
     'previous_unique_id': None,
     'suggested_object_id': None,
     'supported_features': 0,
-    'translation_key': 'average_daily_use_day_5',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_5',
+    'translation_key': 'average_daily_use_day_6',
+    'unique_id': '7384243_20203_1120_average_daily_use_day_6',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
@@ -352,7 +352,7 @@
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
       'friendly_name': 'Dom Average use Thursday',
-      'reported': '2026-07-16T00:01:01+00:00',
+      'reported': '2026-07-17T00:01:02+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
@@ -361,7 +361,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '174.128942064',
+    'state': '151.41647136',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_average_use_tuesday-entry]
@@ -403,8 +403,8 @@
     'previous_unique_id': None,
     'suggested_object_id': None,
     'supported_features': 0,
-    'translation_key': 'average_daily_use_day_3',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_3',
+    'translation_key': 'average_daily_use_day_4',
+    'unique_id': '7384243_20203_1120_average_daily_use_day_4',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
@@ -413,7 +413,7 @@
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
       'friendly_name': 'Dom Average use Tuesday',
-      'reported': '2026-07-21T00:01:03+00:00',
+      'reported': '2026-07-18T00:01:01+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
@@ -422,7 +422,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '162.772706712',
+    'state': '132.48941244',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_average_use_wednesday-entry]
@@ -464,8 +464,8 @@
     'previous_unique_id': None,
     'suggested_object_id': None,
     'supported_features': 0,
-    'translation_key': 'average_daily_use_day_4',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_4',
+    'translation_key': 'average_daily_use_day_5',
+    'unique_id': '7384243_20203_1120_average_daily_use_day_5',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
@@ -474,7 +474,7 @@
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
       'friendly_name': 'Dom Average use Wednesday',
-      'reported': '2026-07-18T00:01:01+00:00',
+      'reported': '2026-07-16T00:01:01+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
@@ -483,7 +483,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '132.48941244',
+    'state': '174.128942064',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_capacity_remaining-entry]
