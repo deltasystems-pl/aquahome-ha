@@ -65,7 +65,7 @@ class AuthManager:
         session: aiohttp.ClientSession,
         *,
         base_url: str = API_BASE_URL,
-        time_func: Callable[[], float] = time.time,
+        time_func: Callable[[], float] | None = None,
         on_token_update: Callable[[str, str], None] | None = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
@@ -83,6 +83,8 @@ class AuthManager:
         """
         self._session = session
         self._base_url = base_url
+        #: None means "read time.time at call time" — a captured default would
+        #: pin the real clock at import and escape patched clocks (freezegun).
         self._time_func = time_func
         self._on_token_update = on_token_update
         self._timeout_seconds = timeout_seconds
@@ -215,7 +217,8 @@ class AuthManager:
         expiry = self._token_expiry(token)
         if expiry is None:
             return False
-        return expiry - self._time_func() >= TOKEN_REFRESH_MARGIN_SECONDS
+        now = self._time_func() if self._time_func is not None else time.time()
+        return expiry - now >= TOKEN_REFRESH_MARGIN_SECONDS
 
     @staticmethod
     def _token_expiry(token: str) -> float | None:
