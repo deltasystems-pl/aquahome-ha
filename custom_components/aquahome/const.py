@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import time, timedelta
 from typing import Final
 
 from homeassistant.const import Platform
@@ -219,6 +219,101 @@ TOTAL_WATER_CLAMP_TOLERANCE: Final = 0.05
 SALT_DAYS_WARNING_THRESHOLD: Final = 14
 SALT_DAYS_CRITICAL_THRESHOLD: Final = 7
 SALT_DAYS_HYSTERESIS: Final = 2
+
+# --- Analytics tier (Phase 7). Every threshold below traces to
+# reverse-engineering/knowledge/research/water-usage-analytics.md (bracketed
+# source numbers refer to its bibliography) — no folklore thresholds.
+
+# Daily engine run, device-local wall clock: just after the 01-07 minimum-night-
+# flow window closes, so the freshest complete night is classifiable the same
+# morning. Not on the hour, as a small politeness offset.
+ANALYTICS_RUN_LOCAL_TIME: Final = time(7, 35)
+
+# Rolling window the hour-of-week baseline grid and daily statistics are built
+# from (26 weekly cycles), and the shorter window the night/vacation/ratio
+# verdicts are assessed over. The activity coordinator's single history page
+# (20 events x ~7 day cadence) comfortably covers the detector window with
+# regeneration masking data.
+BASELINE_WINDOW_DAYS: Final = 182
+DETECTOR_WINDOW_DAYS: Final = 35
+
+# Minimum-night-flow window, local hours [start, end) — the leak-detection
+# window validated on 21,845 users [44]. Scheduled regenerations fire ~02:00
+# local, squarely inside it, hence the mandatory masking.
+MNF_WINDOW_START_HOUR: Final = 1
+MNF_WINDOW_END_HOUR: Final = 7
+
+# Leak debounce: consecutive classifiable LEAK nights before the binary turns
+# on (lower bound of the study's 2-3-day recommendation [44][51]), and the
+# persistent-flow fallback window [45].
+LEAK_CONSECUTIVE_NIGHTS: Final = 2
+PERSISTENT_FLOW_HOURS: Final = 72
+
+# Tiered implied-continuous-rate thresholds anchored to the REU2016 skewed
+# leakage distribution [47]: mean household leakage, a clearly-broken fixture,
+# and the burst-pipe tail. Only the urgent tier files a Repairs issue
+# (owner decision 2026-07-27).
+LEAK_TIER_INFO_LITERS_PER_DAY: Final = 67.0
+LEAK_TIER_WARNING_LITERS_PER_DAY: Final = 380.0
+LEAK_TIER_URGENT_LITERS_PER_DAY: Final = 1135.0
+
+# REU application-ratio buckets on daily totals [47]: below LOW is an
+# away/vacation candidate, above EXCESS is guests or a possible leak.
+RATIO_LOW: Final = 0.70
+RATIO_EXCESS: Final = 1.30
+
+# Vacation detection [55][47]: sustained multi-day low usage only (water alone
+# cannot resolve short absences), each day below VACATION_RATIO of expectation
+# with no single discrete event larger than a shower-scale draw (REU fixture
+# volumes: toilet 1.6 gal, dishwasher 4-6 gal, shower 15-20 gal).
+VACATION_RATIO: Final = 0.30
+VACATION_MIN_DAYS: Final = 3
+VACATION_LARGE_EVENT_GALLONS: Final = 10.0
+
+# Robust-statistics band multiplier (k ~ 3 on 1.4826*MAD) [31][45], the number
+# of anomalous hours within a day required to call a point anomaly, and the
+# maturity gates: grid buckets need MIN_BUCKET_SAMPLES samples, learned daily
+# statistics need two full weekly cycles (the Flo warm-up doubled [61]).
+ANALYTICS_K: Final = 3.0
+POINT_ANOMALY_MIN_HOURS: Final = 2
+MIN_BUCKET_SAMPLES: Final = 4
+LEARNED_DAILY_MIN_DAYS: Final = 14
+
+# Freshness guard on the device's own per-weekday averages (gap-analysis U4:
+# slots go weeks stale — the fixture's Friday slot was 43 days old and 4x off).
+# updated_at is a change-stamp, so a stable-valued fresh slot can look stale;
+# the guard is deliberately conservative and falls back to learned statistics.
+WEEKDAY_SLOT_FRESHNESS_DAYS: Final = 14
+
+# Drift detection on daily totals: standard CUSUM design (k = 0.5 sigma,
+# h = 5 sigma) [35] with an EWMA control chart complement [36]; the input
+# series is Hampel-cleaned (local median replacement) first [32].
+CUSUM_K_SIGMA: Final = 0.5
+CUSUM_H_SIGMA: Final = 5.0
+EWMA_LAMBDA: Final = 0.2
+EWMA_L: Final = 3.0
+HAMPEL_WINDOW: Final = 7
+
+# A night or noon-day is assessable only when meter readings bound it within
+# this many hours on both sides — otherwise the silence is indistinguishable
+# from a data gap (device offline, backfill stale) and no verdict is honest.
+ASSESSABLE_BOUND_HOURS: Final = 48
+
+# Fallback duration for an open regeneration event (end_time null): observed
+# cycles run ~2 h, padded for masking safety.
+NOMINAL_REGEN_DURATION: Final = timedelta(hours=3)
+
+# REU2016 North-American indoor per-capita reference (58.6 gpcd = 222 L/day)
+# used only for the coarse occupancy estimate attribute [47].
+OCCUPANCY_LITERS_PER_PERSON: Final = 222.0
+
+# aquahome_event types fired on analytics verdict transitions.
+EVENT_TYPE_LEAK_SUSPECTED: Final = "leak_suspected"
+EVENT_TYPE_LEAK_CLEARED: Final = "leak_cleared"
+EVENT_TYPE_USAGE_ANOMALY: Final = "usage_anomaly"
+EVENT_TYPE_USAGE_ANOMALY_CLEARED: Final = "usage_anomaly_cleared"
+EVENT_TYPE_VACATION_STARTED: Final = "vacation_started"
+EVENT_TYPE_VACATION_ENDED: Final = "vacation_ended"
 
 CONFIG_VERSION: Final = 1
 CONFIG_MINOR_VERSION: Final = 1
