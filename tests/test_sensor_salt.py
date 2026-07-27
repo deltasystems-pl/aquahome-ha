@@ -480,6 +480,35 @@ async def test_salt_per_regeneration_native_pounds_display_kilograms(
     assert attributes["unit_of_measurement"] == UnitOfMass.KILOGRAMS
 
 
+async def test_kilogram_display_survives_a_localized_payload(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The kg preference is detected numerically, never by the unit label.
+
+    The server localizes ``converted_units`` per ``accept-language`` — a
+    Polish account receives "kilogramy"/"funtów" (live-confirmed 2026-07-27),
+    so a name allow-list silently leaves every non-English metric account on
+    pounds. The ``converted_value/value`` ratio (~0.4536) is locale-blind.
+    """
+    freezer.move_to(FROZEN_INSTANT)
+    detail = load_fixture("device-detail.json")
+    for prop in detail["properties"].values():
+        if prop.get("converted_units") == "kilograms":
+            prop["converted_units"] = "kilogramy"
+    add_device_routes(mock_api, device_detail=detail)
+    with _ONLY_SENSOR:
+        await setup_integration(hass, mock_config_entry)
+
+    attributes = _attributes(hass, "salt_per_regeneration")
+    assert attributes["unit_of_measurement"] == UnitOfMass.KILOGRAMS
+    assert float(_state_value(hass, "salt_per_regeneration")) == pytest.approx(
+        SALT_PER_REGEN_KG, abs=0.001
+    )
+
+
 # ---------------------------------------------------------------------------
 # Registry categories and enabled-by-default flags
 # ---------------------------------------------------------------------------

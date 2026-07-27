@@ -550,27 +550,35 @@ def _exists_property(name: str) -> Callable[[Device], bool]:
     return _exists
 
 
-#: ``converted_units`` spellings meaning the account displays weights in kg.
-_KILOGRAM_UNIT_NAMES = frozenset({"kilograms", "kilogram", "kg"})
+#: ``converted_value / value`` band identifying a pounds-to-kilograms account
+#: conversion (the exact factor is 0.45359237).
+_LB_TO_KG_RATIO_BAND = (0.43, 0.48)
 
 
 def _weight_display_unit(name: str) -> Callable[[Device], str | None]:
     """Build a suggested-unit function mirroring the account's weight display.
 
     Home Assistant's unit system converts volumes but never weights, so a
-    weight sensor would otherwise show its native pounds to every user. When
-    the backing property's server-side ``converted_units`` says the account
-    displays kilograms, suggest kilograms; otherwise keep the native unit. The
-    suggestion is only consulted at first registration, so a later change of
-    the account preference never churns an existing entity.
+    weight sensor would otherwise show its native pounds to every user. The
+    kilogram preference is detected NUMERICALLY — a ``converted_value/value``
+    ratio of ~0.4536 is the lb→kg factor — never by the ``converted_units``
+    label: the server localizes that string per ``accept-language``
+    ("kilograms" arrives as "kilogramy" on a Polish account, live-confirmed
+    2026-07-27, community PAIN #5), so any name allow-list silently fails for
+    non-English locales. The ratio is also immune to the server's missing ÷10
+    on the lifetime totals, which scales both sides equally.
     """
 
     def _suggested_unit(device: Device) -> str | None:
-        """Return kilograms when the account's converted unit is metric."""
+        """Return kilograms when the account converts this weight to kg."""
         prop = _property(device, name)
-        if prop is None or prop.converted_units is None:
+        if prop is None or prop.converted_value is None:
             return None
-        if prop.converted_units.casefold() in _KILOGRAM_UNIT_NAMES:
+        value = prop.value
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not value:
+            return None
+        ratio = prop.converted_value / value
+        if _LB_TO_KG_RATIO_BAND[0] <= ratio <= _LB_TO_KG_RATIO_BAND[1]:
             return UnitOfMass.KILOGRAMS
         return None
 
