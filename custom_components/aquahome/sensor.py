@@ -22,6 +22,16 @@ Two conventions are load-bearing and deliberate:
 The lifetime total-water counter is a :class:`~homeassistant.components.sensor.RestoreSensor`
 with a monotonic clamp guard, so a transient cloud dip on the counter is not
 misread by ``total_increasing`` long-term statistics as a meter reset.
+
+The two analytics sensors are a third family: they read no cloud payload at all
+but the :class:`~.analytics.engine.AquaHomeAnalyticsEngine`'s verdict over the
+imported long-term statistics, so they stay meaningful while the softener is
+offline. ``usage_forecast`` publishes tomorrow's expected use in native gallons
+(``VOLUME_STORAGE`` again, for the measurement state class), while ``night_flow``
+publishes the freshest classified night's minimum hourly flow in litres per hour
+— native metric because the research thresholds behind the classification are
+metric, with the display unit left to the user. Both render ``None`` until the
+engine's first pass completes.
 """
 
 from __future__ import annotations
@@ -48,11 +58,13 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
     UnitOfVolume,
+    UnitOfVolumeFlowRate,
 )
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
 from . import salt
+from .analytics.model import NightVerdict
 from .api import (
     Device,
     LeakDetector,
@@ -74,6 +86,7 @@ from .const import (
 from .dynamic import async_setup_dynamic_entities
 from .entity import (
     AquaHomeActivityEntity,
+    AquaHomeAnalyticsEntity,
     AquaHomeEntity,
     AquaHomeLeakDetectorEntity,
 )
@@ -88,6 +101,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
     from homeassistant.helpers.typing import StateType
 
+    from .analytics.model import AnalyticsResult, NightAssessment
     from .api import DeviceSettingsDocument
     from .coordinator import (
         AquaHomeConfigEntry,
@@ -1248,6 +1262,131 @@ ACTIVITY_SENSOR_DESCRIPTIONS: tuple[AquaHomeActivitySensorDescription, ...] = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Analytics-engine-backed sensors (Phase 7)
+#
+# The engine publishes one immutable :class:`~.analytics.model.AnalyticsResult`
+# per pass; these sensors only project fields out of it. They never compute — a
+# sensor that re-derived anything here would drift from the binary sensors and
+# the fired events, which read the very same result.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class AquaHomeAnalyticsSensorDescription(SensorEntityDescription):
+    """Describe a sensor read from a device's analytics engine.
+
+    ``value_fn`` maps one completed :class:`~.analytics.model.AnalyticsResult` to
+    the sensor's native value; ``attributes_fn`` — when set — supplies extra
+    state attributes from the same result. Neither is called before the engine's
+    first pass: the entity short-circuits to ``None`` while the result is absent,
+    so both may assume a fully built result.
+    """
+
+    value_fn: Callable[[AnalyticsResult], StateType]
+    attributes_fn: Callable[[AnalyticsResult], dict[str, Any]] | None = None
+
+
+#: Night verdicts that carry a flow number. The other three (UNKNOWN, MASKED,
+#: UNASSESSED) are explicit non-answers and must never be rendered as 0 L/h.
+_DETERMINATE_NIGHT_VERDICTS: Final = frozenset(
+    {NightVerdict.LEAK, NightVerdict.NO_LEAK}
+)
+
+
+def _usage_forecast(result: AnalyticsResult) -> StateType:
+    """Return tomorrow's forecast use in native gallons, or ``None``."""
+    return result.forecast.gallons
+
+
+def _usage_forecast_attributes(result: AnalyticsResult) -> dict[str, Any]:
+    """Return the forecast's metric form, provenance, band, and occupancy.
+
+    ``source`` names which link of the expectation chain produced the number, so
+    a forecast resting on a fallback is never mistaken for a device-reported one.
+    The litre figures are rounded to whole litres: the underlying statistics are
+    hour-resolution meter reads, and sub-litre precision would be false rigour.
+    """
+    forecast = result.forecast
+    return {
+        "liters": round(forecast.liters) if forecast.liters is not None else None,
+        "source": forecast.source,
+        "band_liters": round(forecast.band_liters)
+        if forecast.band_liters is not None
+        else None,
+        "weekday": forecast.weekday,
+        "persons": forecast.persons,
+    }
+
+
+def _latest_determinate_night(result: AnalyticsResult) -> NightAssessment | None:
+    """Return the newest night that actually got a verdict, or ``None``.
+
+    Selected by date rather than by position so the sensor is independent of the
+    order the detectors happen to emit their assessments in.
+    """
+    determinate = [
+        night for night in result.nights if night.verdict in _DETERMINATE_NIGHT_VERDICTS
+    ]
+    if not determinate:
+        return None
+    return max(determinate, key=lambda night: night.night)
+
+
+def _night_flow(result: AnalyticsResult) -> StateType:
+    """Return the freshest classified night's minimum hourly flow in L/h.
+
+    A NO_LEAK night is a hard zero — the classifier only reaches that verdict on
+    evidence of a genuinely dry hour — while a LEAK night reports the smallest
+    certain hour of the window, which over one hour is already a rate. Nights
+    the classifier could not judge (masked by a regeneration, unbounded by
+    readings, or ambiguous) leave the sensor ``None``: an unassessed night is
+    not a quiet one.
+    """
+    night = _latest_determinate_night(result)
+    if night is None:
+        return None
+    if night.verdict == NightVerdict.NO_LEAK:
+        return 0.0
+    return night.min_hour_liters
+
+
+def _night_flow_attributes(result: AnalyticsResult) -> dict[str, Any]:
+    """Return which night the reading belongs to and how it was classified."""
+    night = _latest_determinate_night(result)
+    if night is None:
+        return {"night": None, "verdict": None}
+    return {"night": night.night.isoformat(), "verdict": str(night.verdict)}
+
+
+#: Analytics sensors, created for every device (analytics always runs — there is
+#: no capability to gate on) and registry-enabled. ``night_flow`` is diagnostic:
+#: it is the evidence behind the leak binary rather than a headline number.
+ANALYTICS_SENSOR_DESCRIPTIONS: tuple[AquaHomeAnalyticsSensorDescription, ...] = (
+    AquaHomeAnalyticsSensorDescription(
+        key="usage_forecast",
+        translation_key="usage_forecast",
+        device_class=SensorDeviceClass.VOLUME_STORAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfVolume.GALLONS,
+        suggested_display_precision=1,
+        value_fn=_usage_forecast,
+        attributes_fn=_usage_forecast_attributes,
+    ),
+    AquaHomeAnalyticsSensorDescription(
+        key="night_flow",
+        translation_key="night_flow",
+        device_class=SensorDeviceClass.VOLUME_FLOW_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfVolumeFlowRate.LITERS_PER_HOUR,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_night_flow,
+        attributes_fn=_night_flow_attributes,
+    ),
+)
+
+
 @callback
 def _async_add_dynamic_sensors(
     entry: AquaHomeConfigEntry,
@@ -1337,6 +1476,11 @@ async def async_setup_entry(
     capability-driven, so each activity coordinator is paired once with its fast
     coordinator's device view (same device-id key) for the existence gate and the
     shared ``DeviceInfo``.
+
+    The analytics sensors (from :data:`ANALYTICS_SENSOR_DESCRIPTIONS`) are static
+    and ungated: the engine runs for every device regardless of what the cloud
+    advertises, so each engine gets both sensors, paired with its fast
+    coordinator's device view for the shared ``DeviceInfo``.
     """
     runtime = entry.runtime_data
     for coordinator in runtime.coordinators.values():
@@ -1358,6 +1502,16 @@ async def async_setup_entry(
             if description.exists_fn(device)
         )
     async_add_entities(activity_entities)
+    analytics_entities: list[SensorEntity] = []
+    for engine_device_id, engine in runtime.analytics_engines.items():
+        engine_fast = runtime.coordinators.get(engine_device_id)
+        if engine_fast is None:
+            continue
+        analytics_entities.extend(
+            AquaHomeAnalyticsSensor(engine, description, engine_fast.data)
+            for description in ANALYTICS_SENSOR_DESCRIPTIONS
+        )
+    async_add_entities(analytics_entities)
 
 
 class AquaHomeSensor(AquaHomeEntity, SensorEntity):
@@ -1497,6 +1651,37 @@ class AquaHomeActivitySensor(AquaHomeActivityEntity, SensorEntity):
         if data is None:
             return None
         return attributes_fn(data)
+
+
+class AquaHomeAnalyticsSensor(AquaHomeAnalyticsEntity, SensorEntity):
+    """A sensor projecting one field of the analytics engine's latest result.
+
+    The engine has no result until its first pass finishes (it is refreshed in
+    the background after the statistics backfill, not during setup), so every
+    read is guarded: an absent result renders ``unknown`` rather than raising,
+    and the description's functions only ever see a complete result.
+    """
+
+    entity_description: AquaHomeAnalyticsSensorDescription
+
+    @property
+    def native_value(self) -> StateType:
+        """Return the value from the latest result, or ``None`` before the first."""
+        result: AnalyticsResult | None = self.coordinator.data
+        if result is None:
+            return None
+        return self.entity_description.value_fn(result)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the result-derived attributes, or ``None`` when unset/absent."""
+        attributes_fn = self.entity_description.attributes_fn
+        if attributes_fn is None:
+            return None
+        result: AnalyticsResult | None = self.coordinator.data
+        if result is None:
+            return None
+        return attributes_fn(result)
 
 
 class AquaHomeTotalWaterSensor(AquaHomeEntity, RestoreSensor):
