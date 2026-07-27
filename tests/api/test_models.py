@@ -14,9 +14,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from custom_components.aquahome.api.models import (
-    SCALED_PROPERTIES,
     SENTINEL_DISABLED,
-    UNVERIFIED_SCALED_PROPERTIES,
     Alert,
     AlertsPage,
     CommandResult,
@@ -431,13 +429,15 @@ def test_scaled_value_unscaled_property_passthrough() -> None:
     assert scaled_value(PropertyValue(name="total_regens", value=149)) == 149.0
 
 
-def test_scaled_value_does_not_apply_unverified_flow_divisor() -> None:
-    """Never apply the unverified current_water_flow_gpm divisor."""
-    assert "current_water_flow_gpm" in UNVERIFIED_SCALED_PROPERTIES
-    assert "current_water_flow_gpm" not in SCALED_PROPERTIES
+def test_scaled_value_applies_verified_flow_divisor() -> None:
+    """Decode current_water_flow_gpm as tenths of gallons per minute.
 
-    prop = PropertyValue(name="current_water_flow_gpm", value=57)
-    assert scaled_value(prop) == 57.0
+    Verified against a live measured-flow session: the stream published 9
+    while the lifetime counter stepped one gallon every ~70 s (0.86 gpm), and
+    the model's spec peak 572 reads a sane 57.2 gpm.
+    """
+    assert scaled_value(PropertyValue(name="current_water_flow_gpm", value=9)) == 0.9
+    assert scaled_value(PropertyValue(name="current_water_flow_gpm", value=572)) == 57.2
 
 
 def test_scaled_value_non_numeric_is_none() -> None:

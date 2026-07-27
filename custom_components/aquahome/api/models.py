@@ -1484,6 +1484,11 @@ SENTINEL_DISABLED = -1
 #: absurd 17 kg of salt per cycle). The server's own ``converted_value`` for
 #: these two applies lb→kg WITHOUT the ÷10 (5704 -> "2587 kg"), so it is wrong
 #: for them — bind the scaled raw value, never that conversion.
+#:
+#: ``current_water_flow_gpm`` is tenths of gallons per minute: verified against
+#: a live measured-flow session (streamed value 9 while the lifetime counter
+#: stepped one gallon every ~70 s ≈ 0.86 gpm; the model's spec peak 572 is a
+#: sane 57.2 gpm, an absurd 572 gpm unscaled).
 SCALED_PROPERTIES: dict[str, float] = {
     "salt_level_tenths": 10.0,
     "iron_level_tenths_ppm": 10.0,
@@ -1494,12 +1499,6 @@ SCALED_PROPERTIES: dict[str, float] = {
     "avg_salt_per_regen_lbs": 10_000.0,
     "total_salt_use_lbs": 10.0,
     "total_rock_removed_lbs": 10.0,
-}
-
-#: Scale factors that are plausible but NOT yet confirmed against a live,
-#: nonzero reading. The entity layer must verify these before use, so
-#: :func:`scaled_value` deliberately does not apply them.
-UNVERIFIED_SCALED_PROPERTIES: dict[str, float] = {
     "current_water_flow_gpm": 10.0,
 }
 
@@ -1510,8 +1509,7 @@ def scaled_value(prop: PropertyValue) -> float | None:
     Applies the verified divisor from :data:`SCALED_PROPERTIES`, maps the
     ``service_reminder_months`` disabled sentinel to ``None``, and passes
     unscaled numeric properties through unchanged. Non-numeric (and boolean)
-    values yield ``None``. Divisors in :data:`UNVERIFIED_SCALED_PROPERTIES`
-    are intentionally not applied.
+    values yield ``None``.
     """
     value = prop.value
     if isinstance(value, bool) or not isinstance(value, (int, float)):
