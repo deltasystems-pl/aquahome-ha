@@ -135,6 +135,21 @@
       "total_rock_removed": {
         "name": "Total hardness removed"
       },
+      "daily_salt_usage": {
+        "name": "Daily salt usage estimate"
+      },
+      "salt_days_remaining": {
+        "name": "Salt days remaining estimate"
+      },
+      "salt_depletion_estimate": {
+        "name": "Salt depletion estimate"
+      },
+      "salt_per_regeneration": {
+        "name": "Salt per regeneration"
+      },
+      "salt_efficiency": {
+        "name": "Salt efficiency"
+      },
       "error_codes": {
         "name": "Error codes"
       },

@@ -30,7 +30,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -51,6 +51,7 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
+from . import salt
 from .api import (
     Device,
     LeakDetector,
@@ -86,9 +87,11 @@ if TYPE_CHECKING:
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
     from homeassistant.helpers.typing import StateType
 
+    from .api import DeviceSettingsDocument
     from .coordinator import (
         AquaHomeConfigEntry,
         AquaHomeCoordinator,
+        AquaHomeSettingsCoordinator,
         DeviceActivity,
     )
 
@@ -288,21 +291,30 @@ def _rf_signal_strength(device: Device) -> StateType:
     return enriched.rf_signal_strength_dbm if enriched is not None else None
 
 
+def _device_local_midnight(device: Device, days_ahead: int) -> datetime:
+    """Return device-local midnight ``days_ahead`` days from today.
+
+    The timezone comes from the device's ``tz_id`` property; a missing or
+    unrecognised zone falls back to UTC. Anchoring day-countdowns to a local
+    midnight yields a stable point in time instead of a jittery relative count.
+    """
+    tz_value = _prop_str(device, "tz_id")
+    tz = (dt_util.get_time_zone(tz_value) if tz_value else None) or dt_util.UTC
+    target_date = dt_util.now(tz).date() + timedelta(days=days_ahead)
+    return datetime.combine(target_date, time(), tzinfo=tz)
+
+
 def _out_of_salt_estimate(device: Device) -> datetime | None:
     """Return the projected out-of-salt date as a device-local midnight timestamp.
 
     Combines the raw ``out_of_salt_estimate_days`` countdown with the device's
-    ``tz_id`` so the result is a stable point in time — the start of the day the
-    softener is expected to run out of salt — rather than a jittery relative
-    count. A missing or unrecognised timezone falls back to UTC.
+    ``tz_id`` so the result is the start of the day the softener is expected to
+    run out of salt.
     """
     days = _prop_number(device, "out_of_salt_estimate_days")
     if days is None:
         return None
-    tz_value = _prop_str(device, "tz_id")
-    tz = (dt_util.get_time_zone(tz_value) if tz_value else None) or dt_util.UTC
-    target_date = dt_util.now(tz).date() + timedelta(days=int(days))
-    return datetime.combine(target_date, time(), tzinfo=tz)
+    return _device_local_midnight(device, int(days))
 
 
 def _average_daily_water_use(device: Device) -> StateType:
@@ -565,6 +577,305 @@ def _exists_error_codes(device: Device) -> bool:
     return status is not None and status.error_codes is not None
 
 
+# ---------------------------------------------------------------------------
+# Salt intelligence (Phase 6)
+#
+# Chemistry lives in the pure .salt module; this section only resolves the
+# inputs from the coordinator payloads. Inlet hardness prefers the settings
+# document's precise ``inlet_hardness`` (gpg-denominated regardless of the
+# account's display unit; PATCH-echo reconciled, so an app-side change lands
+# within one settings cycle), falling back to the integer ``hardness_grains``
+# raw property. Outlet hardness is structurally 0 — no known iQua model
+# exposes a blend setting (validated to ~8-9 % error; owner decision
+# 2026-07-27: no override entity at launch). The device's own
+# ``out_of_salt_estimate_days`` stays PRIMARY everywhere; the chemistry
+# estimate is a cross-check only.
+# ---------------------------------------------------------------------------
+
+#: Structural outlet hardness (°dH) — see the section comment above.
+OUTLET_HARDNESS_DH: Final = 0.0
+
+#: ``inlet_hardness_source`` attribute values.
+_HARDNESS_SOURCE_SETTING = "device_setting"
+_HARDNESS_SOURCE_PROPERTY = "device_property"
+
+#: ``salt_type_enum`` / settings ``salt_type`` value -> regenerant name.
+_SALT_TYPE_NAMES = {0: "NaCl", 1: "KCl"}
+
+#: ``salt.efficiency_mol_per_kg_with_source`` source -> attribute value.
+_EFFICIENCY_SOURCE_NAMES = {
+    salt.EFFICIENCY_SOURCE_RATED: "device_rated_property",
+    salt.EFFICIENCY_SOURCE_TOTALS: "lifetime_totals",
+}
+
+
+def _setting_float(document: DeviceSettingsDocument | None, name: str) -> float | None:
+    """Return a settings-document value coerced to ``float``, else ``None``.
+
+    ``current_value`` arrives as a string for select settings (``"25.7"``); a
+    missing document, absent setting, boolean, or non-numeric string all
+    collapse to ``None`` so callers fall through to their raw-property source.
+    """
+    if document is None:
+        return None
+    setting = document.get(name)
+    if setting is None:
+        return None
+    value = setting.current_value
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _inlet_hardness_dh(
+    device: Device, document: DeviceSettingsDocument | None
+) -> tuple[float, str] | None:
+    """Return the inlet hardness in °dH and which source supplied it.
+
+    Both sources are gpg-denominated; non-positive or missing values fall
+    through, so a device that reports neither yields ``None``.
+    """
+    gpg = _setting_float(document, "inlet_hardness")
+    if gpg is not None and gpg > 0:
+        return gpg * salt.GPG_TO_DH, _HARDNESS_SOURCE_SETTING
+    gpg = _prop_number(device, "hardness_grains")
+    if gpg is not None and gpg > 0:
+        return gpg * salt.GPG_TO_DH, _HARDNESS_SOURCE_PROPERTY
+    return None
+
+
+def _salt_type(device: Device, document: DeviceSettingsDocument | None) -> str | None:
+    """Return the regenerant in use (``NaCl``/``KCl``), or ``None`` when unknown.
+
+    Informational only: the self-calibrated efficiency is already denominated
+    in actual salt mass, so the salt type never enters the math. The raw
+    ``salt_type_enum`` property (fast-poll fresh) wins over the settings
+    document's ``salt_type``; unknown enum values yield ``None``.
+    """
+    enum_value = _prop_number(device, "salt_type_enum")
+    if enum_value is not None:
+        name = _SALT_TYPE_NAMES.get(int(enum_value))
+        if name is not None:
+            return name
+    setting_value = _setting_float(document, "salt_type")
+    if setting_value is not None:
+        return _SALT_TYPE_NAMES.get(int(setting_value))
+    return None
+
+
+def _efficiency_with_source(device: Device) -> tuple[float, str] | None:
+    """Return the device's operational salt efficiency (mol/kg) and its source."""
+    return salt.efficiency_mol_per_kg_with_source(
+        _prop_number(device, "salt_effic_grains_per_lb"),
+        _prop_number(device, "total_rock_removed_lbs"),
+        _prop_number(device, "total_salt_use_lbs"),
+    )
+
+
+def _chemistry_daily_salt(
+    device: Device, document: DeviceSettingsDocument | None
+) -> float | None:
+    """Return the chemistry-estimated daily salt consumption in grams."""
+    hardness = _inlet_hardness_dh(device, document)
+    efficiency = _efficiency_with_source(device)
+    average_daily_gal = _prop_number(device, "avg_daily_use_gals")
+    return salt.daily_salt_grams(
+        average_daily_gal * salt.LITERS_PER_GALLON
+        if average_daily_gal is not None
+        else None,
+        hardness[0] if hardness is not None else None,
+        OUTLET_HARDNESS_DH,
+        efficiency[0] if efficiency is not None else None,
+    )
+
+
+def _device_daily_salt(device: Device) -> float | None:
+    """Return the device-observed daily salt rate in grams."""
+    return salt.device_daily_salt_grams(
+        _prop_number(device, "avg_salt_per_regen_lbs"),
+        _prop_number(device, "avg_days_between_regens"),
+    )
+
+
+def _chemistry_salt_days(
+    device: Device, document: DeviceSettingsDocument | None
+) -> float | None:
+    """Return the chemistry-timed days-until-empty cross-check."""
+    return salt.cross_check_days(
+        _prop_number(device, "out_of_salt_estimate_days"),
+        _device_daily_salt(device),
+        _chemistry_daily_salt(device, document),
+    )
+
+
+def _daily_salt_usage(
+    device: Device, document: DeviceSettingsDocument | None
+) -> StateType | datetime:
+    """Return the daily-salt-usage estimate sensor value."""
+    return _chemistry_daily_salt(device, document)
+
+
+def _daily_salt_attributes(
+    device: Device, document: DeviceSettingsDocument | None
+) -> dict[str, Any]:
+    """Return the estimate's inputs so the number is auditable in the UI."""
+    attributes: dict[str, Any] = {"outlet_hardness_dh": OUTLET_HARDNESS_DH}
+    hardness = _inlet_hardness_dh(device, document)
+    if hardness is not None:
+        attributes["inlet_hardness_dh"] = round(hardness[0], 2)
+        attributes["inlet_hardness_source"] = hardness[1]
+    efficiency = _efficiency_with_source(device)
+    if efficiency is not None:
+        attributes["salt_efficiency_mol_per_kg"] = round(efficiency[0], 3)
+    salt_type = _salt_type(device, document)
+    if salt_type is not None:
+        attributes["salt_type"] = salt_type
+    return attributes
+
+
+def _salt_days_remaining(
+    device: Device, document: DeviceSettingsDocument | None
+) -> StateType | datetime:
+    """Return the cross-check days-until-empty sensor value."""
+    return _chemistry_salt_days(device, document)
+
+
+def _salt_days_attributes(
+    device: Device, document: DeviceSettingsDocument | None
+) -> dict[str, Any]:
+    """Return the cross-check's inputs and its deviation from the device."""
+    attributes: dict[str, Any] = {}
+    device_days = _prop_number(device, "out_of_salt_estimate_days")
+    if device_days is not None:
+        attributes["device_estimate_days"] = device_days
+    chemistry_rate = _chemistry_daily_salt(device, document)
+    if chemistry_rate is not None:
+        attributes["chemistry_daily_salt_g"] = round(chemistry_rate, 1)
+    device_rate = _device_daily_salt(device)
+    if device_rate is not None:
+        attributes["device_daily_salt_g"] = round(device_rate, 1)
+    chemistry_days = _chemistry_salt_days(device, document)
+    if chemistry_days is not None and device_days is not None and device_days > 0:
+        attributes["deviation_pct"] = round((chemistry_days / device_days - 1) * 100, 1)
+    return attributes
+
+
+def _salt_depletion_estimate(
+    device: Device, document: DeviceSettingsDocument | None
+) -> datetime | None:
+    """Return the cross-check depletion date as a device-local midnight."""
+    days = _chemistry_salt_days(device, document)
+    if days is None:
+        return None
+    return _device_local_midnight(device, int(days))
+
+
+def _salt_efficiency(device: Device) -> StateType:
+    """Return the operational salt efficiency in mol/kg."""
+    efficiency = _efficiency_with_source(device)
+    return efficiency[0] if efficiency is not None else None
+
+
+def _salt_efficiency_attributes(device: Device) -> dict[str, Any]:
+    """Return the efficiency's gr/lb form and which counter supplied it."""
+    efficiency = _efficiency_with_source(device)
+    if efficiency is None:
+        return {}
+    value, source = efficiency
+    return {
+        "grains_per_pound": round(value / salt.MOL_PER_KG_PER_GRAIN_PER_LB),
+        "source": _EFFICIENCY_SOURCE_NAMES.get(source, source),
+    }
+
+
+def _exists_efficiency_inputs(device: Device) -> bool:
+    """Report whether either salt-efficiency source's properties are present."""
+    return _property(device, "salt_effic_grains_per_lb") is not None or (
+        _property(device, "total_rock_removed_lbs") is not None
+        and _property(device, "total_salt_use_lbs") is not None
+    )
+
+
+def _exists_daily_salt(device: Device) -> bool:
+    """Report whether the daily-salt estimate's device-side inputs are present.
+
+    The settings-document hardness cannot be consulted here (existence gates
+    see only the fast payload), so the gate requires the raw fallback
+    ``hardness_grains`` — present on every observed softener payload.
+    """
+    return (
+        _property(device, "avg_daily_use_gals") is not None
+        and _property(device, "hardness_grains") is not None
+        and _exists_efficiency_inputs(device)
+    )
+
+
+def _exists_salt_days(device: Device) -> bool:
+    """Report whether the days-until-empty cross-check inputs are present."""
+    return (
+        _exists_daily_salt(device)
+        and _property(device, "out_of_salt_estimate_days") is not None
+        and _property(device, "avg_salt_per_regen_lbs") is not None
+        and _property(device, "avg_days_between_regens") is not None
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class AquaHomeSaltSensorDescription(SensorEntityDescription):
+    """Describe a salt sensor that also reads the settings document.
+
+    Unlike :class:`AquaHomeSensorDescription`, ``value_fn``/``attributes_fn``
+    receive the paired settings coordinator's current document (``None`` until
+    it first loads) alongside the fast device view, so the inlet-hardness
+    setting can feed the chemistry live. ``exists_fn`` still sees only the
+    device: entity creation must not depend on the tolerant settings fetch.
+    """
+
+    value_fn: Callable[[Device, DeviceSettingsDocument | None], StateType | datetime]
+    exists_fn: Callable[[Device], bool] = lambda device: True
+    attributes_fn: (
+        Callable[[Device, DeviceSettingsDocument | None], dict[str, Any]] | None
+    ) = None
+
+
+SALT_SENSOR_DESCRIPTIONS: tuple[AquaHomeSaltSensorDescription, ...] = (
+    AquaHomeSaltSensorDescription(
+        key="daily_salt_usage",
+        translation_key="daily_salt_usage",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="g/d",
+        suggested_display_precision=0,
+        value_fn=_daily_salt_usage,
+        exists_fn=_exists_daily_salt,
+        attributes_fn=_daily_salt_attributes,
+    ),
+    AquaHomeSaltSensorDescription(
+        key="salt_days_remaining",
+        translation_key="salt_days_remaining",
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTime.DAYS,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_salt_days_remaining,
+        exists_fn=_exists_salt_days,
+        attributes_fn=_salt_days_attributes,
+    ),
+    AquaHomeSaltSensorDescription(
+        key="salt_depletion_estimate",
+        translation_key="salt_depletion_estimate",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=_salt_depletion_estimate,
+        exists_fn=_exists_salt_days,
+    ),
+)
+
+
 #: Per-weekday average-use sensors. Keys and translation keys are SLOT-based
 #: (``average_daily_use_day_N``) so an entity's identity never depends on the
 #: weekday mapping — the day labels live in ``strings.json`` (map A) and a future
@@ -752,6 +1063,28 @@ SENSOR_DESCRIPTIONS: tuple[AquaHomeSensorDescription, ...] = (
         suggested_unit_fn=_weight_display_unit("total_rock_removed_lbs"),
     ),
     AquaHomeSensorDescription(
+        key="salt_per_regeneration",
+        translation_key="salt_per_regeneration",
+        device_class=SensorDeviceClass.WEIGHT,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfMass.POUNDS,
+        suggested_display_precision=2,
+        value_fn=lambda device: _prop_number(device, "avg_salt_per_regen_lbs"),
+        exists_fn=_exists_property("avg_salt_per_regen_lbs"),
+        suggested_unit_fn=_weight_display_unit("avg_salt_per_regen_lbs"),
+    ),
+    AquaHomeSensorDescription(
+        key="salt_efficiency",
+        translation_key="salt_efficiency",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="mol/kg",
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_salt_efficiency,
+        exists_fn=_exists_efficiency_inputs,
+        attributes_fn=_salt_efficiency_attributes,
+    ),
+    AquaHomeSensorDescription(
         key="error_codes",
         translation_key="error_codes",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -895,16 +1228,19 @@ ACTIVITY_SENSOR_DESCRIPTIONS: tuple[AquaHomeActivitySensorDescription, ...] = (
 def _async_add_dynamic_sensors(
     entry: AquaHomeConfigEntry,
     coordinator: AquaHomeCoordinator,
+    settings_coordinator: AquaHomeSettingsCoordinator | None,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add one device's fast-coordinator sensors, growing the set over time.
 
-    The telemetry descriptions and any paired leak detector's sensors are keyed
-    uniquely and handed to :func:`~.dynamic.async_setup_dynamic_entities`, which
-    creates the keys present at setup and adds later ones once seen
+    The telemetry descriptions, the salt-intelligence descriptions, and any
+    paired leak detector's sensors are keyed uniquely and handed to
+    :func:`~.dynamic.async_setup_dynamic_entities`, which creates the keys
+    present at setup and adds later ones once seen
     :data:`~.const.CAPABILITY_DEBOUNCE_POLLS` consecutive polls. The lifetime
     total-water counter keeps its dedicated :class:`AquaHomeTotalWaterSensor`
-    class through the retrofit.
+    class through the retrofit; the salt sensors additionally read (and follow)
+    the paired settings coordinator's document.
     """
 
     def _discover() -> set[str]:
@@ -915,6 +1251,11 @@ def _async_add_dynamic_sensors(
             for description in SENSOR_DESCRIPTIONS
             if description.exists_fn(device)
         }
+        keys.update(
+            description.key
+            for description in SALT_SENSOR_DESCRIPTIONS
+            if description.exists_fn(device)
+        )
         for detector in _leak_detectors(device):
             keys.update(
                 f"leak_{detector.detector_id}_{description.key}"
@@ -933,6 +1274,11 @@ def _async_add_dynamic_sensors(
                 entities.append(AquaHomeTotalWaterSensor(coordinator, description))
             else:
                 entities.append(AquaHomeSensor(coordinator, description))
+        entities.extend(
+            AquaHomeSaltSensor(coordinator, salt_description, settings_coordinator)
+            for salt_description in SALT_SENSOR_DESCRIPTIONS
+            if salt_description.key in keys
+        )
         for detector in _leak_detectors(device):
             entities.extend(
                 AquaHomeLeakSensor(coordinator, description, detector.detector_id)
@@ -970,7 +1316,12 @@ async def async_setup_entry(
     """
     runtime = entry.runtime_data
     for coordinator in runtime.coordinators.values():
-        _async_add_dynamic_sensors(entry, coordinator, async_add_entities)
+        _async_add_dynamic_sensors(
+            entry,
+            coordinator,
+            runtime.settings_coordinators.get(coordinator.device_id),
+            async_add_entities,
+        )
     activity_entities: list[SensorEntity] = []
     for device_id, activity in runtime.activity_coordinators.items():
         fast = runtime.coordinators.get(device_id)
@@ -1018,6 +1369,71 @@ class AquaHomeSensor(AquaHomeEntity, SensorEntity):
         if attributes_fn is None:
             return None
         return attributes_fn(self.coordinator.data)
+
+
+class AquaHomeSaltSensor(AquaHomeEntity, SensorEntity):
+    """A salt-intelligence sensor reading the device and the settings document.
+
+    Bound to the fast coordinator like every telemetry sensor, but its value
+    and attribute functions additionally receive the paired settings
+    coordinator's current document so the precise ``inlet_hardness`` setting
+    feeds the chemistry. A listener on the settings coordinator re-renders the
+    sensor the moment that document changes (6-hour poll or PATCH-echo
+    reconcile) without waiting for the next fast poll; a missing or not-yet-
+    loaded document simply yields ``None`` and the value functions fall back to
+    raw properties. Availability deliberately ignores settings-coordinator
+    health — the fallback keeps the sensor meaningful without the document.
+    """
+
+    entity_description: AquaHomeSaltSensorDescription
+
+    def __init__(
+        self,
+        coordinator: AquaHomeCoordinator,
+        description: AquaHomeSaltSensorDescription,
+        settings_coordinator: AquaHomeSettingsCoordinator | None,
+    ) -> None:
+        """Bind the sensor to the fast coordinator and its settings sibling."""
+        super().__init__(coordinator, description)
+        self._settings_coordinator = settings_coordinator
+
+    async def async_added_to_hass(self) -> None:
+        """Follow settings-document updates in addition to the fast poll."""
+        await super().async_added_to_hass()
+        if self._settings_coordinator is not None:
+            self.async_on_remove(
+                self._settings_coordinator.async_add_listener(
+                    self._handle_settings_update
+                )
+            )
+
+    @callback
+    def _handle_settings_update(self) -> None:
+        """Re-render when the settings document changes."""
+        self.async_write_ha_state()
+
+    @property
+    def _settings_document(self) -> DeviceSettingsDocument | None:
+        """Return the current settings document, or ``None`` before it loads."""
+        if self._settings_coordinator is None:
+            return None
+        document: DeviceSettingsDocument | None = self._settings_coordinator.data
+        return document
+
+    @property
+    def native_value(self) -> StateType | datetime:
+        """Return the value from the device view and settings document."""
+        return self.entity_description.value_fn(
+            self.coordinator.data, self._settings_document
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the description's extra attributes, or ``None`` when unset."""
+        attributes_fn = self.entity_description.attributes_fn
+        if attributes_fn is None:
+            return None
+        return attributes_fn(self.coordinator.data, self._settings_document)
 
 
 class AquaHomeLeakSensor(AquaHomeLeakDetectorEntity, SensorEntity):
