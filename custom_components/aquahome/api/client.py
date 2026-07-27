@@ -264,11 +264,15 @@ class AquaHomeClient:
         end: datetime,
         value_type: str,
         keep_negatives: bool = False,
+        language: str | None = None,
     ) -> DatapointGraph:
         """Return a datapoint graph series for a device property.
 
         ``start`` and ``end`` are serialized RFC3339 with their offset; the
-        server aligns periods to the timezone carried by ``start``.
+        server aligns periods to the timezone carried by ``start``. ``language``
+        overrides the client-level ``accept-language`` for this request only —
+        the response ``units`` string is server-localized, so a caller that
+        parses it pins a known language instead of the account's UI locale.
         """
         body = await self._request(
             "GET",
@@ -280,6 +284,7 @@ class AquaHomeClient:
                 "value_type": value_type,
                 "keep_negatives": keep_negatives,
             },
+            language=language,
         )
         return DatapointGraph.from_dict(body)
 
@@ -371,7 +376,7 @@ class AquaHomeClient:
 
     # -- Request plumbing --------------------------------------------------
 
-    async def _request(
+    async def _request(  # noqa: PLR0913 - internal plumbing, keyword-only knobs
         self,
         method: str,
         path: str,
@@ -379,6 +384,7 @@ class AquaHomeClient:
         params: Mapping[str, Any] | None = None,
         json_body: dict[str, Any] | None = None,
         shared_backoff: bool = True,
+        language: str | None = None,
     ) -> dict[str, Any]:
         """Send an authenticated request, refreshing once on a 401 and retrying.
 
@@ -388,14 +394,15 @@ class AquaHomeClient:
         while a 429 backoff window is still open, and a throttle response arms
         that window. ``/live`` passes ``shared_backoff=False`` — it is a
         separate server throttle domain governed only by its own client-side
-        minimum interval.
+        minimum interval. ``language`` overrides the ``accept-language`` header
+        for this request only.
         """
         if shared_backoff:
             self._enforce_backoff()
-        status, body = await self._send(method, path, params, json_body)
+        status, body = await self._send(method, path, params, json_body, language)
         if status == HTTPStatus.UNAUTHORIZED:
             await self._auth.async_refresh()
-            status, body = await self._send(method, path, params, json_body)
+            status, body = await self._send(method, path, params, json_body, language)
         if status >= HTTPStatus.BAD_REQUEST:
             self._raise_for_status(status, body, arm_backoff=shared_backoff)
         return body
@@ -429,11 +436,14 @@ class AquaHomeClient:
         path: str,
         params: Mapping[str, Any] | None,
         json_body: dict[str, Any] | None,
+        language: str | None = None,
     ) -> tuple[int, dict[str, Any]]:
         """Perform one HTTP round-trip and return ``(status, parsed_body)``."""
         url = f"{self._base_url}{path}"
         token = await self._auth.async_get_access_token()
         headers = self._headers()
+        if language is not None:
+            headers["accept-language"] = language
         headers["Authorization"] = f"Bearer {token}"
         query = _encode_params(params) if params else None
         try:
