@@ -51,7 +51,7 @@ from .coordinator import (
     AquaHomeSettingsCoordinator,
 )
 from .entity import device_display_name
-from .issues import async_setup_salt_issues
+from .issues import async_remove_salt_issues, async_setup_salt_issues
 from .statistics import (
     AquaHomeStatisticsCoordinator,
     async_clear_device_statistics,
@@ -349,10 +349,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) ->
 async def async_remove_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> None:
     """Clean up when a config entry is permanently removed.
 
-    External statistics are not tied to entities, so Home Assistant does not
-    delete them with the entry — without this hook every ``aquahome:*`` series
-    would survive an uninstall as orphaned recorder data.
+    External statistics and Repairs issues are not tied to entities, so Home
+    Assistant does not delete them with the entry — without this hook every
+    ``aquahome:*`` statistics series and every low-salt issue would survive an
+    uninstall as orphaned state.
     """
+    async_remove_salt_issues(hass, entry)
     await async_clear_device_statistics(hass, entry)
 
 

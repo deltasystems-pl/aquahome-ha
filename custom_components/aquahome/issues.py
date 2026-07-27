@@ -17,6 +17,7 @@ import enum
 from typing import TYPE_CHECKING
 
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 
 from .api import scaled_value
@@ -120,6 +121,15 @@ def async_setup_salt_issues(
         if new_tier is tier and new_days == reported_days:
             return
         translation_key, severity = _TIER_PRESENTATION[new_tier]
+        if tier is _Tier.WARNING and new_tier is _Tier.CRITICAL:
+            # An observed escalation must reach the user even if the warning
+            # was ignored: async_create_issue updates an existing issue in
+            # place and deliberately preserves its dismissed_version, so the
+            # issue is deleted first to clear the dismissal. Only the genuine
+            # WARNING -> CRITICAL transition does this — the first evaluation
+            # after a restart re-enters the current tier from NONE, and
+            # deleting there would wipe a legitimate dismissal on every boot.
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
         ir.async_create_issue(
             hass,
             DOMAIN,
@@ -136,17 +146,29 @@ def async_setup_salt_issues(
         tier = new_tier
         reported_days = new_days
 
-    @callback
-    def _delete_on_unload() -> None:
-        """Drop the issue when the entry unloads.
-
-        A Repairs issue outlives its config entry unless deleted explicitly, so
-        without this an uninstalled integration would keep nagging until the
-        next restart. On a plain reload the setup path re-evaluates immediately
-        and re-creates the issue if the salt is still low.
-        """
-        ir.async_delete_issue(hass, DOMAIN, issue_id)
-
     _evaluate()
     entry.async_on_unload(coordinator.async_add_listener(_evaluate))
-    entry.async_on_unload(_delete_on_unload)
+
+
+@callback
+def async_remove_salt_issues(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> None:
+    """Delete every device's low-salt issue when the entry is removed.
+
+    A Repairs issue outlives its config entry unless deleted explicitly, so
+    without this an uninstalled integration would keep nagging until the next
+    restart. Called from ``async_remove_entry``, which runs on an entry that
+    may never have been loaded, so — like the statistics cleanup — the issue
+    ids are rebuilt from the device registry (each AquaHome device identifier
+    is exactly the slug the ids are built from) rather than from runtime data.
+    Deleting an id that was never filed (leak-detector sub-devices, healthy
+    softeners) is a documented no-op.
+
+    Deliberately NOT wired to plain unload: the Repairs registry preserves a
+    user's "Ignore" across reloads and restarts via ``dismissed_version``, and
+    a delete would wipe it on every entry reload.
+    """
+    registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
+        for domain, identifier in device.identifiers:
+            if domain == DOMAIN:
+                ir.async_delete_issue(hass, DOMAIN, f"low_salt_{identifier}")
