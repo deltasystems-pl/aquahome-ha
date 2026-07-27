@@ -161,6 +161,12 @@
       },
       "leak_signal_strength": {
         "name": "Signal strength"
+      },
+      "usage_forecast": {
+        "name": "Usage forecast"
+      },
+      "night_flow": {
+        "name": "Night flow"
       }
     },
     "button": {
@@ -279,6 +285,15 @@
       },
       "leak_connectivity": {
         "name": "Connectivity"
+      },
+      "leak_suspected": {
+        "name": "Leak suspected"
+      },
+      "usage_anomaly": {
+        "name": "Usage anomaly"
+      },
+      "vacation_detected": {
+        "name": "Vacation detected"
       }
     }
   },
@@ -326,6 +341,10 @@
     "unique_id_migration": {
       "title": "AquaHome entity identities were migrated",
       "description": "An integration update renamed the internal identity of the following entities. History is preserved, but if you renamed or customized any of them, review the changes:\n\n{renames}"
+    },
+    "leak_urgent": {
+      "title": "Severe continuous water flow on {device}",
+      "description": "Water has been flowing continuously through {device} at roughly {liters_per_day} liters per day, including every overnight hour between 01:00 and 07:00 on consecutive nights. If nobody has been deliberately running water, check for a burst pipe, a running toilet, or an open tap, and consider shutting off the supply."
     }
   }
 }
