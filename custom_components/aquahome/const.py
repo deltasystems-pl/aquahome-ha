@@ -109,6 +109,54 @@ SETTINGS_UPDATE_INTERVAL: Final = timedelta(hours=6)
 # while still going honestly unavailable within a day.
 SETTINGS_MAX_STALE_SECONDS: Final = 86400.0
 
+# Cadence of the per-device statistics coordinator (external water-usage
+# statistics backfill). Long-term statistics are hour-bucketed and the cloud
+# counter history is immutable, so a slow cadence loses nothing; every run is
+# idempotent by bucket start.
+STATISTICS_UPDATE_INTERVAL: Final = timedelta(hours=12)
+
+# External statistic id suffix: aquahome:<device_slug>_water.
+WATER_STATISTIC_SUFFIX: Final = "_water"
+
+# The raw property whose datapoint history feeds the water statistics — the
+# same lifetime outlet counter the live total_water sensor exposes (verified
+# identical against the live counter, 2026-07-27).
+DATAPOINT_WATER_PROPERTY: Final = "total_outlet_water_gals"
+
+# Datapoint value_type for the backfill: "max" returns the raw counter reading
+# per bucket (0 = no reading; a lifetime counter is never genuinely zero) and
+# diffing consecutive readings client-side loses no usage. "max_diff" (the
+# app's choice) under-counts ~4 % at hourly resolution by dropping inter-bucket
+# usage, and "actual" returns HTTP 500 (both live-verified 2026-07-27).
+DATAPOINT_METER_VALUE_TYPE: Final = "max"
+
+# accept-language pinned on every backfill request so the response `units`
+# string parses against a fixed English vocabulary. The field is BOTH
+# account-preference-driven and server-localized ("Liters" vs "Litry",
+# community PAIN #5) — never parse it in the account's own language.
+BACKFILL_LANGUAGE: Final = "en"
+
+# Pause between consecutive datapoint requests inside one backfill run. The
+# measured REST budget is a 5-per-60s token bucket with burst 50; a full
+# first-run backfill is well under a dozen requests, so this pacing keeps the
+# whole session far inside one refill window.
+BACKFILL_REQUEST_PACING_SECONDS: Final = 2.0
+
+# How far before the newest stored statistics row a backfill run re-fetches and
+# recomputes, absorbing meter readings the device uploaded late. History behind
+# this window is never rewritten.
+BACKFILL_OVERLAP_DAYS: Final = 30
+
+# Depth-probe horizon: the yearly sweep that finds the earliest retained
+# reading starts this many years back.
+BACKFILL_DEPTH_PROBE_YEARS: Final = 15
+
+# Chunk ceilings for the datapoint fetches. No server-side row cap was observed
+# (2185 hourly rows returned in one response), so these bound payload sizes and
+# keep each request's bucket labels inside one DST regime.
+BACKFILL_HOURLY_CHUNK_DAYS: Final = 92
+BACKFILL_DAILY_CHUNK_DAYS: Final = 366
+
 # How long an optimistic control state (valve motion, scan switch) is shown
 # before falling back to polled truth. Sized for the cloud round-trip feel the
 # prior-art fork validated (~10 s), not for the device's real actuation time.
