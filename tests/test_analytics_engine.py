@@ -978,6 +978,15 @@ async def test_daily_trigger_refreshes_statistics_then_recomputes(
         await original(self)
 
     with patch.object(AquaHomeStatisticsCoordinator, "async_refresh", _spy):
+        # Nothing may run before 07:35 device-local: a mid-MNF-window arming
+        # (or one computed in HA-local time) would already have fired by one
+        # second before the pinned instant — the lower bound of the bracket.
+        freezer.move_to(FIRST_DAILY_RUN - timedelta(seconds=1))
+        async_fire_time_changed(hass)
+        await settle(hass)
+        assert seen_before == []
+        assert result_of(engine).computed_at == FROZEN_NOW
+
         freezer.move_to(FIRST_DAILY_RUN)
         async_fire_time_changed(hass)
         await settle(hass)
@@ -986,7 +995,13 @@ async def test_daily_trigger_refreshes_statistics_then_recomputes(
         assert result_of(engine).computed_at == FIRST_DAILY_RUN
         assert engine.last_update_success is True
 
-        # Re-armed for the next device-local morning, not a one-shot.
+        # Re-armed for the next device-local morning, not a one-shot —
+        # and again not a second early.
+        freezer.move_to(SECOND_DAILY_RUN - timedelta(seconds=1))
+        async_fire_time_changed(hass)
+        await settle(hass)
+        assert seen_before == [FROZEN_NOW]
+
         freezer.move_to(SECOND_DAILY_RUN)
         async_fire_time_changed(hass)
         await settle(hass)

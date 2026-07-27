@@ -35,9 +35,10 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pytest
 
-from custom_components.aquahome.analytics import detectors, series
+from custom_components.aquahome.analytics import baseline, detectors, series
 from custom_components.aquahome.analytics.detectors import compute_analytics
 from custom_components.aquahome.analytics.model import (
+    REASON_DAILY_HIGH,
     SOURCE_DEVICE_AVERAGE,
     TIER_INFO,
     TIER_URGENT,
@@ -573,9 +574,9 @@ def test_daily_occupancy_scores_an_mcc_above_the_floor() -> None:
             )
 
     assert counts.mcc() >= MCC_FLOOR
-    assert counts.mcc() == pytest.approx(0.934, abs=1e-3)
+    assert counts.mcc() == pytest.approx(1.0, abs=1e-3)
     assert counts.fn == 0
-    assert counts.fp == 5
+    assert counts.fp == 0
 
 
 # ---------------------------------------------------------------------------
@@ -1090,3 +1091,149 @@ def test_occupancy_needs_an_expectation_to_compare_a_gap_against() -> None:
         )
         is None
     )
+
+
+# ---------------------------------------------------------------------------
+# Adversarial-review coverage additions (2026-07-27)
+# ---------------------------------------------------------------------------
+
+
+def test_the_one_real_july_anomaly_fires_on_its_own_day() -> None:
+    """Replayed at the July-20 noon, the single genuine daily anomaly fires.
+
+    326 L against the fresh Monday slot's 163 L expectation and 53 L deviation
+    sits just past the three-deviation band — the only such day in the capture.
+    Without this the suites never assert ``anomaly.active is True`` through
+    ``compute_analytics`` at all, and a detector that could never fire would
+    pass every replay pin.
+    """
+    anomaly = _replay(now=datetime(2026, 7, 20, 12, 30, tzinfo=UTC)).anomaly
+
+    assert anomaly.active is True
+    assert anomaly.reasons == (REASON_DAILY_HIGH,)
+    assert anomaly.day is not None
+    assert anomaly.day.day == date(2026, 7, 20)
+
+
+def test_a_single_chart_vote_does_not_reach_the_drift_consensus() -> None:
+    """A split vote yields no consensus; a genuine sustained shift trips both.
+
+    The split series steps up mid-window and returns to its level: the EWMA
+    chart alarms while crossing, but the CUSUM vote's trailing-level check
+    sees the window end back at the target and withholds — exactly the
+    disagreement the two-chart consensus exists for. Asserting through
+    ``_drift_alarm`` (not the two chart functions separately) is what makes an
+    ``and`` → ``or`` regression in the consensus observable.
+    """
+    generator = np.random.default_rng(5)
+    split = (
+        list(170 + generator.normal(0, 20, 20))
+        + list(255 + generator.normal(0, 20, 15))
+        + list(170 + generator.normal(0, 20, 25))
+    )
+    sustained = list(170 + generator.normal(0, 20, 39)) + list(
+        255 + generator.normal(0, 20, 21)
+    )
+
+    assert detectors._drift_alarm(split) == (False, False, True)
+    assert detectors._drift_alarm(sustained) == (True, True, True)
+
+
+@pytest.mark.parametrize(
+    ("start_day", "consecutive", "active"),
+    [(66, 3, True), (67, 2, False)],
+)
+def test_vacation_needs_the_full_run_of_silent_days(
+    start_day: int, consecutive: int, active: bool
+) -> None:
+    """One silent day fewer keeps the verdict off — the threshold bites both ways."""
+    house = _household(seed=7, vacation_start_day=start_day, vacation_end_day=70)
+
+    vacation = _household_result(house).vacation
+
+    assert vacation.active is active
+    assert vacation.consecutive_days == consecutive
+
+
+def test_point_detector_refuses_a_zero_width_band() -> None:
+    """A matured bucket of certain zeros must not flag ordinary use.
+
+    A multi-week absence writes certain 0.0 into every covered hour; the
+    resulting buckets mature at median 0 and scaled MAD 0, and without the
+    zero-scale guard any positive draw in those hours would read as anomalous
+    for weeks after the household returns.
+    """
+    tz = ZoneInfo(TZ_KEY)
+    knowledge: dict[datetime, float] = {}
+    # Five prior Mondays proven dry at 07:00 and 08:00 …
+    for weeks_back in range(1, 6):
+        for hour in (7, 8):
+            instant = datetime(2026, 7, 20, hour, tzinfo=tz) - timedelta(
+                days=7 * weeks_back
+            )
+            knowledge[instant] = 0.0
+    # … and one ordinary shower-hour this Monday morning.
+    now = datetime(2026, 7, 20, 9, 30, tzinfo=tz)
+    knowledge[datetime(2026, 7, 20, 7, tzinfo=tz)] = 1.0 * LITERS_PER_GALLON
+    knowledge[datetime(2026, 7, 20, 8, tzinfo=tz)] = 1.0 * LITERS_PER_GALLON
+
+    median, mad, count = baseline.build_grid(knowledge)
+
+    assert detectors.point_anomaly_hours(knowledge, median, mad, count, now, tz) == 0
+
+
+def test_daily_anomaly_refuses_a_zero_spread_band() -> None:
+    """A zero spread is an unusable scale, not a band of width zero."""
+    day = DayAssessment(
+        day=date(2026, 7, 20),
+        total_liters=38.2,
+        expected_liters=37.9,
+        spread_liters=0.0,
+        ratio=1.008,
+        bucket="normal",
+        largest_event_liters=None,
+        assessable=True,
+    )
+
+    assert detectors.daily_anomaly(day) is False
+
+
+def test_a_day_holding_readings_is_never_a_gap_interior() -> None:
+    """A day with in-day readings but a missing bound is unjudgeable.
+
+    Averaging the surrounding gap's delta over such a day would smear its own
+    real usage into an "unoccupied" verdict — the review reproduced exactly
+    that on a mid-vacation day the household briefly visited.
+    """
+    tz = ZoneInfo(TZ_KEY)
+
+    def reading(day: int, hour: int, value: float) -> Reading:
+        return (
+            datetime(2026, 6, day, hour, tzinfo=tz).astimezone(UTC),
+            value,
+        )
+
+    readings = (
+        reading(1, 9, 1000.0),
+        # Readings inside the noon-day labelled June 10 …
+        reading(9, 18, 1010.0),
+        reading(10, 8, 1030.0),
+        # … whose closing bound only arrives days later.
+        reading(20, 9, 1031.0),
+    )
+    day = DayAssessment(
+        day=date(2026, 6, 10),
+        total_liters=None,
+        expected_liters=160.0,
+        spread_liters=40.0,
+        ratio=None,
+        bucket=None,
+        largest_event_liters=None,
+        assessable=False,
+    )
+
+    verdict = detectors._occupancy(
+        day, readings, tz, device_online=True, statistics_fresh=True
+    )
+
+    assert verdict is None

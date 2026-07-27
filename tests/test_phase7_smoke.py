@@ -39,7 +39,7 @@ thread rather than a completed write (see :func:`_settled_result`).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Final, cast
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -59,7 +59,6 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
 
 from custom_components.aquahome.analytics.engine import AquaHomeAnalyticsEngine
 from custom_components.aquahome.const import (
-    ANALYTICS_RUN_LOCAL_TIME,
     DOMAIN,
     EVENT_AQUAHOME,
     EVENT_TYPE_LEAK_CLEARED,
@@ -159,12 +158,9 @@ ANALYTICS_EVENT_TYPES: Final = frozenset(
 )
 
 #: The next device-local analytics run after :data:`FROZEN_NOW` — 07:35 the
-#: following morning in the device's zone, which is 05:35 UTC.
-NEXT_RUN: Final = datetime.combine(
-    FROZEN_NOW.astimezone(DEVICE_TZ).date() + timedelta(days=1),
-    ANALYTICS_RUN_LOCAL_TIME,
-    tzinfo=DEVICE_TZ,
-)
+#: following morning in the device's zone, which is 05:35 UTC. Hard-coded so
+#: a mistimed arming (HA-local, mid-MNF-window) cannot re-derive itself green.
+NEXT_RUN: Final = datetime(2026, 7, 28, 5, 35, tzinfo=UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -262,14 +258,12 @@ async def _settled_result(
 ) -> AnalyticsResult:
     """Return the engine's verdict over the fully committed imported series.
 
-    The backfill hands its rows to the recorder as a queued import task while
-    the engine reads them back through the recorder's executor, so the startup
-    pipeline's own pass can race ahead of the import and see an empty series
-    (it does, on this fixture — reported to the orchestrator, not papered over
-    with production changes here). Draining the recorder and asking for one more
-    pass makes the verdicts below deterministic: the engine is stateless by
-    design, so a pass that already saw the rows simply recomputes the same
-    result, and a pass that did not now sees them.
+    The statistics coordinator drains the recorder behind its own import, so
+    the boot pipeline's pass already sees every row — the boot-pass assertions
+    in the first smoke test prove exactly that. This helper only re-settles
+    and recomputes so later tests stay independent of pass ordering: the
+    engine is stateless by design, so the extra pass recomputes the same
+    result.
     """
     await async_wait_recording_done(hass)
     engine = _engine(entry)
@@ -401,10 +395,22 @@ async def test_full_boot_imports_history_then_computes_analytics(  # noqa: PLR09
     assert statistics.last_update_success is True
     assert await _stored_row_count(hass, statistics.statistic_id) == EXPECTED_ROWS
 
-    # ... and its second half completed a pass without an error.
+    # ... and its second half completed a pass without an error — and that
+    # BOOT pass itself already saw the imported rows (the statistics
+    # coordinator drains the recorder behind its import; without that barrier
+    # this pass raced the import and judged an empty series). Asserting on
+    # engine.data here, before any re-refresh, is what makes the barrier's
+    # absence observable.
     engine = _engine(mock_config_entry)
     assert engine.last_update_success is True
-    assert engine.data is not None
+    booted = engine.data
+    assert booted is not None
+    assert _verdict_counts(booted) == {
+        "no_leak": EXPECTED_NO_LEAK_NIGHTS,
+        "masked": EXPECTED_MASKED_NIGHTS,
+    }
+    assert booted.leak.active is False
+    assert _state(hass, entity_registry, "binary_sensor", "leak_suspected") == STATE_OFF
 
     # Over that imported series the classifier judges every night of its window.
     result = await _settled_result(hass, mock_config_entry)
