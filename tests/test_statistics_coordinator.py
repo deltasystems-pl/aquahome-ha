@@ -715,3 +715,36 @@ async def test_removing_the_entry_clears_its_statistics(
 
     assert await stored_rows(hass) == []
     assert await stored_metadata(hass) == []
+
+
+async def test_timezone_comes_from_the_props_detail_not_the_device_list(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Bucket alignment survives the property-less production device list.
+
+    ``GET /devices`` is fetched without ``props``, so in production the list
+    objects carry no property map at all — the composed fixture's full map is a
+    test-only convenience. The device timezone must therefore come from the
+    ``props=true`` detail payload the fast coordinator fetched (adversarial
+    review finding, 2026-07-27): fed from the list object it would silently
+    fall back to the Home Assistant zone (US/Pacific in this harness) and file
+    every daily reading at the wrong local instant.
+    """
+    devices_list = load_fixture("devices-list.json")
+    for item in devices_list["data"]:
+        item["properties"] = {}
+        item["enriched_data"] = None
+    add_device_routes(mock_api, devices_list=devices_list)
+    meter_routes(mock_api)
+
+    await boot(hass, mock_config_entry, freezer)
+
+    assert coordinator_of(mock_config_entry).last_update_success is True
+    rows = await stored_rows(hass)
+    assert len(rows) == EXPECTED_ROW_COUNT
+    # Warsaw local midnight, not a US/Pacific one — the detail payload's tz won.
+    assert starts(rows)[0] == FIRST_START

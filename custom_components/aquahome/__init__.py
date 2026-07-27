@@ -125,14 +125,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         await _async_first_settings_refresh(settings)
         settings_coordinators[device.id] = settings
 
+        # The device list is fetched without props, so the list objects carry
+        # no property map (and no enriched block) in production — tz_id and the
+        # model-name fallback must come from the props=true payload the fast
+        # coordinator has already fetched (adversarial-review finding, 2026-07-27).
         statistics_coordinators[device.id] = AquaHomeStatisticsCoordinator(
             hass,
             entry,
             client,
             device_id=device.id,
             device_slug=coordinator.device_slug,
-            device_name=_device_display_name(device),
-            tz_id=_device_tz_id(device),
+            device_name=_device_display_name(coordinator.data),
+            tz_id=_device_tz_id(coordinator.data),
         )
 
         _async_wire_activity_triggers(hass, entry, coordinator, activity)
