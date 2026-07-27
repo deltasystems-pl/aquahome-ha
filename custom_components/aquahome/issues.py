@@ -1,6 +1,6 @@
-"""Tiered low-salt repair issues for AquaHome devices.
+"""Repair issues for AquaHome devices: low salt and urgent leak.
 
-Watches each device's fast coordinator for the softener's own
+The salt section watches each device's fast coordinator for the softener's own
 ``out_of_salt_estimate_days`` countdown (the PRIMARY salt signal — the Phase-6
 chemistry estimate is deliberately not used here) and raises one Repairs issue
 per device when it runs low: a warning at
@@ -9,6 +9,14 @@ at :data:`~.const.SALT_DAYS_CRITICAL_THRESHOLD`. Each tier releases only after
 the countdown recovers past its threshold plus
 :data:`~.const.SALT_DAYS_HYSTERESIS`, so the day-to-day wobble of an estimate
 hovering at a boundary never flaps the issue in and out of existence.
+
+The leak section watches each device's analytics engine and files a single
+error-severity issue when the leak detector confirms a continuous flow at the
+urgent tier (:data:`~.const.LEAK_TIER_URGENT_LITERS_PER_DAY`, burst-pipe
+scale) — and only then: softer leak evidence stays on the binary sensor and
+the event bus (owner decision 2026-07-27). An engine pass that has nothing to
+assess (``active is None``) leaves the issue untouched, so a transient
+statistics failure can never silently retract a live warning.
 """
 
 from __future__ import annotations
@@ -20,6 +28,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 
+from .analytics.model import TIER_URGENT
 from .api import scaled_value
 from .const import (
     DOMAIN,
@@ -32,6 +41,7 @@ from .entity import device_display_name
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
+    from .analytics.engine import AquaHomeAnalyticsEngine
     from .api import Device
     from .coordinator import AquaHomeConfigEntry, AquaHomeCoordinator
 
@@ -148,6 +158,84 @@ def async_setup_salt_issues(
 
     _evaluate()
     entry.async_on_unload(coordinator.async_add_listener(_evaluate))
+
+
+@callback
+def async_setup_leak_issues(
+    hass: HomeAssistant,
+    entry: AquaHomeConfigEntry,
+    coordinator: AquaHomeCoordinator,
+    engine: AquaHomeAnalyticsEngine,
+) -> None:
+    """Watch one device's leak verdict and maintain its urgent repair issue.
+
+    Filed when the analytics leak detector is active at the urgent tier,
+    deleted when the detector confirms the flow has stopped (``active`` is
+    ``False``). ``active is None`` — nothing to assess — changes nothing in
+    either direction. The issue is re-created only when the rendered daily
+    volume changes, so a steady leak does not churn the issue registry on
+    every engine pass; a clear-then-refile naturally resets any dismissal,
+    which is exactly right for a leak that stopped and started again.
+    """
+    issue_id = f"leak_urgent_{engine.device_slug}"
+    reported_liters: int | None = None
+
+    @callback
+    def _evaluate() -> None:
+        """Sync the repair issue with the engine's latest leak verdict."""
+        nonlocal reported_liters
+        result = engine.data
+        if result is None:
+            return
+        leak = result.leak
+        if leak.active is None:
+            return
+        urgent = leak.active and leak.tier == TIER_URGENT
+        if not urgent:
+            if leak.active is False:
+                ir.async_delete_issue(hass, DOMAIN, issue_id)
+                reported_liters = None
+            return
+        liters = (
+            int(leak.implied_liters_per_day)
+            if leak.implied_liters_per_day is not None
+            else 0
+        )
+        if liters == reported_liters:
+            return
+        device: Device | None = coordinator.data
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            is_persistent=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="leak_urgent",
+            translation_placeholders={
+                "device": device_display_name(device) if device is not None else "?",
+                "liters_per_day": str(liters),
+            },
+        )
+        reported_liters = liters
+
+    _evaluate()
+    entry.async_on_unload(engine.async_add_listener(_evaluate))
+
+
+@callback
+def async_remove_leak_issues(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> None:
+    """Delete every device's urgent-leak issue when the entry is removed.
+
+    Mirrors :func:`async_remove_salt_issues`: ids are rebuilt from the device
+    registry because ``async_remove_entry`` may run on an entry that was never
+    loaded, and deleting an id that was never filed is a documented no-op.
+    """
+    registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
+        for domain, identifier in device.identifiers:
+            if domain == DOMAIN:
+                ir.async_delete_issue(hass, DOMAIN, f"leak_urgent_{identifier}")
 
 
 @callback
