@@ -32,6 +32,7 @@ Two behaviours deserve their own attention and get it below:
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Final
 
@@ -848,3 +849,61 @@ def test_ground_truth_hardness_is_the_captured_setting() -> None:
     assert float(fixture_setting("inlet_hardness")) == pytest.approx(
         SETTINGS_HARDNESS_GPG, rel=1e-12
     )
+
+
+# ---------------------------------------------------------------------------
+# Non-finite inputs
+#
+# ``json.loads`` accepts bare ``NaN``/``Infinity`` literals and NaN slips
+# through every ordinary ``<``/``<=`` guard (all comparisons are ``False``),
+# so without an explicit finiteness check a malformed cloud payload would
+# surface as a ``nan`` sensor state instead of an honest ``None``.
+# ---------------------------------------------------------------------------
+
+#: The three non-finite doubles a JSON payload can smuggle in.
+NON_FINITE: Final = (math.nan, math.inf, -math.inf)
+
+
+@pytest.mark.parametrize("bad", NON_FINITE, ids=["nan", "inf", "-inf"])
+def test_daily_salt_rejects_non_finite_inputs(bad: float) -> None:
+    """A non-finite value in any argument position yields None, never nan."""
+    assert daily_salt_grams(bad, INLET_DH_SETTING, OUTLET_DH, E_RATED) is None
+    assert daily_salt_grams(LITERS_PER_DAY, bad, OUTLET_DH, E_RATED) is None
+    assert daily_salt_grams(LITERS_PER_DAY, INLET_DH_SETTING, bad, E_RATED) is None
+    assert daily_salt_grams(LITERS_PER_DAY, INLET_DH_SETTING, OUTLET_DH, bad) is None
+
+
+@pytest.mark.parametrize("bad", NON_FINITE, ids=["nan", "inf", "-inf"])
+def test_device_daily_rate_rejects_non_finite_inputs(bad: float) -> None:
+    """A non-finite dose or interval yields None, never nan."""
+    assert device_daily_salt_grams(bad, AVG_DAYS_BETWEEN_REGENS) is None
+    assert device_daily_salt_grams(AVG_SALT_PER_REGEN_LB, bad) is None
+
+
+@pytest.mark.parametrize("bad", NON_FINITE, ids=["nan", "inf", "-inf"])
+def test_cross_check_rejects_non_finite_inputs(bad: float) -> None:
+    """A non-finite countdown or rate yields None, never nan."""
+    assert cross_check_days(bad, DEVICE_DAILY_SALT_G, DAILY_SALT_G_SETTING) is None
+    assert cross_check_days(DEVICE_ESTIMATE_DAYS, bad, DAILY_SALT_G_SETTING) is None
+    assert cross_check_days(DEVICE_ESTIMATE_DAYS, DEVICE_DAILY_SALT_G, bad) is None
+
+
+def test_negative_outlet_hardness_is_rejected() -> None:
+    """A negative outlet hardness would inflate the estimate; it yields None."""
+    assert daily_salt_grams(LITERS_PER_DAY, INLET_DH_SETTING, -1.0, E_RATED) is None
+
+
+@pytest.mark.parametrize("bad", NON_FINITE, ids=["nan", "inf", "-inf"])
+def test_non_finite_rated_efficiency_falls_through_to_the_totals(bad: float) -> None:
+    """The stoichiometric guard already stops non-finite rated figures.
+
+    ``0 < nan <= ceiling`` and ``0 < inf <= ceiling`` are both False, so the
+    rated source is rejected and the lifetime-totals ratio takes over; with no
+    totals either, the result is an honest None.
+    """
+    resolved = efficiency_mol_per_kg_with_source(bad, TOTAL_ROCK_LB, TOTAL_SALT_LB)
+    assert resolved is not None
+    value, source = resolved
+    assert source == EFFICIENCY_SOURCE_TOTALS
+    assert value == pytest.approx(E_TOTALS, abs=E_TOLERANCE)
+    assert efficiency_mol_per_kg_with_source(bad, None, None) is None

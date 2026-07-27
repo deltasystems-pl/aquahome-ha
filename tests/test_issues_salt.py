@@ -29,6 +29,7 @@ from unittest.mock import patch
 
 import pytest
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
@@ -309,12 +310,14 @@ async def test_registry_actions_track_the_tier_walk(
     mock_api: aioresponses,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """The registry sees create, then update, then remove — and nothing while steady.
+    """The registry sees create, re-file on escalation, then remove — nothing while steady.
 
     The lifecycle is asserted from the outside, on the Repairs registry's own
-    event bus: raising, escalating, and clearing must each move the registry
-    exactly once, and a poll that repeats the same day count in the same tier
-    must leave it completely untouched.
+    event bus: raising moves the registry once; escalating RE-FILES the issue
+    (remove + create — ``async_create_issue`` alone would preserve a user's
+    dismissal and hide the critical nudge behind "show ignored issues"); a poll
+    that repeats the same day count in the same tier must leave it completely
+    untouched; and clearing removes it once.
     """
     actions: list[str] = []
 
@@ -343,13 +346,13 @@ async def test_registry_actions_track_the_tier_walk(
     assert actions == ["create"]
 
     await _fire_next_poll(hass, freezer)
-    assert actions == ["create", "update"]
+    assert actions == ["create", "remove", "create"]
 
     await _fire_next_poll(hass, freezer)
-    assert actions == ["create", "update"]
+    assert actions == ["create", "remove", "create"]
 
     await _fire_next_poll(hass, freezer)
-    assert actions == ["create", "update", "remove"]
+    assert actions == ["create", "remove", "create", "remove"]
 
 
 # ---------------------------------------------------------------------------
@@ -539,26 +542,91 @@ async def test_unloading_the_entry_stops_the_updates(
     assert _issue(hass) is None
 
 
-async def test_unloading_the_entry_deletes_a_standing_issue(
+async def test_removing_the_entry_deletes_a_standing_issue(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_api: aioresponses,
 ) -> None:
-    """An issue standing at unload is deleted, not left to outlive the entry.
+    """Uninstalling the integration deletes the issue instead of orphaning it.
 
-    The Repairs registry outlives config entries and the tier tracker is
-    rebuilt from scratch on every setup, so without the unload cleanup a
-    pre-reload "salt is almost empty" card would keep showing for a softener
-    refilled while the entry was unloaded — or after an uninstall — until the
-    next Home Assistant restart. A plain reload re-evaluates immediately at
-    setup and re-files the issue if the salt is still low.
+    The Repairs registry outlives config entries, so without the
+    ``async_remove_entry`` cleanup an uninstalled integration's "salt is
+    almost empty" card would keep nagging until the next restart. The issue
+    ids are rebuilt from the device registry, so this works even though the
+    entry is already unloaded when the removal hook runs. The autouse
+    ``no_platforms`` fixture means no entity ever registers the device here,
+    so the test files the device-registry entry itself — exactly what the
+    entity platforms do in production (and what the Phase-5 statistics
+    cleanup, which shares the enumeration, relies on live).
     """
     _register_polls(mock_api, [_detail_with_countdown(7)])
 
     assert await setup_integration(hass, mock_config_entry)
     _assert_issue(hass, CRITICAL_TIER, "7")
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=mock_config_entry.entry_id,
+        identifiers={(DOMAIN, SLUG)},
+    )
 
-    assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.config_entries.async_remove(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     assert _issue(hass) is None
+
+
+async def test_reload_preserves_a_dismissal(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+) -> None:
+    """A plain reload keeps the user's "Ignore" instead of resurfacing the nudge.
+
+    ``dismissed_version`` lives on the registry entry, which survives an
+    unload; the fresh setup's evaluation must take the update path (same
+    issue id, same tier) so the dismissal carries over — deleting on unload
+    or re-filing on the same tier would wipe it on every reload.
+    """
+    _register_polls(mock_api, [_detail_with_countdown(10)])
+
+    assert await setup_integration(hass, mock_config_entry)
+    _assert_issue(hass, WARNING_TIER, "10")
+    ir.async_get(hass).async_ignore(DOMAIN, ISSUE_ID, ignore=True)
+
+    assert await hass.config_entries.async_reload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    issue = _issue(hass)
+    assert issue is not None
+    assert issue.translation_key == "salt_level_low"
+    assert issue.dismissed_version is not None
+
+
+async def test_escalation_resurfaces_a_dismissed_warning(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Ignoring the warning must not silence the critical escalation.
+
+    ``async_create_issue`` updates an existing id in place and deliberately
+    preserves ``dismissed_version``, so the escalation deletes the warning
+    first — otherwise a user who pressed "Ignore" at 14 days would never see
+    the error-severity nudge and the softener would run dry unannounced.
+    """
+    _register_polls(
+        mock_api,
+        [_detail_with_countdown(14), _detail_with_countdown(7)],
+    )
+
+    assert await setup_integration(hass, mock_config_entry)
+    _assert_issue(hass, WARNING_TIER, "14")
+    ir.async_get(hass).async_ignore(DOMAIN, ISSUE_ID, ignore=True)
+
+    await _fire_next_poll(hass, freezer)
+
+    issue = _issue(hass)
+    assert issue is not None
+    assert issue.translation_key == "salt_level_critical"
+    assert issue.severity is ir.IssueSeverity.ERROR
+    assert issue.dismissed_version is None

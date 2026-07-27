@@ -283,6 +283,41 @@ async def test_daily_salt_usage_falls_back_to_hardness_property(
     assert attributes["inlet_hardness_dh"] == round(INLET_DH_FALLBACK, 2)
 
 
+@pytest.mark.parametrize(
+    "malformed",
+    ["Infinity", "-Infinity", "NaN", "not-a-number", "0"],
+    ids=["inf", "neg-inf", "nan", "text", "zero"],
+)
+async def test_daily_salt_usage_rejects_malformed_setting_value(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    malformed: str,
+) -> None:
+    """A malformed ``inlet_hardness`` setting falls back, never a nan state.
+
+    ``float("Infinity")`` and ``float("NaN")`` succeed, so without an explicit
+    finiteness guard a corrupted settings document would poison the estimate
+    (and its ``inlet_hardness_dh`` attribute) with a non-finite number instead
+    of taking the honest raw-property path.
+    """
+    freezer.move_to(FROZEN_INSTANT)
+    settings = with_setting_value(
+        load_fixture("settings.json"), "inlet_hardness", malformed
+    )
+    add_device_routes(mock_api, settings=settings)
+    with _ONLY_SENSOR:
+        await setup_integration(hass, mock_config_entry)
+
+    assert _native(hass, "daily_salt_usage") == pytest.approx(
+        DAILY_SALT_FALLBACK, abs=0.1
+    )
+    attributes = _attributes(hass, "daily_salt_usage")
+    assert attributes["inlet_hardness_source"] == "device_property"
+    assert attributes["inlet_hardness_dh"] == round(INLET_DH_FALLBACK, 2)
+
+
 async def test_daily_salt_usage_falls_back_when_settings_endpoint_fails(
     hass: HomeAssistant,
     mock_api: aioresponses,
