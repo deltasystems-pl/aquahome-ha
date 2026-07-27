@@ -4,9 +4,12 @@ Sets up, per cloud device, a fast :class:`~.coordinator.AquaHomeCoordinator`
 (telemetry), a gentle :class:`~.coordinator.AquaHomeActivityCoordinator`
 (alert + regeneration history), a gentle
 :class:`~.coordinator.AquaHomeSettingsCoordinator` (the rule-driven settings
-document), and a slow :class:`~.statistics.AquaHomeStatisticsCoordinator`
+document), a slow :class:`~.statistics.AquaHomeStatisticsCoordinator`
 (external water-usage statistics backfilled from the cloud datapoint history,
-first run as a background task) behind a shared authenticated
+first run as a background task), and an
+:class:`~.analytics.engine.AquaHomeAnalyticsEngine` (leak / anomaly / vacation
+detection over the imported statistics, run after the backfill and daily at a
+device-local morning time) behind a shared authenticated
 :class:`~.api.AquaHomeClient`, stores
 them on ``entry.runtime_data`` (:class:`~.coordinator.AquaHomeRuntimeData`), and
 forwards the sensor / binary-sensor / event platforms. A rising alert badge or a
@@ -33,6 +36,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.start import async_at_started
 
+from .analytics.engine import AquaHomeAnalyticsEngine
 from .api import (
     ApiError,
     AquaHomeClient,
@@ -51,7 +55,12 @@ from .coordinator import (
     AquaHomeSettingsCoordinator,
 )
 from .entity import device_display_name
-from .issues import async_remove_salt_issues, async_setup_salt_issues
+from .issues import (
+    async_remove_leak_issues,
+    async_remove_salt_issues,
+    async_setup_leak_issues,
+    async_setup_salt_issues,
+)
 from .statistics import (
     AquaHomeStatisticsCoordinator,
     async_clear_device_statistics,
@@ -103,6 +112,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
     activity_coordinators: dict[str, AquaHomeActivityCoordinator] = {}
     settings_coordinators: dict[str, AquaHomeSettingsCoordinator] = {}
     statistics_coordinators: dict[str, AquaHomeStatisticsCoordinator] = {}
+    analytics_engines: dict[str, AquaHomeAnalyticsEngine] = {}
     for device in devices:
         coordinator = AquaHomeCoordinator(hass, entry, client, device)
         await coordinator.async_config_entry_first_refresh()
@@ -132,7 +142,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         # no property map (and no enriched block) in production — tz_id and the
         # model-name fallback must come from the props=true payload the fast
         # coordinator has already fetched (adversarial-review finding, 2026-07-27).
-        statistics_coordinators[device.id] = AquaHomeStatisticsCoordinator(
+        statistics = AquaHomeStatisticsCoordinator(
             hass,
             entry,
             client,
@@ -141,9 +151,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
             device_name=device_display_name(coordinator.data),
             tz_id=_device_tz_id(coordinator.data),
         )
+        statistics_coordinators[device.id] = statistics
+
+        engine = AquaHomeAnalyticsEngine(
+            hass,
+            entry,
+            device_id=device.id,
+            device_slug=coordinator.device_slug,
+            fast=coordinator,
+            activity=activity,
+            statistics=statistics,
+        )
+        analytics_engines[device.id] = engine
 
         _async_wire_activity_triggers(hass, entry, coordinator, activity)
         async_setup_salt_issues(hass, entry, coordinator)
+        async_setup_leak_issues(hass, entry, coordinator, engine)
 
     entry.runtime_data = AquaHomeRuntimeData(
         client=client,
@@ -152,16 +175,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         activity_coordinators=activity_coordinators,
         settings_coordinators=settings_coordinators,
         statistics_coordinators=statistics_coordinators,
+        analytics_engines=analytics_engines,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     @callback
     def _async_start_backfills(_hass: HomeAssistant) -> None:
-        """Kick off every device's first backfill as a background task."""
-        for statistics in statistics_coordinators.values():
+        """Kick off every device's backfill-then-analytics pipeline."""
+        for device_id, statistics in statistics_coordinators.items():
             entry.async_create_background_task(
                 hass,
-                statistics.async_refresh(),
+                _async_run_startup_pipeline(statistics, analytics_engines[device_id]),
                 name=f"{DOMAIN} statistics backfill {statistics.device_slug}",
             )
 
@@ -174,6 +198,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
     # reload the started event has long fired and the callback runs immediately.
     entry.async_on_unload(async_at_started(hass, _async_start_backfills))
     return True
+
+
+async def _async_run_startup_pipeline(
+    statistics: AquaHomeStatisticsCoordinator,
+    engine: AquaHomeAnalyticsEngine,
+) -> None:
+    """Run one device's startup sequence: backfill, analyze, arm the daily run.
+
+    Strictly ordered so the analytics engine's first pass sees the imported
+    history (the Phase-5 backfill is the analytics tier's explicit
+    prerequisite — detectors work from day one over replayed nights). Neither
+    step raises (`async_refresh` swallows failures into coordinator state), so
+    the daily schedule is always armed.
+    """
+    await statistics.async_refresh()
+    await engine.async_refresh()
+    await engine.async_schedule()
 
 
 async def _async_first_activity_refresh(
@@ -343,6 +384,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) ->
             await settings.async_shutdown()
         for statistics in entry.runtime_data.statistics_coordinators.values():
             await statistics.async_shutdown()
+        for engine in entry.runtime_data.analytics_engines.values():
+            await engine.async_shutdown()
     return unloaded
 
 
@@ -355,6 +398,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) ->
     uninstall as orphaned state.
     """
     async_remove_salt_issues(hass, entry)
+    async_remove_leak_issues(hass, entry)
     await async_clear_device_statistics(hass, entry)
 
 
