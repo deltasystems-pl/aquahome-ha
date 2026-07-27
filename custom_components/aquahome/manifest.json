@@ -8,6 +8,6 @@
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/deltasystems-pl/aquahome-ha/issues",
-  "requirements": [],
+  "requirements": ["numpy>=1.26,<3"],
   "version": "0.0.1"
 }
