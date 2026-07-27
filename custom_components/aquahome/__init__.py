@@ -50,6 +50,7 @@ from .coordinator import (
     AquaHomeRuntimeData,
     AquaHomeSettingsCoordinator,
 )
+from .issues import async_setup_salt_issues
 from .statistics import (
     AquaHomeStatisticsCoordinator,
     async_clear_device_statistics,
@@ -141,6 +142,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         )
 
         _async_wire_activity_triggers(hass, entry, coordinator, activity)
+        async_setup_salt_issues(hass, entry, coordinator)
 
     entry.runtime_data = AquaHomeRuntimeData(
         client=client,

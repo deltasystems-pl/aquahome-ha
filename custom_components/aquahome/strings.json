@@ -315,6 +315,14 @@
     }
   },
   "issues": {
+    "salt_level_low": {
+      "title": "Salt is running low on {device}",
+      "description": "The softener estimates about {days} days of salt remain. Plan a refill of the brine tank soon."
+    },
+    "salt_level_critical": {
+      "title": "Salt is almost empty on {device}",
+      "description": "The softener estimates only about {days} days of salt remain. Refill the brine tank now to keep the water softened."
+    },
     "unique_id_migration": {
       "title": "AquaHome entity identities were migrated",
       "description": "An integration update renamed the internal identity of the following entities. History is preserved, but if you renamed or customized any of them, review the changes:\n\n{renames}"

@@ -210,5 +210,15 @@ CONF_REFRESH_TOKEN: Final = "refresh_token"  # noqa: S105 - entry-data key, not 
 # Larger drops are accepted as a genuine counter reset.
 TOTAL_WATER_CLAMP_TOLERANCE: Final = 0.05
 
+# Tiered low-salt Repairs nudge, driven by the device's own
+# out_of_salt_estimate_days countdown (the PRIMARY salt signal — never the
+# chemistry cross-check). Warning at <=14 days, error severity at <=7, each
+# releasing only once the countdown has recovered past threshold + hysteresis
+# so a day-to-day wobble at the boundary never flaps the issue
+# (owner-confirmed tiers, 2026-07-27).
+SALT_DAYS_WARNING_THRESHOLD: Final = 14
+SALT_DAYS_CRITICAL_THRESHOLD: Final = 7
+SALT_DAYS_HYSTERESIS: Final = 2
+
 CONFIG_VERSION: Final = 1
 CONFIG_MINOR_VERSION: Final = 1
