@@ -1,0 +1,489 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Połączenie z iQua",
+        "description": "Zaloguj się adresem e-mail i hasłem, których używasz w aplikacji iQua. Właściwy host API zostanie wykryty automatycznie.",
+        "data": {
+          "email": "Adres e-mail",
+          "password": "Hasło"
+        }
+      },
+      "verify": {
+        "title": "Zweryfikuj konto",
+        "description": "Twoje konto iQua wymaga weryfikacji adresu e-mail. Kod potwierdzający został wysłany na adres {email} — wpisz go poniżej.",
+        "data": {
+          "code": "Kod potwierdzający"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Ponowne uwierzytelnienie AquaHome",
+        "description": "Zapisane dane logowania dla {email} przestały działać. Podaj aktualne hasło do konta iQua, aby połączyć się ponownie.",
+        "data": {
+          "password": "Hasło"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Nieprawidłowy adres e-mail lub hasło",
+      "cannot_connect": "Nie udało się połączyć z chmurą iQua",
+      "rate_limited": "Chmura iQua ogranicza liczbę żądań — odczekaj kilka minut i spróbuj ponownie",
+      "invalid_code": "Kod potwierdzający nie został zaakceptowany",
+      "no_devices": "Na tym koncie iQua nie znaleziono żadnych urządzeń",
+      "wrong_account": "Te dane logowania należą do innego konta iQua niż to, które jest ponownie uwierzytelniane"
+    },
+    "abort": {
+      "already_configured": "Konto jest już skonfigurowane",
+      "reauth_successful": "Ponowne uwierzytelnienie powiodło się"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "salt_level": {
+        "name": "Poziom soli"
+      },
+      "water_used_today": {
+        "name": "Zużycie wody dzisiaj"
+      },
+      "treated_water_available": {
+        "name": "Dostępna woda zmiękczona"
+      },
+      "total_water": {
+        "name": "Łączne zużycie wody"
+      },
+      "days_since_last_recharge": {
+        "name": "Dni od ostatniej regeneracji"
+      },
+      "days_powered_up": {
+        "name": "Dni od włączenia zasilania"
+      },
+      "total_recharges": {
+        "name": "Łączna liczba regeneracji"
+      },
+      "rf_signal_strength": {
+        "name": "Siła sygnału RF"
+      },
+      "out_of_salt_estimate": {
+        "name": "Przewidywany brak soli"
+      },
+      "average_daily_water_use": {
+        "name": "Średnie dobowe zużycie wody"
+      },
+      "model": {
+        "name": "Model"
+      },
+      "serial_number": {
+        "name": "Numer seryjny"
+      },
+      "control_version": {
+        "name": "Oprogramowanie sterownika"
+      },
+      "wifi_module_version": {
+        "name": "Oprogramowanie modułu Wi-Fi"
+      },
+      "regeneration_status": {
+        "name": "Stan regeneracji",
+        "state": {
+          "regenerating": "Regeneracja w toku",
+          "scheduled": "Zaplanowana",
+          "none": "Nieaktywna",
+          "disabled": "Wyłączona",
+          "suspended": "Wstrzymana",
+          "error": "Błąd",
+          "wsov_disabled": "Wyłączona (zawór odcinający)"
+        }
+      },
+      "regeneration_time_remaining": {
+        "name": "Pozostały czas regeneracji"
+      },
+      "next_regeneration": {
+        "name": "Następna regeneracja"
+      },
+      "last_regeneration": {
+        "name": "Ostatnia regeneracja"
+      },
+      "average_daily_use_day_1": {
+        "name": "Średnie zużycie w soboty"
+      },
+      "average_daily_use_day_2": {
+        "name": "Średnie zużycie w niedziele"
+      },
+      "average_daily_use_day_3": {
+        "name": "Średnie zużycie w poniedziałki"
+      },
+      "average_daily_use_day_4": {
+        "name": "Średnie zużycie we wtorki"
+      },
+      "average_daily_use_day_5": {
+        "name": "Średnie zużycie w środy"
+      },
+      "average_daily_use_day_6": {
+        "name": "Średnie zużycie w czwartki"
+      },
+      "average_daily_use_day_7": {
+        "name": "Średnie zużycie w piątki"
+      },
+      "capacity_remaining": {
+        "name": "Pozostała pojemność jonowymienna"
+      },
+      "hardness_setting": {
+        "name": "Ustawiona twardość wody"
+      },
+      "total_salt_used": {
+        "name": "Łączne zużycie soli"
+      },
+      "total_rock_removed": {
+        "name": "Łącznie usunięte sole twardości"
+      },
+      "daily_salt_usage": {
+        "name": "Szacowane dobowe zużycie soli"
+      },
+      "salt_days_remaining": {
+        "name": "Szacowane dni zapasu soli"
+      },
+      "salt_depletion_estimate": {
+        "name": "Szacowana data wyczerpania soli"
+      },
+      "salt_per_regeneration": {
+        "name": "Zużycie soli na regenerację"
+      },
+      "salt_efficiency": {
+        "name": "Efektywność zużycia soli"
+      },
+      "error_codes": {
+        "name": "Kody błędów"
+      },
+      "latest_alert": {
+        "name": "Ostatni alert"
+      },
+      "leak_temperature": {
+        "name": "Temperatura"
+      },
+      "leak_signal_strength": {
+        "name": "Siła sygnału"
+      },
+      "usage_forecast": {
+        "name": "Prognoza zużycia wody"
+      },
+      "night_flow": {
+        "name": "Przepływ nocny"
+      },
+      "current_water_flow": {
+        "name": "Przepływ wody"
+      },
+      "live_mode_status": {
+        "name": "Tryb podglądu na żywo",
+        "state": {
+          "idle": "Bezczynny",
+          "live": "Na żywo",
+          "backoff": "Wstrzymany po błędzie"
+        }
+      }
+    },
+    "button": {
+      "regenerate_now": {
+        "name": "Regeneruj teraz"
+      },
+      "schedule_regeneration": {
+        "name": "Zaplanuj regenerację"
+      },
+      "cancel_regeneration": {
+        "name": "Anuluj regenerację"
+      },
+      "silence_alarm": {
+        "name": "Wycisz alarm"
+      },
+      "refresh_data": {
+        "name": "Odśwież dane"
+      },
+      "advance_valve": {
+        "name": "Przełącz zawór na następny cykl"
+      },
+      "reset_error_code": {
+        "name": "Skasuj kod błędu"
+      },
+      "reset_wsov_error_code": {
+        "name": "Skasuj błąd zaworu odcinającego"
+      },
+      "vacation_mode": {
+        "name": "Tryb urlopowy"
+      },
+      "recharge_off": {
+        "name": "Wyłącz regenerację"
+      },
+      "enable_recharge": {
+        "name": "Włącz regenerację"
+      }
+    },
+    "valve": {
+      "water_shutoff_valve": {
+        "name": "Zawór odcinający wodę"
+      }
+    },
+    "switch": {
+      "leak_detector_scan": {
+        "name": "Wyszukiwanie czujników wycieku"
+      },
+      "vacation_deferral": {
+        "name": "Odroczenie regeneracji (urlop)"
+      },
+      "auto_vacation": {
+        "name": "Automatyczne odroczenie regeneracji (urlop)"
+      },
+      "smart_regeneration": {
+        "name": "Inteligentne planowanie regeneracji"
+      },
+      "live_view": {
+        "name": "Podgląd na żywo"
+      },
+      "smart_live_windows": {
+        "name": "Inteligentne okna podglądu"
+      },
+      "continuous_live_flow": {
+        "name": "Ciągły pomiar przepływu"
+      }
+    },
+    "event": {
+      "alert": {
+        "name": "Alert",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "connection_status_offline": "Utrata połączenia",
+              "connection_status_online": "Nawiązanie połączenia",
+              "excessive_water_use_alert": "Nadmierne zużycie wody",
+              "water_shutoff_valve_opened": "Otwarcie zaworu odcinającego",
+              "salt_level_2": "Niski poziom soli",
+              "other": "Inne"
+            }
+          }
+        }
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      },
+      "salt_level_alert": {
+        "name": "Alert poziomu soli"
+      },
+      "error_code_alert": {
+        "name": "Alert kodu błędu"
+      },
+      "flow_monitor_alert": {
+        "name": "Alert monitora przepływu"
+      },
+      "connection_alert": {
+        "name": "Alert połączenia"
+      },
+      "water_usage_alert": {
+        "name": "Alert zużycia wody"
+      },
+      "resin_alert": {
+        "name": "Alert złoża żywicy"
+      },
+      "alarm_beeping": {
+        "name": "Alarm dźwiękowy"
+      },
+      "water_to_drain_alert": {
+        "name": "Alert wypływu wody do kanalizacji"
+      },
+      "regenerating": {
+        "name": "Regeneracja w toku"
+      },
+      "vacation_mode": {
+        "name": "Tryb urlopowy"
+      },
+      "recharge_off": {
+        "name": "Regeneracja wyłączona"
+      },
+      "regeneration_suspended": {
+        "name": "Regeneracja wstrzymana"
+      },
+      "wsov_closed": {
+        "name": "Zawór odcinający zamknięty"
+      },
+      "leak_detected": {
+        "name": "Wykryty wyciek"
+      },
+      "leak_low_battery": {
+        "name": "Niski poziom baterii"
+      },
+      "leak_tampered": {
+        "name": "Sabotaż"
+      },
+      "leak_connectivity": {
+        "name": "Łączność"
+      },
+      "leak_suspected": {
+        "name": "Podejrzenie wycieku"
+      },
+      "usage_anomaly": {
+        "name": "Anomalia zużycia"
+      },
+      "vacation_detected": {
+        "name": "Wykryta nieobecność"
+      }
+    },
+    "number": {
+      "live_sessions_per_day": {
+        "name": "Sesje podglądu na żywo dziennie"
+      },
+      "live_min_gap": {
+        "name": "Minimalny odstęp między sesjami podglądu"
+      }
+    }
+  },
+  "exceptions": {
+    "command_rejected": {
+      "message": "Urządzenie odrzuciło polecenie: {message}"
+    },
+    "command_failed": {
+      "message": "Wysłanie polecenia nie powiodło się: {message}"
+    },
+    "cannot_connect": {
+      "message": "Nie można połączyć się z chmurą iQua"
+    },
+    "rate_limited": {
+      "message": "Chmura iQua ogranicza liczbę żądań; spróbuj ponownie za kilka minut"
+    },
+    "auth_failed": {
+      "message": "Uwierzytelnienie w chmurze iQua nie powiodło się"
+    },
+    "setting_rejected": {
+      "message": "Urządzenie odrzuciło zmianę ustawienia: {message}"
+    },
+    "setting_unavailable": {
+      "message": "To ustawienie jest obecnie niedostępne w urządzeniu"
+    },
+    "invalid_option": {
+      "message": "{option} nie jest opcją oferowaną dla tego ustawienia"
+    },
+    "number_out_of_range": {
+      "message": "Wartość musi mieścić się w zakresie od {min} do {max}"
+    },
+    "valve_action_blocked": {
+      "message": "Zawór nie pozwala obecnie na tę czynność"
+    },
+    "service_wrong_entity": {
+      "message": "Ta akcja musi być skierowana na {expected}"
+    },
+    "analytics_not_ready": {
+      "message": "Analiza zużycia wody nie dała jeszcze wyniku; spróbuj ponownie po następnym przebiegu analizy"
+    },
+    "regen_not_allowed": {
+      "message": "Urządzenie nie przyjmuje w tej chwili tej czynności regeneracji"
+    },
+    "forecast_failed": {
+      "message": "Obliczenie prognozy zużycia nie powiodło się: {message}"
+    }
+  },
+  "issues": {
+    "salt_level_low": {
+      "title": "Kończy się sól w urządzeniu {device}",
+      "description": "Zmiękczacz szacuje, że zapasu soli wystarczy jeszcze na około {days} dni. Zaplanuj wkrótce uzupełnienie soli w zbiorniku solanki."
+    },
+    "salt_level_critical": {
+      "title": "Sól w urządzeniu {device} jest na wyczerpaniu",
+      "description": "Zmiękczacz szacuje, że zapasu soli wystarczy już tylko na około {days} dni. Uzupełnij sól w zbiorniku solanki teraz, aby woda nadal była zmiękczana."
+    },
+    "unique_id_migration": {
+      "title": "Identyfikatory encji AquaHome zostały zmigrowane",
+      "description": "Aktualizacja integracji zmieniła wewnętrzne identyfikatory poniższych encji. Historia została zachowana, ale jeśli któreś z nich zmieniałeś lub dostosowywałeś, sprawdź te zmiany:\n\n{renames}"
+    },
+    "leak_urgent": {
+      "title": "Silny ciągły przepływ wody w urządzeniu {device}",
+      "description": "Przez urządzenie {device} woda płynie nieprzerwanie w tempie około {liters_per_day} litrów na dobę, również w każdej godzinie nocnej między 01:00 a 07:00 przez kolejne noce. Jeśli nikt nie pobierał wody celowo, sprawdź, czy nie doszło do pęknięcia rury, cieknącej spłuczki lub odkręconego kranu, i rozważ zamknięcie dopływu wody."
+    },
+    "leak_while_away": {
+      "title": "Woda płynie przez {device}, choć nikogo nie ma w domu",
+      "description": "W urządzeniu {device} wykrywany jest ciągły wyciek (poziom {tier}, około {liters_per_day} litrów na dobę), mimo że domownicy wydają się nieobecni. Woda płynąca w pustym domu rzadko jest zamierzona — sprawdź, czy nie doszło do pęknięcia rury, cieknącej spłuczki lub odkręconego kranu, i jeśli masz taką możliwość, rozważ zdalne zamknięcie dopływu wody."
+    },
+    "vacation_defer": {
+      "title": "Wykryto nieobecność — odroczyć regeneracje w urządzeniu {device}?",
+      "description": "Od {consecutive_days} dni urządzenie {device} nie odnotowało istotnego zużycia wody, co wygląda na nieobecność domowników. Regeneracja zmiękczacza, który nie uzdatnia wody, marnuje sól i wodę.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Odrocz regeneracje w urządzeniu {device}",
+            "description": "Zaplanowane regeneracje będą anulowane, dopóki dom pozostaje pusty, i wznowią się automatycznie, gdy wróci zużycie wody. Po 21 odroczonych dniach jedna regeneracja i tak zostanie dopuszczona, aby chronić złoże żywicy."
+          }
+        },
+        "abort": {
+          "entry_not_loaded": "Integracja AquaHome nie jest wczytana; spróbuj ponownie po jej uruchomieniu."
+        }
+      }
+    },
+    "regen_time": {
+      "title": "Godzina regeneracji w urządzeniu {device} pokrywa się z domowym poborem wody",
+      "description": "Regeneracje w urządzeniu {device} są ustawione na godzinę {current}, ale wyuczone wzorce zużycia pokazują, że o tej porze regularnie pobierana jest woda. Podczas regeneracji zmiękczona woda jest niedostępna, więc spokojniejsza godzina ({proposed}) pasowałaby lepiej do tego gospodarstwa domowego.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Zmień godzinę regeneracji w urządzeniu {device}",
+            "description": "Ustawienie godziny regeneracji zostanie zmienione z {current} na {proposed}. W każdej chwili możesz je przywrócić w ustawieniach urządzenia."
+          }
+        },
+        "abort": {
+          "write_failed": "Zapisanie nowej godziny regeneracji nie powiodło się; ustawienie urządzenia nie zostało zmienione.",
+          "entry_not_loaded": "Integracja AquaHome nie jest wczytana; spróbuj ponownie po jej uruchomieniu."
+        }
+      }
+    },
+    "live_mode_failing": {
+      "title": "Aktualizacje na żywo zawodzą w urządzeniu {device}",
+      "description": "Połączenie WebSocket na żywo z urządzeniem {device} kilka razy z rzędu zakończyło się niepowodzeniem, mimo że samo urządzenie jest online (ostatni błąd: {error}). Integracja wróciła do zwykłego odpytywania, więc encje są nadal aktualizowane w normalnym rytmie. To zgłoszenie zniknie samo, gdy sesja na żywo znów się powiedzie."
+    }
+  },
+  "selector": {
+    "regeneration_mode": {
+      "options": {
+        "schedule": "Zaplanuj na najbliższą godzinę regeneracji",
+        "now": "Regeneruj teraz",
+        "cancel": "Anuluj zaplanowaną regenerację"
+      }
+    }
+  },
+  "services": {
+    "analyze_usage": {
+      "name": "Analizuj zużycie wody",
+      "description": "Zwraca pełną analizę zużycia wody dla urządzenia: nocne werdykty dotyczące wycieków, dobowe oceny zużycia, stan wykrywania anomalii i nieobecności, prognozę na jutro oraz wyuczoną siatkę aktywności.",
+      "fields": {
+        "refresh": {
+          "name": "Najpierw odśwież",
+          "description": "Przelicz analizę na podstawie najnowszych zaimportowanych statystyk, zanim zostanie zwrócona."
+        }
+      }
+    },
+    "get_usage_forecast": {
+      "name": "Pobierz prognozę zużycia",
+      "description": "Zwraca oczekiwane dobowe zużycie wody na najbliższe dni, wyliczone na podstawie własnych średnich urządzenia i wyuczonych statystyk.",
+      "fields": {
+        "days": {
+          "name": "Liczba dni",
+          "description": "Na ile dni naprzód sporządzić prognozę, licząc od jutra."
+        }
+      }
+    },
+    "set_vacation_mode": {
+      "name": "Ustaw tryb urlopowy",
+      "description": "Włącza lub wyłącza odraczanie regeneracji. Gdy jest włączone, zaplanowane regeneracje są anulowane (z limitem chroniącym złoże żywicy), a po powrocie planowana jest regeneracja nadrabiająca, jeśli pojemność jest niska. Nie zmienia to kafelka trybu urlopowego w aplikacji iQua.",
+      "fields": {
+        "vacation": {
+          "name": "Urlop",
+          "description": "Czy domownicy są nieobecni."
+        }
+      }
+    },
+    "schedule_regeneration": {
+      "name": "Zaplanuj regenerację",
+      "description": "Planuje, uruchamia lub anuluje regenerację we wskazanym urządzeniu.",
+      "fields": {
+        "mode": {
+          "name": "Tryb",
+          "description": "Którą czynność regeneracji wykonać."
+        }
+      }
+    }
+  }
+}
