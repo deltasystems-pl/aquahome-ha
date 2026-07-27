@@ -1,13 +1,19 @@
 {
   "domain": "aquahome",
   "name": "AquaHome",
-  "after_dependencies": ["recorder"],
-  "codeowners": ["@deltasystems-pl"],
+  "after_dependencies": [
+    "recorder"
+  ],
+  "codeowners": [
+    "@deltasystems-pl"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/deltasystems-pl/aquahome-ha",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/deltasystems-pl/aquahome-ha/issues",
-  "requirements": ["numpy>=1.26,<3"],
-  "version": "0.0.1"
+  "requirements": [
+    "numpy>=1.26,<3"
+  ],
+  "version": "1.0.0"
 }

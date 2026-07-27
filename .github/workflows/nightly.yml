@@ -1,0 +1,43 @@
+name: Scheduled compatibility
+
+# Custom integrations historically break when a Home Assistant core release
+# changes an API underneath them. This scheduled run tests the integration
+# against the current stable, beta, and dev channels every week so a breaking
+# change surfaces before users hit it.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  compat:
+    name: HA ${{ matrix.channel }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.channel == 'dev' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [stable, beta, dev]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements_test.txt
+      - name: Upgrade Home Assistant to the ${{ matrix.channel }} channel
+        # The pinned pytest-homeassistant-custom-component release carries its
+        # matching homeassistant version; upgrading it tracks the newest stable
+        # core. The beta/dev channels then force core past the plugin's pin —
+        # a deliberate mismatch that trades install cleanliness for an early
+        # look at the next release.
+        run: |
+          case "${{ matrix.channel }}" in
+            stable) pip install --upgrade pytest-homeassistant-custom-component ;;
+            beta)   pip install --upgrade pytest-homeassistant-custom-component &&
+                    pip install --upgrade --pre homeassistant ;;
+            dev)    pip install --upgrade pytest-homeassistant-custom-component &&
+                    pip install --upgrade "git+https://github.com/home-assistant/core.git@dev" ;;
+          esac
+          python -c "from homeassistant.const import __version__; print('Home Assistant', __version__)"
+      - run: pytest -q
