@@ -27,6 +27,7 @@ misread by ``total_increasing`` long-term statistics as a meter reset.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
@@ -613,8 +614,10 @@ def _setting_float(document: DeviceSettingsDocument | None, name: str) -> float 
     """Return a settings-document value coerced to ``float``, else ``None``.
 
     ``current_value`` arrives as a string for select settings (``"25.7"``); a
-    missing document, absent setting, boolean, or non-numeric string all
-    collapse to ``None`` so callers fall through to their raw-property source.
+    missing document, absent setting, boolean, non-numeric string, or
+    non-finite number (``json.loads`` accepts bare ``NaN``/``Infinity``
+    literals, and ``int()`` on them raises) all collapse to ``None`` so
+    callers fall through to their raw-property source.
     """
     if document is None:
         return None
@@ -625,9 +628,10 @@ def _setting_float(document: DeviceSettingsDocument | None, name: str) -> float 
     if value is None or isinstance(value, bool):
         return None
     try:
-        return float(value)
+        result = float(value)
     except ValueError:
         return None
+    return result if math.isfinite(result) else None
 
 
 def _inlet_hardness_dh(
@@ -635,14 +639,15 @@ def _inlet_hardness_dh(
 ) -> tuple[float, str] | None:
     """Return the inlet hardness in °dH and which source supplied it.
 
-    Both sources are gpg-denominated; non-positive or missing values fall
-    through, so a device that reports neither yields ``None``.
+    Both sources are gpg-denominated; non-positive, non-finite, or missing
+    values fall through, so a device that reports neither yields ``None`` —
+    and a malformed ``Infinity`` payload can never reach a state attribute.
     """
     gpg = _setting_float(document, "inlet_hardness")
     if gpg is not None and gpg > 0:
         return gpg * salt.GPG_TO_DH, _HARDNESS_SOURCE_SETTING
     gpg = _prop_number(device, "hardness_grains")
-    if gpg is not None and gpg > 0:
+    if gpg is not None and math.isfinite(gpg) and gpg > 0:
         return gpg * salt.GPG_TO_DH, _HARDNESS_SOURCE_PROPERTY
     return None
 
@@ -656,7 +661,7 @@ def _salt_type(device: Device, document: DeviceSettingsDocument | None) -> str |
     document's ``salt_type``; unknown enum values yield ``None``.
     """
     enum_value = _prop_number(device, "salt_type_enum")
-    if enum_value is not None:
+    if enum_value is not None and math.isfinite(enum_value):
         name = _SALT_TYPE_NAMES.get(int(enum_value))
         if name is not None:
             return name
