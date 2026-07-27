@@ -1517,7 +1517,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '179504.22679728',
+    'state': '179727.566092536',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_treated_water_available-entry]
@@ -1637,7 +1637,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '0.0',
+    'state': '11.356235352',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_wi_fi_module_firmware-entry]

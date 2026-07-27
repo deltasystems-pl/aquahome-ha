@@ -70,8 +70,9 @@ SLUG = "7384243_20203_1120"
 FROZEN_INSTANT = "2026-07-21T12:00:00+00:00"
 #: Countdown carried by the ``out_of_salt_estimate_days`` fixture property.
 OUT_OF_SALT_DAYS = 167
-#: Lifetime treated-water native gallon counter in the fixture.
-TOTAL_WATER_GALLONS = 47420
+#: Lifetime treated-water native gallon counter in the fixture — the raw
+#: ``total_outlet_water_gals`` property (the enriched copy lags it at 47420).
+TOTAL_WATER_GALLONS = 47479
 
 _ONLY_SENSOR = patch("custom_components.aquahome.PLATFORMS", [Platform.SENSOR])
 
@@ -87,14 +88,13 @@ def _load_detail() -> dict[str, Any]:
 
 
 def _set_total_water_base(detail: dict[str, Any], gallons: float) -> None:
-    """Overwrite the stable (unit_conversion == 1) total-water gallon value."""
-    converted = detail["enriched_data"]["water_treatment"]["total_water_used"]
-    for conversion in converted["conversions"]:
-        if conversion["unit_of_measure"]["conversion"] == 1:
-            conversion["value"] = gallons
-            return
-    msg = "no stable gallon conversion entry found in fixture"
-    raise AssertionError(msg)
+    """Overwrite the raw lifetime counter the total-water sensor binds.
+
+    The sensor reads the raw ``total_outlet_water_gals`` property (the enriched
+    copy lags it — live finding 2026-07-27), so the clamp scenarios manipulate
+    that property directly.
+    """
+    detail["properties"]["total_outlet_water_gals"]["value"] = gallons
 
 
 def _entity_id(hass: HomeAssistant, key: str) -> str:
@@ -170,8 +170,10 @@ async def test_native_values_and_unit_labels(
 
     Binding to the stable native unit (not the account's litre preference) is
     the fix for the unit-mislabel regression: the lifetime counter's native
-    value is 47420 gallons and Home Assistant converts that to ~179504 L for the
-    metric account, never the raw 179504 L masqueraded as gallons.
+    value is the raw 47479-gallon property and Home Assistant converts that to
+    ~179728 L for the metric account, never the raw litres masqueraded as
+    gallons. The counters read the raw properties (47479 / 3), not the lagging
+    enriched copies (47420 / 0) captured in the very same fixture.
     """
     freezer.move_to(FROZEN_INSTANT)
     add_device_routes(mock_api)
@@ -180,14 +182,14 @@ async def test_native_values_and_unit_labels(
 
     assert _native(hass, "total_water") == TOTAL_WATER_GALLONS
     assert _native(hass, "treated_water_available") == 185
-    assert _native(hass, "water_used_today") == 0
+    assert _native(hass, "water_used_today") == 3
     assert _native(hass, "salt_level") == 37.5
     assert _native(hass, "average_daily_water_use") == 47
 
     total_state = hass.states.get(_entity_id(hass, "total_water"))
     assert total_state is not None
     assert total_state.attributes[ATTR_UNIT_OF_MEASUREMENT] == UnitOfVolume.LITERS
-    assert float(total_state.state) == pytest.approx(179504.2, rel=1e-4)
+    assert float(total_state.state) == pytest.approx(179727.6, rel=1e-4)
 
     salt_state = hass.states.get(_entity_id(hass, "salt_level"))
     assert salt_state is not None
@@ -349,7 +351,7 @@ async def test_total_water_clamps_small_downward_dip(
     freezer.move_to(FROZEN_INSTANT)
     dipped = _load_detail()
     _set_total_water_base(dipped, TOTAL_WATER_GALLONS * 0.98)
-    dipped["enriched_data"]["water_treatment"]["gallons_used_today"] = 5
+    dipped["properties"]["gallons_used_today"]["value"] = 5
 
     mock_api.get(devices_url(), payload=load_fixture("devices-list.json"), repeat=True)
     mock_api.get(device_url(), payload=load_fixture("device-detail.json"))
@@ -428,7 +430,11 @@ async def test_value_sensors_unknown_when_enriched_absent(
     mock_config_entry: MockConfigEntry,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """A null enriched block yields ``unknown`` value sensors, never a crash."""
+    """A null enriched block yields ``unknown`` enriched sensors, never a crash.
+
+    The water counters survive on their raw-property sources; only sensors with
+    no raw twin go unknown.
+    """
     freezer.move_to(FROZEN_INSTANT)
     detail = _load_detail()
     detail["enriched_data"] = None
@@ -437,13 +443,41 @@ async def test_value_sensors_unknown_when_enriched_absent(
         await setup_integration(hass, mock_config_entry)
 
     assert mock_config_entry.state is ConfigEntryState.LOADED
-    for key in ("total_water", "treated_water_available", "water_used_today", "model"):
+    for key in ("treated_water_available", "model"):
         state = hass.states.get(_entity_id(hass, key))
         assert state is not None
         assert state.state == STATE_UNKNOWN
+
+    # The counters read raw properties, so a broken enriched block cannot
+    # blank them (the enriched copy lags the raw truth anyway).
+    assert _native(hass, "total_water") == TOTAL_WATER_GALLONS
+    assert _native(hass, "water_used_today") == 3
 
     # A device-root field survives regardless of the enriched block.
     serial_state = hass.states.get(_entity_id(hass, "serial_number"))
     assert serial_state is not None
     assert serial_state.state == "7384243-20203-1120"
     assert serial_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+
+
+async def test_water_counters_fall_back_to_enriched_without_raw_properties(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Without the raw counter properties, the enriched copies still serve.
+
+    The lagging-but-present enriched values (47420 / 0 in the fixture) are the
+    honest fallback for a payload variant that omits the properties map.
+    """
+    freezer.move_to(FROZEN_INSTANT)
+    detail = _load_detail()
+    del detail["properties"]["total_outlet_water_gals"]
+    del detail["properties"]["gallons_used_today"]
+    add_device_routes(mock_api, device_detail=detail)
+    with _ONLY_SENSOR:
+        await setup_integration(hass, mock_config_entry)
+
+    assert _native(hass, "total_water") == 47420
+    assert _native(hass, "water_used_today") == 0

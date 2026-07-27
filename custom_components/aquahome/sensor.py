@@ -219,7 +219,17 @@ def _salt_level(device: Device) -> StateType:
 
 
 def _water_used_today(device: Device) -> StateType:
-    """Return today's water use in gallons (the enriched, always-gallons field)."""
+    """Return today's water use in native gallons, raw property first.
+
+    The raw ``gallons_used_today`` property tracks the device's own pushes,
+    while the curated ``enriched_data`` copy is served from a server-side
+    computation that lags it badly — observed live (2026-07-27) frozen at 0
+    all morning while the raw property (and the vendor app) read 10 gal. The
+    enriched field remains only as a fallback for payloads without properties.
+    """
+    raw = _prop_number(device, "gallons_used_today")
+    if raw is not None:
+        return raw
     enriched = _enriched(device)
     return enriched.gallons_used_today if enriched is not None else None
 
@@ -233,7 +243,17 @@ def _treated_water_available(device: Device) -> StateType:
 
 
 def _total_water(device: Device) -> StateType:
-    """Return the lifetime treated-water total in stable native gallons."""
+    """Return the lifetime treated-water total in stable native gallons.
+
+    Reads the raw ``total_outlet_water_gals`` counter first: the enriched
+    ``total_water_used`` copy lags it by days of usage (observed live
+    2026-07-27: enriched 47,637 gal vs raw 47,695 gal) because the curated
+    block is recomputed server-side on its own schedule. The enriched
+    fixed-gallons conversion remains as a fallback only.
+    """
+    raw = _prop_number(device, "total_outlet_water_gals")
+    if raw is not None:
+        return raw
     enriched = _enriched(device)
     if enriched is None or enriched.total_water_used is None:
         return None
