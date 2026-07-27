@@ -422,7 +422,16 @@ def _total_salt_used(device: Device) -> StateType:
 
 
 def _total_rock_removed(device: Device) -> StateType:
-    """Return the lifetime hardness (rock) removed in pounds."""
+    """Return the lifetime hardness (rock) removed in pounds.
+
+    NOT monotonic despite the "total" name: the device derives it as
+    ``total_salt_use x salt_efficiency / 7000`` (identity verified exactly on
+    two live snapshots, 2026-07-27) and the efficiency figure itself moves
+    both ways, so the value dips whenever recent efficiency drops — observed
+    live 175.4 -> 170.1 lb. The description therefore declares ``TOTAL``, not
+    ``TOTAL_INCREASING``, or every dip would register as a phantom meter
+    reset in long-term statistics.
+    """
     return _prop_number(device, "total_rock_removed_lbs")
 
 
@@ -1061,7 +1070,9 @@ SENSOR_DESCRIPTIONS: tuple[AquaHomeSensorDescription, ...] = (
         key="total_rock_removed",
         translation_key="total_rock_removed",
         device_class=SensorDeviceClass.WEIGHT,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        # TOTAL, not TOTAL_INCREASING: the counter dips when the device's
+        # efficiency figure drops — see _total_rock_removed.
+        state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfMass.POUNDS,
         value_fn=_total_rock_removed,
         exists_fn=_exists_property("total_rock_removed_lbs"),
