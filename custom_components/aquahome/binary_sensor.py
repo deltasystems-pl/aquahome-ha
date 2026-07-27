@@ -35,13 +35,24 @@ low battery, tamper, and connectivity — registered under the detector's own
 sub-device via :class:`~.entity.AquaHomeLeakDetectorEntity`. The dev device pairs
 none, so none is created there; a detector that later vanishes makes its binaries
 unavailable through the base entity rather than reporting a fabricated state.
+
+The Phase-7 detection binaries are the odd family out: leak suspected, usage
+anomaly and vacation detected are not payload flags at all but verdicts the
+analytics engine derives from the imported long-term statistics series (see
+:mod:`.analytics`). Nothing gates their existence — the engine runs for every
+device, so all three are created unconditionally and are not part of the dynamic
+adder. Both tri-states they inherit are rendered honestly as ``unknown``: the
+engine holds no result until its first run completes (the platform is set up
+before the backfill-then-analytics background task finishes), and each detector's
+own ``active`` stays ``None`` while it has nothing to assess — an empty statistics
+window must never read as "no leak".
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -63,15 +74,17 @@ from .api import (
 from .const import CAPABILITY_DEBOUNCE_POLLS, RECHARGE_STATE_OFFLINE
 from .coordinator import resolve_device_online
 from .dynamic import async_setup_dynamic_entities
-from .entity import AquaHomeEntity, AquaHomeLeakDetectorEntity
+from .entity import AquaHomeAnalyticsEntity, AquaHomeEntity, AquaHomeLeakDetectorEntity
 
 if TYPE_CHECKING:
     from collections.abc import Set as AbstractSet
+    from datetime import date
 
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity import Entity
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+    from .analytics.model import AnalyticsResult
     from .coordinator import AquaHomeConfigEntry, AquaHomeCoordinator
 
 # Read-only coordinator platform: entity updates never do their own I/O, so
@@ -446,6 +459,139 @@ LEAK_BINARY_SENSORS: tuple[AquaHomeLeakBinarySensorDescription, ...] = (
 
 
 # ---------------------------------------------------------------------------
+# Analytics detection binaries (engine-backed)
+# ---------------------------------------------------------------------------
+
+
+def _rounded(value: float | None) -> float | None:
+    """Round a float attribute to one decimal, preserving ``None``.
+
+    The analytics tier computes in full precision; the attributes only have to
+    be readable, and unrounded binary floats would churn the state machine on
+    every recompute.
+    """
+    return None if value is None else round(value, 1)
+
+
+def _iso_date(value: date | None) -> str | None:
+    """Render a local calendar date as an ISO-8601 string, preserving ``None``.
+
+    Attributes must survive the JSON round-trip of the state machine and the
+    REST API, which a :class:`~datetime.date` object does not.
+    """
+    return None if value is None else value.isoformat()
+
+
+def _leak_active(result: AnalyticsResult) -> bool | None:
+    """Return the leak verdict, ``None`` while there is nothing to assess."""
+    return result.leak.active
+
+
+def _leak_attributes(result: AnalyticsResult) -> dict[str, Any]:
+    """Return the evidence behind the leak verdict.
+
+    ``masking_coverage`` is part of the evidence on purpose: without
+    regeneration history covering the assessed window no LEAK verdict is ever
+    issued, so a permanently-off binary is explained by this attribute rather
+    than looking like a broken detector.
+    """
+    leak = result.leak
+    return {
+        "consecutive_nights": leak.consecutive_nights,
+        "rate_liters_per_hour": _rounded(leak.rate_liters_per_hour),
+        "implied_liters_per_day": _rounded(leak.implied_liters_per_day),
+        "tier": leak.tier,
+        "last_verdict_night": _iso_date(leak.last_verdict_night),
+        "persistent_flow": leak.persistent_flow,
+        "masking_coverage": leak.masking_coverage,
+    }
+
+
+def _anomaly_active(result: AnalyticsResult) -> bool | None:
+    """Return the usage-anomaly verdict, ``None`` while nothing is assessable."""
+    return result.anomaly.active
+
+
+def _anomaly_attributes(result: AnalyticsResult) -> dict[str, Any]:
+    """Return the reasons behind the anomaly verdict and the day that drove it.
+
+    The day fields stay present but ``None`` when no daily expectation could be
+    resolved (stale device slots, too little learned history): the anomaly may
+    then rest on the point or drift reasons alone, and a disappearing attribute
+    would break templates written against the populated case.
+    """
+    anomaly = result.anomaly
+    day = anomaly.day
+    return {
+        "reasons": list(anomaly.reasons),
+        "day": _iso_date(day.day) if day is not None else None,
+        "actual_liters": _rounded(day.total_liters) if day is not None else None,
+        "expected_liters": _rounded(day.expected_liters) if day is not None else None,
+        "ratio": round(day.ratio, 2)
+        if day is not None and day.ratio is not None
+        else None,
+        "ratio_bucket": day.bucket if day is not None else None,
+        "point_hours": anomaly.point_hours,
+        "drift_alarm": anomaly.drift_alarm,
+        "drift_cusum": anomaly.drift_cusum,
+        "drift_ewma": anomaly.drift_ewma,
+    }
+
+
+def _vacation_active(result: AnalyticsResult) -> bool | None:
+    """Return the vacation verdict, ``None`` while no day is assessable."""
+    return result.vacation.active
+
+
+def _vacation_attributes(result: AnalyticsResult) -> dict[str, Any]:
+    """Return how long the low-usage streak has run and when it started."""
+    vacation = result.vacation
+    return {
+        "consecutive_days": vacation.consecutive_days,
+        "since": _iso_date(vacation.since),
+    }
+
+
+@dataclass(frozen=True, kw_only=True)
+class AquaHomeAnalyticsBinaryDescription(BinarySensorEntityDescription):
+    """Describe one analytics binary and how to render it from a result.
+
+    ``value_fn`` maps a completed :class:`~.analytics.model.AnalyticsResult` to
+    the detector's tri-state verdict; ``attributes_fn`` — when set — supplies the
+    supporting evidence. Neither ever sees a ``None`` result: the entity handles
+    the pre-first-run case itself.
+    """
+
+    value_fn: Callable[[AnalyticsResult], bool | None]
+    attributes_fn: Callable[[AnalyticsResult], dict[str, Any]] | None = None
+
+
+ANALYTICS_BINARY_SENSORS: tuple[AquaHomeAnalyticsBinaryDescription, ...] = (
+    AquaHomeAnalyticsBinaryDescription(
+        key="leak_suspected",
+        translation_key="leak_suspected",
+        device_class=BinarySensorDeviceClass.MOISTURE,
+        value_fn=_leak_active,
+        attributes_fn=_leak_attributes,
+    ),
+    AquaHomeAnalyticsBinaryDescription(
+        key="usage_anomaly",
+        translation_key="usage_anomaly",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_fn=_anomaly_active,
+        attributes_fn=_anomaly_attributes,
+    ),
+    AquaHomeAnalyticsBinaryDescription(
+        key="vacation_detected",
+        translation_key="vacation_detected",
+        icon="mdi:beach",
+        value_fn=_vacation_active,
+        attributes_fn=_vacation_attributes,
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
 # Entity and platform setup
 # ---------------------------------------------------------------------------
 
@@ -474,6 +620,37 @@ class AquaHomeLeakBinarySensor(AquaHomeLeakDetectorEntity, BinarySensorEntity):
         if detector is None or detector.status is None:
             return None
         return self.entity_description.value_fn(detector.status)
+
+
+class AquaHomeAnalyticsBinarySensor(AquaHomeAnalyticsEntity, BinarySensorEntity):
+    """A detection binary backed by one device's analytics engine.
+
+    The engine's result is ``None`` until its first run completes, and both
+    that case and a detector's own ``None`` verdict render as ``unknown``: the
+    binaries are only allowed to claim "no leak", "no anomaly" or "not on
+    vacation" once the statistics window actually supports the claim.
+    """
+
+    entity_description: AquaHomeAnalyticsBinaryDescription
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the detector's verdict, or ``None`` when it has none yet."""
+        result: AnalyticsResult | None = self.coordinator.data
+        if result is None:
+            return None
+        return self.entity_description.value_fn(result)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the verdict's supporting evidence, or ``None`` when unset."""
+        attributes_fn = self.entity_description.attributes_fn
+        if attributes_fn is None:
+            return None
+        result: AnalyticsResult | None = self.coordinator.data
+        if result is None:
+            return None
+        return attributes_fn(result)
 
 
 @callback
@@ -542,6 +719,21 @@ async def async_setup_entry(
     Every device's fast telemetry coordinator drives a dynamic adder: the
     feature-gated binaries and any paired leak detector's binaries materialise as
     soon as the capability signature carries them, without a reload.
+
+    The three analytics binaries are static instead — the engine runs for every
+    device, so no capability gates them — and each engine is paired with its fast
+    coordinator's device view (same device-id key) for the shared ``DeviceInfo``.
     """
-    for coordinator in entry.runtime_data.coordinators.values():
+    runtime = entry.runtime_data
+    for coordinator in runtime.coordinators.values():
         _async_add_dynamic_binaries(entry, coordinator, async_add_entities)
+    analytics_entities: list[AquaHomeAnalyticsBinarySensor] = []
+    for device_id, engine in runtime.analytics_engines.items():
+        fast = runtime.coordinators.get(device_id)
+        if fast is None:
+            continue
+        analytics_entities.extend(
+            AquaHomeAnalyticsBinarySensor(engine, description, fast.data)
+            for description in ANALYTICS_BINARY_SENSORS
+        )
+    async_add_entities(analytics_entities)
