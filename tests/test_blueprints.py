@@ -1,4 +1,4 @@
-"""Contract tests for the four bundled automation blueprints.
+"""Contract tests for the bundled automation blueprints.
 
 The blueprints in ``blueprints/automation/aquahome/`` are shipped YAML, not
 Python: nothing in the test suite imports them, no platform loads them, and a
@@ -45,6 +45,7 @@ from urllib.parse import quote
 import pytest
 from homeassistant.components.blueprint.models import Blueprint
 from homeassistant.components.blueprint.schemas import BLUEPRINT_SCHEMA
+from homeassistant.const import SERVICE_TURN_OFF, SERVICE_TURN_ON, Platform
 from homeassistant.util.yaml import extract_inputs, load_yaml
 
 from custom_components.aquahome import logbook
@@ -113,10 +114,22 @@ class BlueprintCase:
         return BLUEPRINT_DIR / self.file_name
 
 
-#: The four blueprints the integration bundles, with the integration surface
-#: each one is required to drive. The event types and action names come from the
+#: The live-view blueprint, named separately because it is checked once more on
+#: its own below: it is the only bundled blueprint whose entire job is to hold a
+#: switch on, so it is also the only one that has to be pinned to releasing it.
+LIVE_DASHBOARD_CASE: Final = BlueprintCase(
+    file_name="live_dashboard.yaml",
+    name="AquaHome live dashboard view",
+    event_types=frozenset(),
+    services=frozenset(),
+)
+
+#: The blueprints the integration bundles, with the integration surface each one
+#: is required to drive. The event types and action names come from the
 #: integration's constants, so a rename in production fails these tests instead
-#: of quietly orphaning a blueprint.
+#: of quietly orphaning a blueprint. A blueprint that drives entities only —
+#: ``live_dashboard.yaml`` flips a switch and listens to no integration event —
+#: declares both sets empty, which pins it as exactly that.
 BLUEPRINT_CASES: Final[tuple[BlueprintCase, ...]] = (
     BlueprintCase(
         file_name="leak_alert.yaml",
@@ -148,6 +161,7 @@ BLUEPRINT_CASES: Final[tuple[BlueprintCase, ...]] = (
         event_types=frozenset({EVENT_TYPE_USAGE_ANOMALY}),
         services=frozenset(),
     ),
+    LIVE_DASHBOARD_CASE,
 )
 
 
@@ -421,6 +435,25 @@ def test_blueprint_selectors_target_integration_platforms(
     assert _integration_selector_count(data) >= 1
     for selector_domain in _integration_selector_domains(data):
         assert selector_domain in PLATFORM_DOMAINS, selector_domain
+
+
+def test_live_dashboard_blueprint_releases_the_switch_it_holds() -> None:
+    """The live-view blueprint switches its target both on and off.
+
+    Holding the live view on costs a cloud session out of the device's daily
+    live budget, so a blueprint that only ever turned the switch on would spend
+    that budget on an empty room until the switch's own 30-minute cap expired.
+    The pair of calls is the whole point of the file and is pinned here rather
+    than left to the generic "is this a domain we own" check.
+    """
+    data = _load(LIVE_DASHBOARD_CASE)
+
+    switch_calls = {
+        service
+        for call_domain, service in _service_calls(data)
+        if call_domain == Platform.SWITCH
+    }
+    assert switch_calls == {SERVICE_TURN_ON, SERVICE_TURN_OFF}
 
 
 # ---------------------------------------------------------------------------

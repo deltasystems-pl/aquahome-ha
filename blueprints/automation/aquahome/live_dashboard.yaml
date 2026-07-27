@@ -1,0 +1,123 @@
+blueprint:
+  name: AquaHome live dashboard view
+  description: >-
+    Stream the softener's readings live while somebody is actually looking at
+    them, and stop as soon as nobody is.
+
+
+    The softener's *Live view* switch holds a live session open to the iQua
+    cloud. While it runs, water flow and the water counters arrive within
+    seconds of the tap opening instead of waiting for the next poll. This
+    automation presses that switch for you: on while an indicator entity says
+    the Home Assistant app is open in front of you, off again once it is not.
+
+
+    Nothing here can run away with your cloud quota. A live session covers only
+    a few minutes at a time and the switch renews it on its own, but it turns
+    itself off after 30 minutes regardless, and every session is drawn from the
+    device's daily live-session budget with an enforced minimum gap between
+    sessions (the *Live sessions per day* and *Live session minimum gap*
+    numbers). A mistyped indicator can therefore spend part of the day's budget
+    — it cannot hammer the API.
+
+
+    Point **App-open indicator** at anything that means "a dashboard is on
+    screen": the Companion app's last-used-app sensor on Android, a wall
+    tablet's screen or motion `binary_sensor`, or an `input_boolean` you flip
+    from a dashboard button. Then list the states that count as open under
+    **Open states**. `on` and `true` always count, so a binary sensor or a
+    toggle works with the defaults untouched. iOS has no current-app sensor —
+    use a screen sensor or an `input_boolean` there.
+  domain: automation
+  homeassistant:
+    min_version: "2026.2.0"
+  input:
+    live_view_switch:
+      name: Live view switch
+      description: >-
+        The softener's *Live view* switch. It is switched on while the indicator
+        reports the app is open, and off again afterwards.
+      selector:
+        entity:
+          filter:
+            - domain: switch
+              integration: aquahome
+    app_indicator:
+      name: App-open indicator
+      description: >-
+        The entity that reports whether the Home Assistant app is open — the
+        Companion app's last-used-app sensor, a screen or presence
+        `binary_sensor`, or an `input_boolean`. Deliberately unrestricted: any
+        entity whose state can be matched against a list will do.
+      selector:
+        entity:
+    open_states:
+      name: Open states
+      description: >-
+        Comma-separated states that mean the app is open, matched against the
+        indicator's state ignoring case and surrounding spaces. The Companion
+        app reports either the application's name or its package id depending on
+        the phone, so listing both — `Home Assistant,
+        io.homeassistant.companion.android` — is a safe setting. `on` and `true`
+        always count as open on top of whatever is listed here. Every other
+        state, `unavailable` and `unknown` included, counts as closed.
+      default: Home Assistant
+      selector:
+        text:
+    close_delay:
+      name: Keep streaming for
+      description: >-
+        How long the app has to stay closed before the live view is switched
+        off. Zero stops at once; a minute or two rides out short trips to
+        another app, at the cost of streaming a little longer than needed.
+      default:
+        hours: 0
+        minutes: 0
+        seconds: 0
+      selector:
+        duration:
+# Restart is what turns the delay below into a "closed for long enough" test:
+# every fresh indicator state cancels the run in progress, so a pending switch-
+# off is abandoned the moment the app comes back to the foreground.
+mode: restart
+variables:
+  open_states_raw: !input open_states
+  # The configured states, trimmed and lower-cased, plus the two literals a
+  # binary sensor or a toggle reports — those are appended unconditionally so
+  # that such an indicator needs no configuration at all.
+  open_states: >-
+    {{ ((open_states_raw | default('', true)) | string).split(',') | map('trim')
+       | reject('eq', '') | map('lower') | list + ['on', 'true'] }}
+  app_open: >-
+    {{ trigger.to_state is not none
+       and (trigger.to_state.state | lower) in open_states }}
+triggers:
+  # `to: null` means "any change of the state value". Without it the trigger
+  # would also fire on attribute-only updates, and the Companion app's app
+  # sensor rewrites its attributes constantly while a single app stays in the
+  # foreground.
+  - alias: The app-open indicator changed
+    trigger: state
+    entity_id: !input app_indicator
+    to: null
+conditions: []
+actions:
+  - choose:
+      - alias: The app is open — take live coverage
+        conditions:
+          - condition: template
+            value_template: "{{ app_open }}"
+        sequence:
+          # Turning an already-on switch on again is harmless: the switch holds
+          # one live session and renews it, so this only ever (re)starts a hold.
+          - alias: Switch the live view on
+            action: switch.turn_on
+            target:
+              entity_id: !input live_view_switch
+    default:
+      - alias: Wait out the configured grace period
+        delay: !input close_delay
+      - alias: Switch the live view off
+        action: switch.turn_off
+        target:
+          entity_id: !input live_view_switch
