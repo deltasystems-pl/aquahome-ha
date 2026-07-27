@@ -39,6 +39,10 @@ if TYPE_CHECKING:
     from .api import Alert
     from .coordinator import AquaHomeConfigEntry
 
+# Read-only coordinator platform: entity updates never do their own I/O, so
+# Home Assistant may run them unbounded (quality-scale parallel-updates rule).
+PARALLEL_UPDATES = 0
+
 #: The single alert event entity's description. ``event_types`` declares exactly
 #: the catalogued vendor types plus the catch-all; a vendor string outside this
 #: set maps to :data:`~.const.ALERT_EVENT_TYPE_OTHER` (its raw value kept in the

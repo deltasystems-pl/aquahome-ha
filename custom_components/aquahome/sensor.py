@@ -100,6 +100,10 @@ _SCHEDULED = "scheduled"
 
 _LOGGER = logging.getLogger(__name__)
 
+# Read-only coordinator platform: entity updates never do their own I/O, so
+# Home Assistant may run them unbounded (quality-scale parallel-updates rule).
+PARALLEL_UPDATES = 0
+
 #: Description key of the RestoreSensor with the clamp guard; setup dispatches on
 #: it because that one sensor needs a dedicated entity class, not the generic one.
 _TOTAL_WATER_KEY = "total_water"

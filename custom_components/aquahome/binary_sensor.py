@@ -74,6 +74,10 @@ if TYPE_CHECKING:
 
     from .coordinator import AquaHomeConfigEntry, AquaHomeCoordinator
 
+# Read-only coordinator platform: entity updates never do their own I/O, so
+# Home Assistant may run them unbounded (quality-scale parallel-updates rule).
+PARALLEL_UPDATES = 0
+
 
 # ---------------------------------------------------------------------------
 # None-safe payload accessors
