@@ -1,6 +1,6 @@
-"""Switch platform for AquaHome — boolean settings and the leak-scan control.
+"""Switch platform for AquaHome — settings, leak scan, and automation opt-ins.
 
-Two unrelated switch families live here, each on its own coordinator:
+Three unrelated switch families live here, each on its own coordinator:
 
 1. **Setting switches** — a device setting whose ``current_value`` is a JSON
    boolean (and which is neither a select nor a number). Built at runtime on the
@@ -17,27 +17,42 @@ Two unrelated switch families live here, each on its own coordinator:
    after a start/stop command that decays after
    :data:`~.const.OPTIMISTIC_STATE_TTL_SECONDS` or as soon as the cloud reports a
    real scanning state — the same timer discipline the valve uses for motion.
+
+3. **The automation switches** — the three per-device opt-ins of the automation
+   tier (vacation deferral, auto vacation, smart regeneration) on that device's
+   :class:`~.scheduler.AquaHomeRegenScheduler`. Nothing gates their existence:
+   the scheduler runs for every device, so all three are created unconditionally
+   and start OFF, which is what makes every device-affecting automation opt-in.
+   Unlike every other entity in this module they are *always available* — the
+   flags are the user's own preference, persisted in the config entry, not cloud
+   state — and every write goes through the scheduler's public API so exactly
+   one code path persists a flag and performs its device-side side effect.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .command import async_execute_command
 from .const import (
     CAPABILITY_DEBOUNCE_POLLS,
+    DEFERRAL_SOURCE_MANUAL,
     FEATURE_LEAK_DETECTOR,
     OPTIMISTIC_STATE_TTL_SECONDS,
 )
 from .dynamic import async_setup_dynamic_entities
-from .entity import AquaHomeEntity, AquaHomeSettingsEntity
+from .entity import AquaHomeEntity, AquaHomeSettingsEntity, build_device_info
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
     from collections.abc import Set as AbstractSet
     from datetime import datetime
     from typing import Any
@@ -47,11 +62,13 @@ if TYPE_CHECKING:
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
     from .api import Device, DeviceSetting, DeviceSettingsDocument
+    from .automation_state import AutomationState
     from .coordinator import (
         AquaHomeConfigEntry,
         AquaHomeCoordinator,
         AquaHomeSettingsCoordinator,
     )
+    from .scheduler import AquaHomeRegenScheduler
 
 # Writes serialize against the throttled cloud (Phase-4 contract).
 PARALLEL_UPDATES = 1
@@ -122,18 +139,167 @@ def _scanning(device: Device | None) -> bool | None:
     return enriched.leak_detectors.is_scanning
 
 
+# ---------------------------------------------------------------------------
+# Automation switches
+#
+# One description per opt-in flag: how it reads out of the published
+# AutomationState, how a change is applied through the scheduler, and what
+# bookkeeping it exposes. Everything the user can see about an automation
+# decision comes from these three attribute sets.
+# ---------------------------------------------------------------------------
+
+#: Description keys of the three automation switches (also their unique-id and
+#: translation keys).
+_VACATION_DEFERRAL_KEY = "vacation_deferral"
+_AUTO_VACATION_KEY = "auto_vacation"
+_SMART_REGENERATION_KEY = "smart_regeneration"
+
+
+def _vacation_deferral_on(state: AutomationState) -> bool:
+    """Return whether a vacation deferral is currently active."""
+    return state.vacation_deferral
+
+
+def _auto_vacation_on(state: AutomationState) -> bool:
+    """Return whether the deferral follows the vacation detector."""
+    return state.auto_vacation
+
+
+def _smart_regeneration_on(state: AutomationState) -> bool:
+    """Return whether the nightly regeneration scheduler is enabled."""
+    return state.smart_regeneration
+
+
+async def _async_set_vacation_deferral(
+    scheduler: AquaHomeRegenScheduler, enabled: bool
+) -> None:
+    """Start or end the vacation deferral as a *manual* act.
+
+    Both the switch and the ``set_vacation_mode`` action land here, so a
+    deferral a person started is always recorded as manual and therefore never
+    released again by the auto-vacation follower.
+    """
+    await scheduler.async_set_vacation_deferral(enabled, source=DEFERRAL_SOURCE_MANUAL)
+
+
+async def _async_set_auto_vacation(
+    scheduler: AquaHomeRegenScheduler, enabled: bool
+) -> None:
+    """Enable or disable following the vacation detector automatically."""
+    await scheduler.async_set_auto_vacation(enabled)
+
+
+async def _async_set_smart_regeneration(
+    scheduler: AquaHomeRegenScheduler, enabled: bool
+) -> None:
+    """Enable or disable the nightly capacity-versus-forecast scheduler."""
+    await scheduler.async_set_smart_regeneration(enabled)
+
+
+def _deferral_attributes(state: AutomationState) -> dict[str, Any]:
+    """Return who started the deferral, when, and how long it has run.
+
+    All three keys are always present — ``None`` while no deferral is active —
+    so a template written against a running deferral keeps evaluating once it
+    ends. ``days_deferred`` counts whole elapsed days, which is the same unit
+    the resin-hygiene cap (:data:`~.const.REGEN_DEFERRAL_MAX_DAYS`) is measured
+    in, so the attribute says how close the deferral is to letting a
+    regeneration through.
+    """
+    started = state.deferral_started
+    return {
+        "deferral_source": state.deferral_source,
+        "deferral_started": started.isoformat() if started is not None else None,
+        "days_deferred": (
+            (dt_util.utcnow() - dt_util.as_utc(started)).days
+            if started is not None
+            else None
+        ),
+    }
+
+
+def _decision_attributes(state: AutomationState) -> dict[str, Any]:
+    """Return the scheduler's latest verdict and when it was taken.
+
+    The scheduler records a verdict on every analytics pass — an action or one
+    of its ``skipped_*`` literals — so a night that passed without a
+    regeneration always explains itself here rather than in the debug log.
+    Both keys stay present and read ``None`` until the first pass runs.
+    """
+    decided_at = state.last_decision_at
+    return {
+        "last_decision": state.last_decision,
+        "last_decision_at": (
+            decided_at.isoformat() if decided_at is not None else None
+        ),
+    }
+
+
+@dataclass(frozen=True, kw_only=True)
+class AquaHomeAutomationSwitchDescription(SwitchEntityDescription):
+    """Describe one automation switch: how it reads and how it writes.
+
+    ``value_fn`` picks the flag out of the scheduler's published
+    :class:`~.automation_state.AutomationState`; ``set_fn`` applies a change
+    through the scheduler's public API (never by writing the options directly,
+    so a flag with a device-side side effect always performs it); and
+    ``attributes_fn`` — when set — exposes the bookkeeping behind the flag.
+    """
+
+    value_fn: Callable[[AutomationState], bool]
+    set_fn: Callable[[AquaHomeRegenScheduler, bool], Coroutine[Any, Any, None]]
+    attributes_fn: Callable[[AutomationState], dict[str, Any]] | None = None
+
+
+#: The three per-device automation opt-ins, all default-off. Only the deferral
+#: is a primary control (it is the one a user reaches for when leaving); the
+#: other two configure how the automation behaves and are categorised as such.
+AUTOMATION_SWITCHES: tuple[AquaHomeAutomationSwitchDescription, ...] = (
+    AquaHomeAutomationSwitchDescription(
+        key=_VACATION_DEFERRAL_KEY,
+        translation_key=_VACATION_DEFERRAL_KEY,
+        icon="mdi:calendar-remove",
+        entity_registry_enabled_default=True,
+        value_fn=_vacation_deferral_on,
+        set_fn=_async_set_vacation_deferral,
+        attributes_fn=_deferral_attributes,
+    ),
+    AquaHomeAutomationSwitchDescription(
+        key=_AUTO_VACATION_KEY,
+        translation_key=_AUTO_VACATION_KEY,
+        icon="mdi:home-export-outline",
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=True,
+        value_fn=_auto_vacation_on,
+        set_fn=_async_set_auto_vacation,
+    ),
+    AquaHomeAutomationSwitchDescription(
+        key=_SMART_REGENERATION_KEY,
+        translation_key=_SMART_REGENERATION_KEY,
+        icon="mdi:auto-fix",
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=True,
+        value_fn=_smart_regeneration_on,
+        set_fn=_async_set_smart_regeneration,
+        attributes_fn=_decision_attributes,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: AquaHomeConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up both switch families for every device.
+    """Set up all three switch families for every device.
 
     Setting switches are wired per device on the settings coordinator (paired
     with the fast device view for the shared ``DeviceInfo``); the leak-scan
     switch is wired per device on the fast coordinator. Per-device helpers build
     the closures so each captures its own coordinator rather than the last loop
-    iteration's.
+    iteration's. The automation switches need no discovery at all — every device
+    has a scheduler — so they are added straight away, again paired with the
+    fast device view for their ``DeviceInfo``.
     """
     runtime = entry.runtime_data
     for device_id, settings_coordinator in runtime.settings_coordinators.items():
@@ -145,6 +311,13 @@ async def async_setup_entry(
         )
     for fast_coordinator in runtime.coordinators.values():
         _async_setup_leak_scan_switch(entry, fast_coordinator, async_add_entities)
+    automation_switches: list[AquaHomeAutomationSwitch] = []
+    for device_id, scheduler in runtime.schedulers.items():
+        fast = runtime.coordinators.get(device_id)
+        if fast is None:
+            continue
+        automation_switches.extend(_automation_switches(scheduler, fast.data))
+    async_add_entities(automation_switches)
 
 
 @callback
@@ -230,6 +403,26 @@ def _async_setup_leak_scan_switch(
         create=_create,
         debounce_polls=CAPABILITY_DEBOUNCE_POLLS,
     )
+
+
+def _automation_switches(
+    scheduler: AquaHomeRegenScheduler, device: Device
+) -> list[AquaHomeAutomationSwitch]:
+    """Build one device's three automation switches.
+
+    The vacation-deferral switch gets its own class because the
+    ``set_vacation_mode`` action identifies its target by class; the other two
+    need no behaviour beyond their description.
+    """
+    entities: list[AquaHomeAutomationSwitch] = []
+    for description in AUTOMATION_SWITCHES:
+        entity_class = (
+            AquaHomeVacationDeferralSwitch
+            if description.key == _VACATION_DEFERRAL_KEY
+            else AquaHomeAutomationSwitch
+        )
+        entities.append(entity_class(scheduler, description, device))
+    return entities
 
 
 class AquaHomeSettingSwitch(AquaHomeSettingsEntity, SwitchEntity):
@@ -342,3 +535,88 @@ class AquaHomeLeakScanSwitch(AquaHomeEntity, SwitchEntity):
         if self._unsub_optimistic is not None:
             self._unsub_optimistic()
             self._unsub_optimistic = None
+
+
+class AquaHomeAutomationSwitch(
+    CoordinatorEntity["AquaHomeRegenScheduler"], SwitchEntity
+):
+    """One opt-in automation flag on a device's regeneration scheduler.
+
+    The switch is a view onto the scheduler's
+    :class:`~.automation_state.AutomationState`: turning it on or off calls the
+    scheduler's public setter, which persists the flag into the config entry's
+    options and republishes the state, and the entity re-renders from that
+    published state like any other coordinator entity. Nothing is written here
+    directly, so a flag set by the switch, by an action, or by a confirmed
+    repair suggestion behaves identically.
+    """
+
+    _attr_has_entity_name = True
+    entity_description: AquaHomeAutomationSwitchDescription
+
+    def __init__(
+        self,
+        coordinator: AquaHomeRegenScheduler,
+        description: AquaHomeAutomationSwitchDescription,
+        device: Device,
+    ) -> None:
+        """Bind the switch to its scheduler, description, and device view.
+
+        ``device`` is the paired fast coordinator's device view, used only to
+        build the shared :class:`~homeassistant.helpers.device_registry.DeviceInfo`
+        so the switch attaches to the same device as the telemetry entities.
+        """
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{coordinator.device_slug}_{description.key}"
+        self._attr_device_info = build_device_info(device)
+
+    @property
+    def available(self) -> bool:
+        """Return ``True`` unconditionally — an opt-in is local, not cloud state.
+
+        Every other entity in this integration is gated on the cloud poll (and
+        most on the device being online) because they render what the device
+        reports. These three render what the *user asked for*, held in the
+        config entry's options, so they must stay operable while the cloud is
+        unreachable or the softener is offline — an outage must never strand an
+        automation the owner wants to switch off.
+        """
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        """Return the flag's current value from the published automation state."""
+        return self.entity_description.value_fn(self.coordinator.state)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the bookkeeping behind the flag, or ``None`` when it has none."""
+        attributes_fn = self.entity_description.attributes_fn
+        if attributes_fn is None:
+            return None
+        return attributes_fn(self.coordinator.state)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable the automation this switch opts into."""
+        await self.entity_description.set_fn(self.coordinator, True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable the automation this switch opts into."""
+        await self.entity_description.set_fn(self.coordinator, False)
+
+
+class AquaHomeVacationDeferralSwitch(AquaHomeAutomationSwitch):
+    """The vacation-deferral switch, and the ``set_vacation_mode`` target.
+
+    The action layer identifies its target by this class, so a call aimed at
+    any other switch is rejected with a translated error rather than silently
+    doing nothing. :meth:`async_set_vacation_mode` is deliberately the same
+    call the switch itself makes: an action, a blueprint, and a tap on the
+    switch all record a *manual* deferral, which the auto-vacation follower is
+    then not allowed to release on the household's behalf.
+    """
+
+    async def async_set_vacation_mode(self, vacation: bool) -> None:
+        """Start or end the vacation deferral on the user's behalf."""
+        await _async_set_vacation_deferral(self.coordinator, vacation)
