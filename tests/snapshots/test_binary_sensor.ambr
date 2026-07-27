@@ -149,6 +149,63 @@
     'state': 'off',
   })
 # ---
+# name: test_all_binary_sensors_snapshot[binary_sensor.dom_leak_suspected-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': None,
+    'entity_id': 'binary_sensor.dom_leak_suspected',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Leak suspected',
+    'options': dict({
+    }),
+    'original_device_class': <BinarySensorDeviceClass.MOISTURE: 'moisture'>,
+    'original_icon': None,
+    'original_name': 'Leak suspected',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'leak_suspected',
+    'unique_id': '7384243_20203_1120_leak_suspected',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_all_binary_sensors_snapshot[binary_sensor.dom_leak_suspected-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'consecutive_nights': 0,
+      'device_class': 'moisture',
+      'friendly_name': 'Dom Leak suspected',
+      'implied_liters_per_day': None,
+      'last_verdict_night': None,
+      'masking_coverage': True,
+      'persistent_flow': False,
+      'rate_liters_per_hour': None,
+      'tier': None,
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.dom_leak_suspected',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---
 # name: test_all_binary_sensors_snapshot[binary_sensor.dom_online-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
@@ -446,6 +503,119 @@
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
+  })
+# ---
+# name: test_all_binary_sensors_snapshot[binary_sensor.dom_usage_anomaly-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': None,
+    'entity_id': 'binary_sensor.dom_usage_anomaly',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Usage anomaly',
+    'options': dict({
+    }),
+    'original_device_class': <BinarySensorDeviceClass.PROBLEM: 'problem'>,
+    'original_icon': None,
+    'original_name': 'Usage anomaly',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'usage_anomaly',
+    'unique_id': '7384243_20203_1120_usage_anomaly',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_all_binary_sensors_snapshot[binary_sensor.dom_usage_anomaly-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'actual_liters': None,
+      'day': None,
+      'device_class': 'problem',
+      'drift_alarm': False,
+      'drift_cusum': False,
+      'drift_ewma': False,
+      'expected_liters': None,
+      'friendly_name': 'Dom Usage anomaly',
+      'point_hours': 0,
+      'ratio': None,
+      'ratio_bucket': None,
+      'reasons': list([
+      ]),
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.dom_usage_anomaly',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---
+# name: test_all_binary_sensors_snapshot[binary_sensor.dom_vacation_detected-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'binary_sensor',
+    'entity_category': None,
+    'entity_id': 'binary_sensor.dom_vacation_detected',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Vacation detected',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': 'mdi:beach',
+    'original_name': 'Vacation detected',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'vacation_detected',
+    'unique_id': '7384243_20203_1120_vacation_detected',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_all_binary_sensors_snapshot[binary_sensor.dom_vacation_detected-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'consecutive_days': 0,
+      'friendly_name': 'Dom Vacation detected',
+      'icon': 'mdi:beach',
+      'since': None,
+    }),
+    'context': <ANY>,
+    'entity_id': 'binary_sensor.dom_vacation_detected',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
   })
 # ---
 # name: test_all_binary_sensors_snapshot[binary_sensor.dom_vacation_mode-entry]

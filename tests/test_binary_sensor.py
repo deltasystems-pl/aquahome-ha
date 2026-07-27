@@ -64,9 +64,17 @@ if TYPE_CHECKING:
 #: Slug of the captured device's serial ``7384243-20203-1120`` (see contract).
 SLUG = "7384243_20203_1120"
 
-#: The binaries created on the dev fixture: online, the six plain alerts, and
-#: the four recharge-state binaries (wsov_closed stays feature-gated out).
+#: Instant the snapshot test freezes to, matching the sensor suite: inside
+#: the fixtures' capture window so the analytics attributes are stable.
+FROZEN_INSTANT = "2026-07-21T12:00:00+00:00"
+
+#: The binaries created on the dev fixture: the three analytics detections,
+#: online, the six plain alerts, and the four recharge-state binaries
+#: (wsov_closed stays feature-gated out).
 EXPECTED_KEYS = (
+    "leak_suspected",
+    "usage_anomaly",
+    "vacation_detected",
     "online",
     "salt_level_alert",
     "error_code_alert",
@@ -133,17 +141,26 @@ def _created_keys(entity_registry: er.EntityRegistry, entry_id: str) -> list[str
 # ---------------------------------------------------------------------------
 
 
-async def test_all_binary_sensors_snapshot(
+async def test_all_binary_sensors_snapshot(  # noqa: PLR0913 - standard HA snapshot-test fixture set
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_api: aioresponses,
     entity_registry: er.EntityRegistry,
     snapshot: SnapshotAssertion,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
-    """Every binary created on the dev fixture matches its registry+state snapshot."""
+    """Every binary created on the dev fixture matches its registry+state snapshot.
+
+    The clock is frozen and the startup background pipeline (statistics
+    backfill, then the analytics engine's first pass) is settled before
+    snapshotting: the analytics binaries' attributes exist only once the engine
+    has run, so an unsettled pipeline would make the snapshot a race.
+    """
+    freezer.move_to(FROZEN_INSTANT)
     add_device_routes(mock_api)
 
     assert await setup_integration(hass, mock_config_entry)
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     await snapshot_platform(hass, entity_registry, snapshot, mock_config_entry.entry_id)
 
@@ -354,6 +371,9 @@ async def test_missing_status_block_drops_alert_binaries(
 
     assert _created_keys(entity_registry, mock_config_entry.entry_id) == sorted(
         [
+            "leak_suspected",
+            "usage_anomaly",
+            "vacation_detected",
             "online",
             "regenerating",
             "vacation_mode",

@@ -95,9 +95,12 @@ NUMBER_NAME = "brine_dose"
 #   event          1 alert event, unchanged
 # ---------------------------------------------------------------------------
 # The Phase-3 sensor set of 30 plus the five Phase-6 salt sensors (daily
-# usage, days remaining, depletion timestamp, per-regeneration, efficiency).
-_DEV_SENSORS = 35
-_DEV_BINARY_SENSORS = 11
+# usage, days remaining, depletion timestamp, per-regeneration, efficiency)
+# plus the two Phase-7 analytics sensors (usage forecast, night flow).
+_DEV_SENSORS = 37
+# The Phase-2/3 set of 11 plus the three Phase-7 detection binaries
+# (leak suspected, usage anomaly, vacation detected).
+_DEV_BINARY_SENSORS = 14
 _DEV_BUTTONS = 6
 _DEV_SELECTS = 15
 

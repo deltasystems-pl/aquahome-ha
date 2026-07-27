@@ -25,6 +25,7 @@ exception); and a syrupy snapshot of the whole leak entity set.
 from __future__ import annotations
 
 import copy
+import re
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
@@ -183,10 +184,11 @@ def _native(
 def _leak_unique_ids(entity_registry: er.EntityRegistry, entry_id: str) -> list[str]:
     """Return the sorted unique ids of every leak-scoped entity for the entry."""
     entries = er.async_entries_for_config_entry(entity_registry, entry_id)
+    # Leak-detector ids embed the numeric detector id ({slug}_leak_<n>_<key>),
+    # which keeps the Phase-7 analytics binary {slug}_leak_suspected out.
+    pattern = re.compile(rf"^{re.escape(SLUG)}_leak_\d+_")
     return sorted(
-        entry.unique_id
-        for entry in entries
-        if entry.unique_id.startswith(f"{SLUG}_leak_")
+        entry.unique_id for entry in entries if pattern.match(entry.unique_id)
     )
 
 

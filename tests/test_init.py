@@ -18,7 +18,7 @@ def test_manifest_is_consistent() -> None:
     assert manifest["domain"] == DOMAIN
     assert MANIFEST.parent.name == DOMAIN
     assert manifest["iot_class"] == "cloud_polling"
-    assert manifest["requirements"] == []
+    assert manifest["requirements"] == ["numpy>=1.26,<3"]
     assert manifest["version"]
 
 

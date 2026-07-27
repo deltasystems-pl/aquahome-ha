@@ -142,6 +142,7 @@ async def test_all_sensor_entities(
     add_device_routes(mock_api)
     with _ONLY_SENSOR:
         await setup_integration(hass, mock_config_entry)
+        await hass.async_block_till_done(wait_background_tasks=True)
         registry = er.async_get(hass)
         for key in ("rf_signal_strength", "salt_depletion_estimate"):
             entity_id = _entity_id(hass, key)

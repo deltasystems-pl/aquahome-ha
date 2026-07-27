@@ -51,8 +51,8 @@ SLUG = "7384243_20203_1120"
 #: device has no valve, leak detectors, number settings, or switch settings.
 #: Sensors: the Phase-3 set of 30 plus the five Phase-6 salt sensors (daily
 #: usage, days remaining, depletion timestamp, per-regeneration, efficiency).
-EXPECTED_SENSORS = 35
-EXPECTED_BINARY_SENSORS = 11
+EXPECTED_SENSORS = 37
+EXPECTED_BINARY_SENSORS = 14
 EXPECTED_EVENTS = 1
 EXPECTED_BUTTONS = 6
 EXPECTED_SELECTS = 15
