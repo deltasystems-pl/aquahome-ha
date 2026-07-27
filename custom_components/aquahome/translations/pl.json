@@ -389,7 +389,7 @@
     },
     "unique_id_migration": {
       "title": "Identyfikatory encji AquaHome zostały zmigrowane",
-      "description": "Aktualizacja integracji zmieniła wewnętrzne identyfikatory poniższych encji. Historia została zachowana, ale jeśli któreś z nich zmieniałeś lub dostosowywałeś, sprawdź te zmiany:\n\n{renames}"
+      "description": "Aktualizacja integracji zmieniła wewnętrzne identyfikatory poniższych encji. Historia została zachowana, ale jeśli któreś z nich zostały zmienione lub dostosowane, sprawdź te zmiany:\n\n{renames}"
     },
     "leak_urgent": {
       "title": "Silny ciągły przepływ wody w urządzeniu {device}",
