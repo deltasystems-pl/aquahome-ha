@@ -54,7 +54,6 @@ from homeassistant.components.recorder.models import (
 )
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
-    clear_statistics,
     get_last_statistics,
     statistics_during_period,
 )
@@ -658,8 +657,10 @@ async def async_clear_device_statistics(
     ]
     if not statistic_ids:
         return
-    instance = get_instance(hass)
-    await instance.async_add_executor_job(clear_statistics, instance, statistic_ids)
+    # Deletion must run in the recorder's own thread (its meta manager asserts
+    # so); async_clear_statistics queues a task onto that thread, whereas the
+    # generic DB executor pool would trip the assertion and leak the series.
+    get_instance(hass).async_clear_statistics(statistic_ids)
     _LOGGER.debug("Cleared AquaHome statistics %s", ", ".join(statistic_ids))
 
 
