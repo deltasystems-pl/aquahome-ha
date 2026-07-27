@@ -28,9 +28,13 @@ that bucket — responses are always zero-filled, never empty):
 - `graph-meter-daily.json` — `period_type=day`, 2025-09-01→2026-07-27 (the full
   retention window; readings start 2025-09-14).
 - `graph-meter-hourly.json` — `period_type=hour`, 2026-07-01→2026-07-27T12:00.
-- `graph-meter-hourly-empty.json` — `period_type=hour` for 2025-10-13, a day
-  older than the hourly retention floor: all-zero rows despite daily data
-  existing there (the zero-filled "no data" shape).
+- `graph-meter-hourly-empty.json` — `period_type=hour` for 2025-10-13,
+  captured with `value_type=max_diff` on a sparse-reading day: all-zero rows
+  (the zero-filled "no readings in this window" shape the backfill's
+  walk-backward stop condition keys on). NB the live 2026-07-27 deployment
+  showed `value_type=max` readings ARE retained that far back — there is no
+  hourly retention cliff on this device; an all-zero `max` window simply means
+  the device never pushed during it.
 - `graph-usage-daily-pl.json` — `period_type=day`, `value_type=max_diff`,
   requested with `accept-language: pl`: documents that the `units` string is
   server-localized (`"Litry"`) — the PAIN#5 guard fixture.

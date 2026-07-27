@@ -18,10 +18,12 @@ costs attribution detail, never volume.
 
 A ``0`` value means "no reading in this bucket" — responses are always
 zero-filled rather than empty, and a lifetime counter is never genuinely zero —
-so zeros are dropped instead of being imported as a meter reset. Hourly readings
-are retained for roughly 130 days and daily ones for years, so every run merges
-both resolutions: a day with hourly coverage is imported hour by hour, an older
-day contributes its single daily reading at local midnight.
+so zeros are dropped instead of being imported as a meter reset. Every run
+merges both resolutions: a day with hourly coverage is imported hour by hour,
+and a day whose readings survive only in the daily series contributes its
+single daily reading at local midnight. (On the reference device hourly
+readings turned out to be retained as deep as daily ones — the merge is
+defensive design for accounts where they are not.)
 
 Runs are idempotent. Rows are keyed by their bucket start and
 :func:`~homeassistant.components.recorder.statistics.async_add_external_statistics`
