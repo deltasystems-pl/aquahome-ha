@@ -58,6 +58,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .analytics.engine import AquaHomeAnalyticsEngine
+    from .scheduler import AquaHomeRegenScheduler
     from .statistics import AquaHomeStatisticsCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ class AquaHomeRuntimeData:
     settings_coordinators: dict[str, AquaHomeSettingsCoordinator]
     statistics_coordinators: dict[str, AquaHomeStatisticsCoordinator]
     analytics_engines: dict[str, AquaHomeAnalyticsEngine]
+    schedulers: dict[str, AquaHomeRegenScheduler]
 
 
 def resolve_device_online(device: Device) -> bool:

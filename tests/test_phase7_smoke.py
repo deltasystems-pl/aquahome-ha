@@ -100,13 +100,15 @@ FROZEN_NOW: Final = datetime(2026, 7, 27, 10, 30, tzinfo=dt_util.UTC)
 
 #: Entities the captured dev fixtures create, per platform domain. The sensor and
 #: binary-sensor totals carry the analytics tier: 35 + ``usage_forecast`` +
-#: ``night_flow``, and 11 + the three detection binaries.
+#: ``night_flow``, and 11 + the three detection binaries. The switches are the
+#: three Phase-8 automation opt-ins, created for every device.
 EXPECTED_ENTITIES: Final[dict[str, int]] = {
     "sensor": 37,
     "binary_sensor": 14,
     "event": 1,
     "button": 6,
     "select": 15,
+    "switch": 3,
 }
 
 #: The five entities the analytics tier itself contributes.

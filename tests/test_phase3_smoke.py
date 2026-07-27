@@ -51,11 +51,14 @@ SLUG = "7384243_20203_1120"
 #: device has no valve, leak detectors, number settings, or switch settings.
 #: Sensors: the Phase-3 set of 30 plus the five Phase-6 salt sensors (daily
 #: usage, days remaining, depletion timestamp, per-regeneration, efficiency).
+#: Switches: the three Phase-8 automation opt-ins (vacation deferral, auto
+#: vacation, smart regeneration), created for every device.
 EXPECTED_SENSORS = 37
 EXPECTED_BINARY_SENSORS = 14
 EXPECTED_EVENTS = 1
 EXPECTED_BUTTONS = 6
 EXPECTED_SELECTS = 15
+EXPECTED_SWITCHES = 3
 
 #: The alert that "arrives" between the setup refresh and the next poll.
 FRESH_ALERT: dict[str, Any] = {
@@ -112,6 +115,7 @@ async def test_full_integration_alert_flow(
         "event": EXPECTED_EVENTS,
         "button": EXPECTED_BUTTONS,
         "select": EXPECTED_SELECTS,
+        "switch": EXPECTED_SWITCHES,
     }
 
     # Idle dev device: no regeneration in progress, countdown force-zeroed, and

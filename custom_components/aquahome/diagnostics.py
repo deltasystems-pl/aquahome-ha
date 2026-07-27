@@ -135,6 +135,8 @@ async def async_get_config_entry_diagnostics(
         activity_data = activity.data if activity is not None else None
         settings = runtime.settings_coordinators.get(device_id)
         settings_data = settings.data if settings is not None else None
+        scheduler = runtime.schedulers.get(device_id)
+        automation = scheduler.data if scheduler is not None else None
         device = coordinator.data
         devices.append(
             {
@@ -144,6 +146,9 @@ async def async_get_config_entry_diagnostics(
                 else None,
                 "settings": _settings_section(settings_data)
                 if settings_data is not None
+                else None,
+                "automation": dataclasses.asdict(automation)
+                if automation is not None
                 else None,
                 "device_online": coordinator.device_online,
                 "last_update_success": coordinator.last_update_success,

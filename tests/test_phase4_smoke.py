@@ -90,7 +90,8 @@ NUMBER_NAME = "brine_dose"
 #   button         6 dev + reset_wsov_error_code (unlocked by the wsov feature)
 #   select        15 dev (17 selects less 2 conditionally hidden), unchanged
 #   number         1 (make_number_setting)
-#   switch         leak-detector scan + 1 boolean setting switch
+#   switch         leak-detector scan + 1 boolean setting switch + the three
+#                  Phase-8 automation opt-in switches
 #   valve          1 water-shutoff valve
 #   event          1 alert event, unchanged
 # ---------------------------------------------------------------------------
@@ -110,7 +111,7 @@ EXPECTED_ENTITIES: dict[str, int] = {
     "button": _DEV_BUTTONS + 1,
     "select": _DEV_SELECTS,
     "number": 1,
-    "switch": 2,
+    "switch": 2 + 3,
     "valve": 1,
     "event": 1,
 }

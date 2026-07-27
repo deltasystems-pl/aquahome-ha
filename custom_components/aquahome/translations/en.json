@@ -345,6 +345,9 @@
     },
     "regen_not_allowed": {
       "message": "The device is not accepting this regeneration action right now"
+    },
+    "forecast_failed": {
+      "message": "Computing the usage forecast failed: {message}"
     }
   },
   "issues": {
