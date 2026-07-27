@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from pytest_homeassistant_custom_component.common import MockConfigEntry
     from syrupy.assertion import SnapshotAssertion
 
-#: Slug of the captured device's serial ``7384243-20203-1120`` (see contract).
+#: Slug of the captured device's serial ``7384243-20203-1120``.
 SLUG = "7384243_20203_1120"
 
 #: Instant the snapshot test freezes to, matching the sensor suite: inside

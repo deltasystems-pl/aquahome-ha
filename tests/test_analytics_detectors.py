@@ -23,7 +23,7 @@ and the redesigned occupancy evidence paths the vacation verdict rests on.
 Nothing here touches Home Assistant, and nothing here reads a clock: every
 ``now`` is an explicit literal handed to a pure function, so the file is
 hermetic by construction rather than by freezing. All thresholds come from
-``const``; the only bare numbers are the contract's measured ground-truth pins.
+``const``; the only bare numbers are the measured ground-truth pins.
 """
 
 from __future__ import annotations
@@ -127,7 +127,7 @@ _MCC_VACATION_START: Final = 45
 _MCC_VACATION_END: Final = 55
 #: A leak rate comfortably above the ~1 gal/h push-detection floor.
 _MCC_LEAK_LPH: Final = 6.0
-#: The MCC floor both classifiers must clear (contract exit criterion).
+#: The MCC floor both classifiers must clear (the tier's exit criterion).
 MCC_FLOOR: Final = 0.9
 
 #: An empty device slot: the synthetic households have no cloud averages, so

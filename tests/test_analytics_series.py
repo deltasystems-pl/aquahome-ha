@@ -27,8 +27,8 @@ statistics grid never aligns with the local clock and only proven zeros survive.
 
 *Replay.* The canonical merged real history from :mod:`tests.analytics_traces` —
 405 readings spanning 2025-09-13 to 2026-07-27 — with the noon-day totals,
-certain-hour counts and draw counts pinned to the numbers the Phase-7 contract
-(as amended) was frozen against. Those pins are the regression net for the whole
+certain-hour counts and draw counts pinned to the numbers measured when the
+analytics tier was frozen. Those pins are the regression net for the whole
 analytics tier: the detector suites replay the same series and reason about
 these exact values.
 """
@@ -786,7 +786,7 @@ def test_the_replayed_pushes_each_own_a_local_hour(
 def test_pinned_real_noon_day_totals(
     real_series: tuple[Reading, ...], day: date, expected: float
 ) -> None:
-    """The contract's re-pinned July totals, on the canonical merged series.
+    """The re-pinned July totals, on the canonical merged series.
 
     07-26 is 0 L rather than 27 L because the merge drops that day's daily row
     in favour of the surrounding hourly coverage; the water it carried lands in
@@ -801,7 +801,7 @@ def test_july_noon_day_statistics_of_the_real_series(
     """The robust daily statistics the detectors' bands are built from.
 
     Derived here rather than copied, because the canonical merged series moved
-    these numbers away from the raw-fixture ones the contract was first frozen
+    these numbers away from the raw-fixture ones they were first frozen
     against: 27 complete noon-days, median 159 L and a scaled MAD of about
     79 L, running from the 0 L second day away up to the 326 L peak of 07-20,
     which sits 2.1 scaled MADs above the median.

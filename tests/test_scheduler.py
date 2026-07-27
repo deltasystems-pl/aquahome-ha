@@ -15,12 +15,12 @@ What each group pins:
 
 * the **decision matrix** — every ordered ``skipped_*`` literal is reachable and
   is the *first* unmet condition, plus the as-built recharge-ready fallback
-  rules of amendment A3 (tile wins when it names a state, the ``regeneration``
-  block stands in when the tile is absent, neither block means "not ready");
+  rules (tile wins when it names a state, the ``regeneration`` block stands in
+  when the tile is absent, neither block means "not ready");
 * the **nightly schedule** — one command per device-*local* day at capacity
   below tomorrow's forecast times
   :data:`~custom_components.aquahome.const.FORECAST_RESERVE_FACTOR`, with the
-  exact event payload, the strict ``<`` at the reserve boundary, and the A3
+  exact event payload, the strict ``<`` at the reserve boundary, and the
   ordering rule that the day latch is checked *before* the capacity comparison;
 * the **deferral enforcement** — the budget-free first cancel, the three-cancel
   daily budget, and the resin-hygiene cap that announces itself once and then
@@ -257,7 +257,7 @@ def _detail(  # noqa: PLR0913 - one keyword per payload field the scheduler read
     ``load_fixture`` re-parses the JSON on every call, so each payload built
     here is an independent document and the fixture file is never mutated.
     ``tile`` / ``regeneration`` drop the corresponding enriched block entirely,
-    which is how the amendment-A3 recharge-ready fallback rules are exercised;
+    which is how the as-built recharge-ready fallback rules are exercised;
     ``capacity`` of ``None`` removes the raw property a device that does not
     report its remaining capacity would omit.
     """
@@ -561,7 +561,7 @@ async def test_decision_matrix_reports_the_first_unmet_condition(  # noqa: PLR09
     forecast: float | None,
     expected: str,
 ) -> None:
-    """Every decision literal is reachable, in the contract's reporting order.
+    """Every decision literal is reachable, in the order the scheduler reports.
 
     Each row leaves exactly one precondition unmet (later rows satisfy all the
     earlier ones), so the recorded verdict names precisely the condition the
@@ -638,7 +638,7 @@ async def test_recharge_ready_follows_the_as_built_fallback_rules(  # noqa: PLR0
     detail_kwargs: dict[str, Any],
     expected: str,
 ) -> None:
-    """Amendment A3's readiness rules decide whether a command may be sent.
+    """The as-built readiness rules decide whether a command may be sent.
 
     The ``recharge_ui`` tile is authoritative when it names a state and only its
     explicit ``ready`` counts; without the tile the ``regeneration`` block
@@ -726,7 +726,7 @@ async def test_day_latch_is_checked_before_the_capacity_comparison(
 ) -> None:
     """A second pass on a latched day reports the latch, not a recovered capacity.
 
-    Amendment A3 fixes the ordering: once a day has scheduled, every further
+    The as-built rule fixes the ordering: once a day has scheduled, every further
     pass that day records ``skipped_already_today`` even when the capacity has
     since recovered and the comparison alone would have said ``not_needed``.
     Reporting the latch is the honest answer — the decision was not re-taken.
@@ -963,9 +963,9 @@ async def test_failed_cancel_is_recorded_without_consuming_budget(
 ) -> None:
     """A rejected cancel records the failure and leaves the budget untouched.
 
-    Amendment A3: the budget caps *sent* cancels, so a command the cloud refused
-    must not eat one of the three — otherwise a flaky cloud would silently
-    disarm the deferral for the rest of the day.
+    The budget caps *sent* cancels, so a command the cloud refused must not eat
+    one of the three — otherwise a flaky cloud would silently disarm the
+    deferral for the rest of the day.
     """
     mock_api.put(command_url(), status=422, payload={"detail": "no"})
     deferred = _events(hass, EVENT_TYPE_REGEN_DEFERRED)
@@ -1064,8 +1064,8 @@ async def test_ending_a_deferral_schedules_a_catch_up_on_low_capacity(
     The device only regenerates on its own schedule, so without this the return
     home would draw hard water until the next one. The announcement carries the
     catch-up reason and the same capacity/forecast superset as the nightly
-    decision (amendment A3), and the whole path works with smart regeneration
-    switched off — it belongs to the deferral, not to the nightly scheduler.
+    decision, and the whole path works with smart regeneration switched off —
+    it belongs to the deferral, not to the nightly scheduler.
     """
     scheduled = _events(hass, EVENT_TYPE_REGEN_SCHEDULED)
     await _boot(hass, mock_config_entry, mock_api, freezer)
@@ -1102,7 +1102,7 @@ async def test_ending_a_deferral_on_ample_capacity_leaves_the_decision_untouched
 ) -> None:
     """No catch-up, no command and no invented verdict when capacity is fine.
 
-    Amendment A3 pins the silence: turning the deferral off without a catch-up
+    The as-built rule pins the silence: turning the deferral off without a catch-up
     leaves ``last_decision`` exactly as the deferral left it, rather than
     fabricating a ``not_needed`` the scheduler never took a decision to record.
     """

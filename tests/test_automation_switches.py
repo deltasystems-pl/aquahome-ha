@@ -25,7 +25,7 @@ result carrying *no* forecast, so a scheduler pass provoked by a switch write
 can never take a scheduling decision (and therefore never sends an unmocked
 command) unless a test explicitly asks for one.
 
-Attribute convention asserted throughout (contract amendment A8 style): the
+Attribute convention asserted throughout, as across the analytics tier: the
 deferral and decision attribute sets always emit *every* key, ``None`` when the
 state has no value, so a template written against a running deferral keeps
 evaluating once it ends.

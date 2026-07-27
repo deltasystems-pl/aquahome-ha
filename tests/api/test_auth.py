@@ -460,7 +460,7 @@ async def test_iqua2_base_url_is_used_for_requests(
 
 
 # ---------------------------------------------------------------------------
-# A1 — request timeout bounds the lock-holding refresh
+# Request timeout bounds the lock-holding refresh
 #
 # aioresponses ignores ClientTimeout (it replaces ClientSession._request), so a
 # real aiohttp server is used to prove the per-request timeout actually fires.
@@ -532,7 +532,7 @@ async def test_refresh_timeout_raises_connection_error(
 
 
 # ---------------------------------------------------------------------------
-# A3 — email confirmation-code login challenge
+# Email confirmation-code login challenge
 # ---------------------------------------------------------------------------
 
 
@@ -625,7 +625,7 @@ async def test_resend_confirmation_code_error_raises_auth_error(
 
 
 # ---------------------------------------------------------------------------
-# A4 — host probe (legacy myiquaapp → migrated iqua2)
+# Host probe (legacy myiquaapp → migrated iqua2)
 # ---------------------------------------------------------------------------
 
 

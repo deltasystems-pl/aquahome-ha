@@ -105,7 +105,7 @@ def _header_int(value: str | None) -> int | None:
 class AquaHomeClient:
     """Typed async client for a single iQua account's devices."""
 
-    def __init__(  # noqa: PLR0913 - contract-fixed dependency-injection signature
+    def __init__(  # noqa: PLR0913 - deliberate dependency-injection signature
         self,
         session: aiohttp.ClientSession,
         auth: AuthManager,
@@ -254,7 +254,7 @@ class AquaHomeClient:
         )
         return RegenerationEventsPage.from_dict(body)
 
-    async def async_get_datapoint_graph(  # noqa: PLR0913 - contract-fixed query signature
+    async def async_get_datapoint_graph(  # noqa: PLR0913 - deliberate query signature
         self,
         device_id: str,
         property_name: str,

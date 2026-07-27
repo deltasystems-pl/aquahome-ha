@@ -18,23 +18,23 @@ production-merge shape of the captured graphs (405 readings, 2025-09-13 →
 from the fixtures, so a regression in the grid arithmetic cannot quietly move
 the expectation along with the result.
 
-Two contract pins deserve their own note, because the merged series is not the
-hourly capture the pre-amendment contract measured (amendment A1):
+Two pinned buckets deserve their own note, because the merged series is not the
+hourly-only capture the first measurements were taken on:
 
 * The ``(Saturday, 09:00)`` bucket holds **four** samples, not three. Ten days
   of unchanged daily meter rows in October 2025 (2025-10-19 → 2025-10-29) prove
   every hour they cover carried nothing, and one of those proven zeros lands in
-  this bucket alongside the three July mornings (53 L, 8 L, 34 L) the contract
-  measured. Median 21 L, not 34 L — see ``test_real_grid_saturday_nine_bucket``.
+  this bucket alongside the three July mornings (53 L, 8 L, 34 L) the hourly
+  capture held. Median 21 L, not 34 L — see
+  ``test_real_grid_saturday_nine_bucket``.
 * ``(Tuesday, 20:00)`` holds three samples for the same reason (two proven
   zeros plus one July evening), which still leaves it short of
-  ``MIN_BUCKET_SAMPLES`` and therefore immature, exactly as the contract
-  requires of it.
+  ``MIN_BUCKET_SAMPLES`` and therefore immature.
 
 The learned statistics are taken over the trailing **28** noon-days unless a
 test says otherwise: that is the shortest window in which the reference
 household's Friday reaches ``MIN_BUCKET_SAMPLES``, and it reproduces the
-amendment's pinned ``learned_weekday`` resolution of 134.5 L / 20.0 L. The 21-
+pinned ``learned_weekday`` resolution of 134.5 L / 20.0 L. The 21-
 and 14-day windows are used deliberately to walk the chain one step further
 down on each fallback test.
 """
@@ -84,7 +84,7 @@ from tests.analytics_traces import real_readings
 WARSAW: Final = ZoneInfo("Europe/Warsaw")
 
 #: The instant every analytics pass in this file is computed at — the end of
-#: the captured window, matching the contract's measured replay (amendment A2).
+#: the captured window, the instant the replayed ground truth was measured at.
 NOW: Final = datetime(2026, 7, 27, 10, 30, tzinfo=UTC)
 
 #: Wall-clock instant a noon-day boundary is cut at.
@@ -94,7 +94,7 @@ NOON: Final = time(12)
 REAL: Final = real_readings()
 REAL_KNOWLEDGE: Final = series.hour_knowledge(REAL, WARSAW)
 
-#: Grid index of the two buckets the contract names.
+#: Grid index of the two buckets called out in the module docstring.
 SATURDAY_NINE: Final = 5 * 24 + 9
 TUESDAY_EIGHT_PM: Final = 1 * 24 + 20
 
@@ -202,11 +202,11 @@ def bucket_values(bucket: int) -> list[float]:
 def test_real_grid_saturday_nine_bucket() -> None:
     """The Saturday-morning bucket holds three July mornings and one proven zero.
 
-    The three hourly captures are the contract's 53 L / 8 L / 34 L; the fourth
-    sample is an hour inside October's ten-day flat stretch of daily meter rows,
-    which proves that hour carried nothing. Four samples, median 21 L — the
-    contract's pre-amendment ``n=3, median 34 L`` was measured on the hourly
-    capture alone, before the production merge shape was frozen (amendment A1).
+    The three hourly captures are 53 L / 8 L / 34 L; the fourth sample is an
+    hour inside October's ten-day flat stretch of daily meter rows, which proves
+    that hour carried nothing. Four samples, median 21 L — the earlier ``n=3,
+    median 34 L`` was measured on the hourly capture alone, before the
+    production merge shape was frozen.
     """
     median, scaled_mad, counts = build_grid(REAL_KNOWLEDGE)
 
@@ -226,8 +226,8 @@ def test_real_grid_saturday_nine_bucket() -> None:
 def test_real_grid_counts_every_certain_hour_exactly_once() -> None:
     """Every hour of certain knowledge lands in exactly one bucket.
 
-    438 certain hours across 46 mature buckets — the contract's measured grid
-    summary for the replayed series (amendment A2).
+    438 certain hours across 46 mature buckets — the measured grid summary for
+    the replayed series.
     """
     _median, _mad, counts = build_grid(REAL_KNOWLEDGE)
 
@@ -240,8 +240,8 @@ def test_real_grid_counts_every_certain_hour_exactly_once() -> None:
 def test_real_grid_immature_buckets_stay_below_the_gate() -> None:
     """Sparse buckets keep their statistics but never claim maturity.
 
-    The contract names ``(Tuesday, 20:00)``: two of October's proven zeros plus
-    one 42 L July evening, so a median of zero on three samples — short of
+    Take ``(Tuesday, 20:00)``: two of October's proven zeros plus one 42 L
+    July evening, so a median of zero on three samples — short of
     ``MIN_BUCKET_SAMPLES`` and therefore never usable as an expectation. 33 of
     the grid's buckets rest on a single sample alone.
     """
@@ -365,7 +365,7 @@ def test_activity_grid_matches_the_real_mature_buckets() -> None:
 
     46 mature buckets, 46 active hours, and the same 46 — the household's week
     is sparse enough that any hour it pushes four readings for is an hour it
-    genuinely uses water in (amendment A2).
+    genuinely uses water in.
     """
     median, mad, counts = build_grid(REAL_KNOWLEDGE)
 
@@ -468,9 +468,9 @@ def test_fresh_device_slot_wins_the_chain() -> None:
 def test_stale_device_slot_falls_back_to_the_learned_weekday() -> None:
     """Friday's souvenir slot is skipped for four learned Fridays.
 
-    The amendment's pinned resolution: 134.5 L with a 20.0 L spread, from the
-    trailing 28 noon-days — exactly ``MIN_BUCKET_SAMPLES`` Fridays, the point
-    at which this branch first opens.
+    The pinned resolution: 134.5 L with a 20.0 L spread, from the trailing 28
+    noon-days — exactly ``MIN_BUCKET_SAMPLES`` Fridays, the point at which this
+    branch first opens.
     """
     learned = learned_over(28)
     assert learned.count_for(FRIDAY) == MIN_BUCKET_SAMPLES
@@ -710,10 +710,10 @@ def test_learned_weekday_gate_is_exact(count: int, source: str) -> None:
 def test_forecast_for_the_day_after_the_real_capture() -> None:
     """Tuesday's forecast comes from the device's own fresh Tuesday slot.
 
-    The contract's measured replay: 35.0 gal / 132.5 L, source
-    ``device_average``, band 90.85 L, weekday ``tuesday``, one person
-    (amendment A2). The band is three scaled spreads, so it is stated in the
-    forecast rather than left for a template to reconstruct.
+    The measured replay: 35.0 gal / 132.5 L, source ``device_average``, band
+    90.85 L, weekday ``tuesday``, one person. The band is three scaled spreads,
+    so it is stated in the forecast rather than left for a template to
+    reconstruct.
     """
     forecast = forecast_for(FORECAST_DAY, make_inputs(), learned_over(28))
 

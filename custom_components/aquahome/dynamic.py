@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 
 @callback
-def async_setup_dynamic_entities(  # noqa: PLR0913 - contract-fixed capability-detection signature
+def async_setup_dynamic_entities(  # noqa: PLR0913 - deliberate capability-detection signature
     entry: AquaHomeConfigEntry,
     coordinator: DataUpdateCoordinator[Any],
     async_add_entities: AddConfigEntryEntitiesCallback,

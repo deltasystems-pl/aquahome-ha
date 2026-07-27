@@ -12,8 +12,8 @@ everything that came before it:
   any of it (37 sensors and 14 binary sensors on the dev device), and the whole
   startup pipeline really runs: the statistics backfill lands its 405 rows and
   the engine completes a pass over the series it reads back;
-* the verdicts over the replayed real history are the quiet ones the contract
-  pins — no leak (zero consecutive nights, last verdict 2026-07-27), no anomaly,
+* the verdicts over the replayed real history are the quiet ones pinned here —
+  no leak (zero consecutive nights, last verdict 2026-07-27), no anomaly,
   no vacation, a 35 gal forecast resting on the device's own fresh weekday
   average, and a night-flow sensor reporting a hard zero for that night;
 * nothing shouts: no urgent-leak repair issue is filed, and not one analytics
@@ -23,7 +23,7 @@ everything that came before it:
   morning really produces fresh cloud traffic and a fresh verdict.
 
 Time is frozen throughout — at 12:30 Europe/Warsaw, the device's own zone, so the
-whole captured history lies in the past and the contract's measured pins apply —
+whole captured history lies in the past and the measured pins apply —
 and the stored access token is re-minted against that frozen clock so the auth
 manager never reaches for a refresh route.
 
@@ -95,7 +95,7 @@ SLUG: Final = "7384243_20203_1120"
 DEVICE_TZ: Final = ZoneInfo("Europe/Warsaw")
 
 #: The instant every clock in this module reads: 12:30 Europe/Warsaw on the last
-#: day of the captured history — the instant the contract's pins were measured at.
+#: day of the captured history — the instant the pins below were measured at.
 FROZEN_NOW: Final = datetime(2026, 7, 27, 10, 30, tzinfo=dt_util.UTC)
 
 #: Entities the captured dev fixtures create, per platform domain. The sensor and

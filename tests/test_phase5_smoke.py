@@ -91,7 +91,7 @@ SLUG = "7384243_20203_1120"
 FROZEN_NOW = "2026-07-27T10:30:00+00:00"
 
 # ---------------------------------------------------------------------------
-# Expected import, computed independently from the fixtures (contract algorithm)
+# Expected import, computed independently from the fixtures (import algorithm)
 #
 #   graph-meter-hourly.json  300 nonzero readings over 26 local July days
 #   graph-meter-daily.json   131 nonzero readings from 2025-09-14

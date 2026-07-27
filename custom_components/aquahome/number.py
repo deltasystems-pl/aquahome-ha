@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from .api import Device, DeviceSetting, DeviceSettingsDocument, NumberRules
     from .coordinator import AquaHomeConfigEntry, AquaHomeSettingsCoordinator
 
-# Writes serialize against the throttled cloud (Phase-4 contract).
+# Writes serialize against the throttled cloud.
 PARALLEL_UPDATES = 1
 
 #: Classification token this module claims (see :func:`_classify_setting`).

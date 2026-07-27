@@ -7,9 +7,9 @@ per-device scheduler:
 * ``leak_while_away_{slug}`` — an error-severity, *any tier* leak escalation
   raised only while the household is away, with a matching ``leak_while_away``
   bus event fired once per onset. Away has two independent sources (a detected
-  vacation and a declared deferral) and both are exercised here. As built
-  (amendment A4) the urgent-tier issue stands *down* while away — it is deleted,
-  dismissal and all — and refiles on the first evaluation after the return.
+  vacation and a declared deferral) and both are exercised here. As built, the
+  urgent-tier issue stands *down* while away — it is deleted, dismissal and
+  all — and refiles on the first evaluation after the return.
 * ``vacation_defer_{slug}`` — a fixable suggestion offered while a detected
   absence runs and the user has neither armed the follower nor started the
   deferral, withdrawn again the moment any of those three facts changes.
@@ -29,7 +29,7 @@ into the engine, which keeps each assertion independent of the numeric detector
 work; the clock is frozen before setup and the stored access token minted
 against it, so nothing depends on wall time.
 
-Fix flows are driven both ways (amendment A6): directly through
+Fix flows are driven both ways: directly through
 ``repairs.async_create_fix_flow`` for the behaviour matrix, and once end-to-end
 over the real ``/api/repairs/issues/fix`` HTTP endpoints so the flow is proven
 to work through Home Assistant's own flow manager.
@@ -97,7 +97,7 @@ if TYPE_CHECKING:
     from custom_components.aquahome.analytics.engine import AquaHomeAnalyticsEngine
     from custom_components.aquahome.scheduler import AquaHomeRegenScheduler
 
-#: Slug of the captured device's serial ``7384243-20203-1120`` (see the contract).
+#: Slug of the captured device's serial ``7384243-20203-1120``.
 SLUG = "7384243_20203_1120"
 #: The captured device's nickname, rendered into every ``device`` placeholder.
 DEVICE_NAME = "Dom"
@@ -560,9 +560,9 @@ async def test_urgent_issue_stands_down_while_away_and_refiles_on_return(
 ) -> None:
     """Away supersedes the urgent nudge, which returns fresh with the household.
 
-    Amendment A4 pins the as-built behaviour: the urgent-tier issue is *deleted*
-    for the duration of the absence (two Repairs cards for one leak would split
-    the user's attention) and the away issue speaks for it. Deleting takes the
+    The as-built rule: the urgent-tier issue is *deleted* for the duration of
+    the absence (two Repairs cards for one leak would split the user's
+    attention) and the away issue speaks for it. Deleting takes the
     registry entry's ``dismissed_version`` with it, so a leak that was ignored
     before the trip is deliberately put back in front of the user on return —
     and that return is noticed on the very next evaluation, not the next nightly
@@ -944,7 +944,7 @@ async def test_changed_proposal_refiles_while_a_steady_grid_does_not_churn(
 
 
 # ---------------------------------------------------------------------------
-# Fix flows, driven directly (amendment A6)
+# Fix flows, driven directly
 # ---------------------------------------------------------------------------
 
 
@@ -1099,7 +1099,7 @@ async def test_regen_time_fix_flow_aborts_without_a_usable_proposal(
     mock_api: aioresponses,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """Issue data missing the proposed value writes nothing at all (A4).
+    """Issue data missing the proposed value writes nothing at all.
 
     Issue data survives restarts as plain JSON and may have been written by
     another version, so every field is treated as untrusted: without a usable

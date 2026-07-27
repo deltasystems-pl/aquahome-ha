@@ -70,7 +70,7 @@ if TYPE_CHECKING:
     )
     from .scheduler import AquaHomeRegenScheduler
 
-# Writes serialize against the throttled cloud (Phase-4 contract).
+# Writes serialize against the throttled cloud.
 PARALLEL_UPDATES = 1
 
 #: Classification token this module claims (see :func:`_classify_setting`).

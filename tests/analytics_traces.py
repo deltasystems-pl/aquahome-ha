@@ -1,6 +1,6 @@
 """Shared trace material for the analytics-tier test suites.
 
-Two kinds of series are produced here, both in the analytics contract's reading
+Two kinds of series are produced here, both in the analytics tier's reading
 convention — ``(UTC instant, cumulative gallons)``:
 
 * **Replayed real history**: the captured datapoint fixtures re-expressed as the

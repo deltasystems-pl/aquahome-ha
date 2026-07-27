@@ -260,7 +260,7 @@ class AquaHomeActivityCoordinator(DataUpdateCoordinator[DeviceActivity]):
     :data:`~.const.ACTIVITY_MAX_STALE_SECONDS`.
     """
 
-    def __init__(  # noqa: PLR0913 - contract-fixed dependency-injection signature
+    def __init__(  # noqa: PLR0913 - deliberate dependency-injection signature
         self,
         hass: HomeAssistant,
         entry: AquaHomeConfigEntry,
@@ -421,7 +421,7 @@ class AquaHomeSettingsCoordinator(DataUpdateCoordinator[DeviceSettingsDocument])
     :data:`~.const.SETTINGS_MAX_STALE_SECONDS`.
     """
 
-    def __init__(  # noqa: PLR0913 - contract-fixed dependency-injection signature
+    def __init__(  # noqa: PLR0913 - deliberate dependency-injection signature
         self,
         hass: HomeAssistant,
         entry: AquaHomeConfigEntry,

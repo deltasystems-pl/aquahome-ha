@@ -302,7 +302,7 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
     the evaluators reuse, so the follower path never re-enters the lock.
     """
 
-    def __init__(  # noqa: PLR0913 - contract-fixed dependency-injection signature
+    def __init__(  # noqa: PLR0913 - deliberate dependency-injection signature
         self,
         hass: HomeAssistant,
         entry: AquaHomeConfigEntry,

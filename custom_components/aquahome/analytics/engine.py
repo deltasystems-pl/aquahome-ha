@@ -103,7 +103,7 @@ _WEEKDAY_SLOT_COUNT: Final = 7
 class AquaHomeAnalyticsEngine(DataUpdateCoordinator[AnalyticsResult]):
     """Compute one device's analytics verdicts from its imported statistics."""
 
-    def __init__(  # noqa: PLR0913 - contract-fixed dependency-injection signature
+    def __init__(  # noqa: PLR0913 - deliberate dependency-injection signature
         self,
         hass: HomeAssistant,
         entry: AquaHomeConfigEntry,

@@ -24,10 +24,10 @@ the ``unknown`` baseline the snapshot captures. The clock is frozen before setup
 and the stored access token is re-minted against it, so nothing here depends on
 the machine's wall clock.
 
-Attribute conventions asserted throughout (contract amendment A8): analytics
-attributes always emit *every* key, ``None`` when absent — a stable template
-surface — with float attributes rounded to one decimal, the anomaly ratio to
-two, and the forecast's litre figures to whole litres.
+Attribute conventions asserted throughout: analytics attributes always emit
+*every* key, ``None`` when absent — a stable template surface — with float
+attributes rounded to one decimal, the anomaly ratio to two, and the forecast's
+litre figures to whole litres.
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ if TYPE_CHECKING:
 
     from custom_components.aquahome.analytics.engine import AquaHomeAnalyticsEngine
 
-#: Slug of the captured device's serial ``7384243-20203-1120`` (see the contract).
+#: Slug of the captured device's serial ``7384243-20203-1120``.
 SLUG = "7384243_20203_1120"
 #: The captured device's nickname, rendered into the issue's ``device`` placeholder.
 DEVICE_NAME = "Dom"
@@ -133,7 +133,7 @@ DEVICE_CLASSES: dict[str, str | None] = {
     "night_flow": SensorDeviceClass.VOLUME_FLOW_RATE,
 }
 
-#: Every key the leak binary's attribute dict always carries (A8).
+#: Every key the leak binary's attribute dict always carries.
 LEAK_ATTRIBUTE_KEYS = frozenset(
     {
         "consecutive_nights",
@@ -145,7 +145,7 @@ LEAK_ATTRIBUTE_KEYS = frozenset(
         "masking_coverage",
     }
 )
-#: Every key the anomaly binary's attribute dict always carries (A8).
+#: Every key the anomaly binary's attribute dict always carries.
 ANOMALY_ATTRIBUTE_KEYS = frozenset(
     {
         "reasons",
@@ -160,13 +160,13 @@ ANOMALY_ATTRIBUTE_KEYS = frozenset(
         "drift_ewma",
     }
 )
-#: Every key the vacation binary's attribute dict always carries (A8).
+#: Every key the vacation binary's attribute dict always carries.
 VACATION_ATTRIBUTE_KEYS = frozenset({"consecutive_days", "since"})
-#: Every key the forecast sensor's attribute dict always carries (A8).
+#: Every key the forecast sensor's attribute dict always carries.
 FORECAST_ATTRIBUTE_KEYS = frozenset(
     {"liters", "source", "band_liters", "weekday", "persons"}
 )
-#: Every key the night-flow sensor's attribute dict always carries (A8).
+#: Every key the night-flow sensor's attribute dict always carries.
 NIGHT_FLOW_ATTRIBUTE_KEYS = frozenset({"night", "verdict"})
 
 
@@ -241,8 +241,8 @@ def make_result(  # noqa: PLR0913 - one defaulted keyword per AnalyticsResult fi
 def urgent_leak(implied_liters_per_day: float = 1200.0) -> LeakState:
     """Return a confirmed urgent-tier leak (the Repairs-filing condition).
 
-    1200 L/day is the measured implied rate of the contract's 50 L/h injection
-    (amendment A3), comfortably past the 1135 L/day urgent threshold.
+    1200 L/day is the measured implied rate of the injected 50 L/h leak pin,
+    comfortably past the 1135 L/day urgent threshold.
     """
     return replace(
         NEUTRAL_LEAK,
@@ -348,8 +348,8 @@ def native_sensor(
     """Return the live sensor entity object behind one analytics sensor key.
 
     The registry stores the *display* unit (Home Assistant converts gallons to
-    litres for a metric install), so the contract's native-unit pins can only be
-    read off the entity itself.
+    litres for a metric install), so the native-unit pins can only be read off
+    the entity itself.
     """
     entity_id = entity_id_of(registry, SENSOR_DOMAIN, key)
     component = hass.data[DATA_INSTANCES][SENSOR_DOMAIN]
@@ -453,7 +453,7 @@ async def test_vacation_binary_carries_its_own_icon(
     entity_registry: er.EntityRegistry,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """The class-less vacation binary is recognisable by its beach icon (A8)."""
+    """The class-less vacation binary is recognisable by its beach icon."""
     await boot(hass, mock_config_entry, mock_api, freezer)
 
     assert attributes_of(hass, entity_registry, "vacation_detected")[ATTR_ICON] == (
@@ -638,7 +638,7 @@ async def test_leak_attributes_keep_every_key_when_nothing_is_known(
 ) -> None:
     """An unassessable window still publishes the full key set, valued ``None``.
 
-    Analytics attributes are a stable template surface (A8): a key that
+    Analytics attributes are a stable template surface: a key that
     disappears when the detector has nothing to say would break every template
     written against the populated case.
     """
@@ -671,7 +671,7 @@ async def test_anomaly_attributes_round_the_ratio_and_expose_both_drift_votes(
 ) -> None:
     """The anomaly publishes its driving day plus each drift chart's own vote.
 
-    ``drift_alarm`` is the consensus verdict — both charts must agree (A5) — so
+    ``drift_alarm`` is the consensus verdict — both charts must agree — so
     a single chart alarming leaves it ``False`` while ``drift_cusum`` /
     ``drift_ewma`` still show who voted; without them a user could not tell a
     quiet series from a split decision. The ratio renders at two decimals, every
@@ -819,9 +819,9 @@ async def test_forecast_state_converts_and_attributes_round_to_whole_liters(
 ) -> None:
     """The forecast publishes gallons natively and whole-litre companions.
 
-    Pinned against the contract's measured cold-start forecast (A2): 35.0 gal
-    for the Tuesday slot, band 90.85 L, one person. The state itself is the
-    metric rendering of the native gallons — Home Assistant's conversion, not
+    Pinned against the measured cold-start forecast: 35.0 gal for the Tuesday
+    slot, band 90.85 L, one person. The state itself is the metric rendering
+    of the native gallons — Home Assistant's conversion, not
     ours — while ``liters`` / ``band_liters`` are whole litres, because the
     underlying statistics are hour-resolution meter reads and sub-litre
     precision would be false rigour.
@@ -1086,7 +1086,7 @@ async def test_nothing_to_assess_leaves_a_standing_issue_alone(
     """``active is None`` after an urgent leak must not retract the warning.
 
     A window that went entirely masked or unbounded — or a statistics import
-    that failed — has no evidence either way (A4). Treating that silence as an
+    that failed — has no evidence either way. Treating that silence as an
     all-clear would let a live burst pipe's nudge vanish on the next pass.
     """
     await boot(hass, mock_config_entry, mock_api, freezer)

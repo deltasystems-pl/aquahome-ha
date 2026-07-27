@@ -113,7 +113,7 @@ class BlueprintCase:
         return BLUEPRINT_DIR / self.file_name
 
 
-#: The four blueprints the Phase-8 contract ships, with the integration surface
+#: The four blueprints the integration bundles, with the integration surface
 #: each one is required to drive. The event types and action names come from the
 #: integration's constants, so a rename in production fails these tests instead
 #: of quietly orphaning a blueprint.
@@ -274,7 +274,7 @@ def _import_link(case: BlueprintCase) -> str:
 
 
 def test_exactly_the_contract_blueprints_are_shipped() -> None:
-    """The directory holds the four contract blueprints and nothing else."""
+    """The directory holds the four bundled blueprints and nothing else."""
     shipped = {path.name for path in BLUEPRINT_DIR.glob("*.yaml")}
     assert shipped == {case.file_name for case in BLUEPRINT_CASES}
     # No stray non-YAML files either: Home Assistant would try to load them.

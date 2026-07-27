@@ -61,10 +61,10 @@ FROZEN_NOW: Final = "2026-07-21T12:00:00+00:00"
 EXPECTED_SENSORS: Final = 37
 
 # ---------------------------------------------------------------------------
-# Ground truth (PHASE6_CONTRACT.md), computed from first principles against the
-# real fixtures: inlet_hardness 25.7 gpg, avg_daily_use_gals 47,
-# salt_effic_grains_per_lb 2152, avg_salt_per_regen_lbs 3.8281,
-# avg_days_between_regens 7.35, out_of_salt_estimate_days 167.
+# Ground truth computed from first principles against the real fixtures:
+# inlet_hardness 25.7 gpg, avg_daily_use_gals 47, salt_effic_grains_per_lb 2152,
+# avg_salt_per_regen_lbs 3.8281, avg_days_between_regens 7.35,
+# out_of_salt_estimate_days 167.
 # ---------------------------------------------------------------------------
 
 #: Chemistry daily consumption, g/d (settings-document hardness).

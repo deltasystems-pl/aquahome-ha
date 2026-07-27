@@ -21,8 +21,8 @@ Three mechanics are copied from ``test_statistics_coordinator.py``:
 
 * the ``mock_recorder_before_hass`` hook, so ``recorder_db_url`` is resolved
   before Home Assistant exists;
-* the clock frozen to :data:`FROZEN_INSTANT` — the instant the contract's
-  ground truth was measured at — *before* setup, with the stored access token
+* the clock frozen to :data:`FROZEN_INSTANT` — the instant the ground truth
+  below was measured at — *before* setup, with the stored access token
   re-minted against that frozen clock (with enough headroom to survive the
   multi-day advances the daily-trigger test makes, so no test ever needs a
   refresh route or the machine's wall clock);
@@ -124,17 +124,17 @@ if TYPE_CHECKING:
 
     from custom_components.aquahome.analytics.engine import AquaHomeAnalyticsEngine
 
-#: Slug derived from the fixture serial ``7384243-20203-1120`` (see contract).
+#: Slug derived from the fixture serial ``7384243-20203-1120``.
 SLUG = "7384243_20203_1120"
 #: External statistic id the meter series lives under.
 STATISTIC_ID = statistic_id_for(SLUG)
 
-#: The instant the contract's A2 ground truth was measured at: 12:30 Warsaw on
+#: The instant the ground truth below was measured at: 12:30 Warsaw on
 #: the capture day, just past the newest fixture reading.
 FROZEN_INSTANT = "2026-07-27T10:30:00+00:00"
 FROZEN_NOW = datetime(2026, 7, 27, 10, 30, tzinfo=UTC)
 
-#: 07:35 Europe/Warsaw (the contract's ``ANALYTICS_RUN_LOCAL_TIME``) on the two
+#: 07:35 Europe/Warsaw (the integration's ``ANALYTICS_RUN_LOCAL_TIME``) on the two
 #: mornings after the frozen instant, in UTC — the device is on CEST (UTC+2).
 FIRST_DAILY_RUN = datetime(2026, 7, 28, 5, 35, tzinfo=UTC)
 SECOND_DAILY_RUN = datetime(2026, 7, 29, 5, 35, tzinfo=UTC)
@@ -166,14 +166,14 @@ ANALYTICS_SENSORS = ("usage_forecast", "night_flow")
 #: Platforms carrying analytics entities (the only two these tests forward).
 ANALYTICS_PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
-# --- Contract A2 pins, as the engine sees them ------------------------------
-# Leak / anomaly / vacation / forecast reproduce the measured A2 values exactly.
-# The grid and point-hour figures differ (A2: 46 mature buckets, 438 hourly
-# samples, point_hours 1) because A2 was measured on the *untrimmed* replay
-# series while the engine reads only ``BASELINE_WINDOW_DAYS`` back: the trimmed
-# head carries a 241-hour zero-delta interval (2025-10-18 to 2025-10-28) whose
-# 240 certain-zero hours are what mature those buckets. Both numbers below are
-# the engine-window truth.
+# --- Measured ground-truth pins, as the engine sees them --------------------
+# Leak / anomaly / vacation / forecast reproduce the measured values exactly.
+# The grid and point-hour figures differ (46 mature buckets, 438 hourly samples
+# and point_hours 1 as first measured) because that measurement was taken on the
+# *untrimmed* replay series while the engine reads only ``BASELINE_WINDOW_DAYS``
+# back: the trimmed head carries a 241-hour zero-delta interval (2025-10-18 to
+# 2025-10-28) whose 240 certain-zero hours are what mature those buckets. Both
+# numbers below are the engine-window truth.
 EXPECTED_LEAK = LeakState(
     active=False,
     consecutive_nights=0,
@@ -422,7 +422,7 @@ def native_value(hass: HomeAssistant, key: str) -> StateType:
     """Return an analytics sensor's native value (unit-system independent).
 
     The forecast is stored in native gallons and displayed in litres for this
-    metric harness, so the pinned contract number is only visible here.
+    metric harness, so the pinned number is only visible here.
     """
     component: EntityComponent[Any] = hass.data[DATA_INSTANCES]["sensor"]
     entity = component.get_entity(entity_id_of(hass, "sensor", key))
@@ -573,11 +573,11 @@ async def test_startup_pipeline_computes_the_replayed_verdicts(
     mock_api: aioresponses,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """A full boot turns the imported series into the contract's A2 verdicts.
+    """A full boot turns the imported series into the pinned verdicts.
 
     This is the whole tier end to end: seeded long-term statistics, the real
     device and datapoint routes, and the backfill-then-analyze background
-    pipeline. Every pinned number is the contract's measured ground truth for
+    pipeline. Every pinned number is the measured ground truth for
     the real July history — most importantly that a real, leak-free month
     produces a leak verdict that is *False* rather than merely unknown.
     """

@@ -9,10 +9,10 @@ config entry is set up against the captured iQua fixtures served through
 entity registry, and — where a unit-system-independent number matters — the live
 entity object.
 
-The ground-truth numbers are the frozen Phase-6 contract table, recomputed here
+The ground-truth numbers are the frozen Phase-6 reference table, recomputed here
 from the very same fixture inputs (``inlet_hardness`` 25.7 gpg /
 ``hardness_grains`` 26 gpg, 47 gal/d, 2152 gr/lb, 3.8281 lb per regen over 7.35
-days, 167 days of device countdown). They are asserted at the contract's
+days, 167 days of device countdown). They are asserted at that table's
 tolerances, never looser.
 
 Two behaviours get dedicated attention because they only exist at the platform
@@ -66,7 +66,7 @@ SLUG = "7384243_20203_1120"
 #: Fixed instant every setup test freezes to (2026-07-21T12:00:00Z == 14:00 CEST).
 FROZEN_INSTANT = "2026-07-21T12:00:00+00:00"
 
-#: The five salt sensors, in contract order.
+#: The five salt sensors, in creation order.
 SALT_KEYS: tuple[str, ...] = (
     "daily_salt_usage",
     "salt_days_remaining",
@@ -75,7 +75,7 @@ SALT_KEYS: tuple[str, ...] = (
     "salt_efficiency",
 )
 
-# --- Ground truth (Phase 6 contract table, from the real fixtures) ----------
+# --- Ground truth (Phase 6 reference table, from the real fixtures) ---------
 #: Daily salt with the settings document's 25.7 gpg inlet hardness (g/d).
 DAILY_SALT_SETTINGS = 254.60
 #: Daily salt with the raw ``hardness_grains`` fallback of 26 gpg (g/d).
@@ -408,7 +408,7 @@ async def test_salt_days_remaining_value_and_attributes(
     assert attributes["chemistry_daily_salt_g"] == round(DAILY_SALT_SETTINGS, 1)
     assert attributes["device_daily_salt_g"] == round(DEVICE_DAILY_SALT, 1)
     assert attributes["deviation_pct"] == -7.2
-    # Inside the ±15 % agreement band the contract requires of the cross-check.
+    # Inside the ±15 % agreement band required of the cross-check.
     assert abs(attributes["deviation_pct"]) < 15
 
 
@@ -520,7 +520,7 @@ async def test_registry_categories_and_enabled_defaults(
     mock_config_entry: MockConfigEntry,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """The three new diagnostics carry the contract's category/enabled flags.
+    """The three new diagnostics carry their intended category/enabled flags.
 
     ``salt_days_remaining`` and ``salt_efficiency`` are diagnostic but enabled
     (they are the cross-check a user is meant to see); the depletion timestamp

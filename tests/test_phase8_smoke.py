@@ -11,7 +11,7 @@ is *wired into* that boot rather than merely importable:
 * the three automation switches join the Phase-7 inventory rather than
   displacing any of it (66 entities now, 63 + 3), all three registry-enabled
   and all three **off** on a fresh entry — the tier is opt-in by construction,
-  so a boot that turns anything on is a contract breach;
+  so a boot that turns anything on is a breach of the opt-in guarantee;
 * all four actions are registered on the domain, and *only* those four;
 * one scheduler exists per device, its published state is the all-off default,
   and the analytics pass the boot runs really reaches it: the scheduler records
@@ -125,11 +125,11 @@ EXPECTED_ENTITIES: Final[dict[str, int]] = {
 #: Total entities a full boot on the dev fixtures registers. The per-domain map
 #: above is the authority; this is the same inventory summed, kept as its own
 #: pin so a platform that silently stops registering anything is caught even if
-#: another one grows by the same amount. (The Phase-8 contract's prose quotes
-#: "63 + 3 = 66", which understates the measured Phase-7 inventory of 73.)
+#: another one grows by the same amount. (The earlier "63 + 3 = 66" estimate
+#: understates the measured Phase-7 inventory of 73.)
 EXPECTED_TOTAL: Final = 76
 
-#: The three automation switches, by unique-id suffix, in contract order.
+#: The three automation switches, by unique-id suffix, in creation order.
 AUTOMATION_SWITCH_KEYS: Final[tuple[str, ...]] = (
     "vacation_deferral",
     "auto_vacation",
@@ -457,7 +457,7 @@ async def test_full_boot_registers_exactly_the_four_actions(
     mock_api: aioresponses,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """The domain exposes the contract's four actions and no others."""
+    """The domain exposes the integration's four actions and no others."""
     await _boot(hass, mock_config_entry, mock_api, freezer)
 
     assert set(hass.services.async_services_for_domain(DOMAIN)) == EXPECTED_SERVICES

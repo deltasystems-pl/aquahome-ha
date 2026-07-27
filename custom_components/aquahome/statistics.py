@@ -320,7 +320,7 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
     backfill inside a single refill window of the cloud's token bucket.
     """
 
-    def __init__(  # noqa: PLR0913 - contract-fixed dependency-injection signature
+    def __init__(  # noqa: PLR0913 - deliberate dependency-injection signature
         self,
         hass: HomeAssistant,
         entry: AquaHomeConfigEntry,

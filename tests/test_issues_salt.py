@@ -16,7 +16,7 @@ entity, so leaving them out keeps every failure here attributable to the tier
 state machine alone.
 
 The ladder walked by :func:`test_tier_ladder_escalates_de_escalates_and_clears`
-is the contract's binding sequence and is deliberately one ordered test: the
+is the binding escalation sequence and is deliberately one ordered test: the
 tiers are history-dependent (a value inside the hysteresis band means "keep
 whatever tier you had"), so the steps only have meaning in sequence.
 """
