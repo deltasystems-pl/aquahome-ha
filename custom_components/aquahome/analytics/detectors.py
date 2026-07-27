@@ -432,14 +432,18 @@ def daily_anomaly(day: DayAssessment) -> bool:
 
     Only the upward side is an anomaly: a day far below expectation is the
     vacation detector's business, and flagging it as a problem would fire on
-    every weekend away.
+    every weekend away. A zero spread — a device deviation slot reporting 0,
+    or a handful of exactly-tied learned days — is an unusable scale, not a
+    zero-width band: comparing against it would flag a day 1 L over its
+    expectation, so no verdict is drawn (the tier-wide "no usable scale, no
+    alarm" rule).
     """
     total = day.total_liters
     expected = day.expected_liters
     spread = day.spread_liters
     if not day.assessable or total is None or expected is None or spread is None:
         return False
-    if not _all_finite(total, expected, spread):
+    if not _all_finite(total, expected, spread) or spread <= 0.0:
         return False
     return total > expected + ANALYTICS_K * spread
 
@@ -457,9 +461,13 @@ def point_anomaly_hours(  # noqa: PLR0913 - a grid lookup needs all three statis
     Only hours with *certain* usage are judged (an hour inside a multi-hour
     interval has no attributable volume), and only against buckets holding at
     least ``MIN_BUCKET_SAMPLES`` samples — an immature bucket has no band, and
-    inventing one is how contextual detectors earn their false positives. The
-    count dtype of ``n`` is left open: the grid builder may tally in integers or
-    floats.
+    inventing one is how contextual detectors earn their false positives. A
+    matured bucket whose scaled MAD is zero is equally unusable: a multi-week
+    absence fills buckets with certain zeros, half-identical samples collapse
+    the MAD, and a zero-width band would flag every ordinary draw in those
+    hours for weeks afterwards — the same "no usable scale, no alarm" rule the
+    drift charts and the Hampel filter already state. The count dtype of ``n``
+    is left open: the grid builder may tally in integers or floats.
     """
     if min(median.size, mad.size, n.size) < _GRID_HOURS:
         return 0
@@ -473,7 +481,7 @@ def point_anomaly_hours(  # noqa: PLR0913 - a grid lookup needs all three statis
             continue
         centre = float(median[bucket])
         spread = float(mad[bucket])
-        if not _all_finite(usage, centre, spread):
+        if not _all_finite(usage, centre, spread) or spread <= 0.0:
             continue
         if usage > centre + ANALYTICS_K * spread:
             anomalous += 1
@@ -670,10 +678,14 @@ def _occupancy(  # noqa: PLR0911 - one verdict per distinct evidence situation
         return None
     previous_instant, previous_value = readings[before - 1]
     after = bisect_left(readings, end, key=itemgetter(0))
+    if after > before:
+        # Readings exist inside the day itself: it is neither trailing
+        # silence nor a gap interior — it is a day that plainly had usage and
+        # merely lost one of its bounds, and averaging a surrounding span
+        # over it would smear that usage into an "unoccupied" verdict.
+        return None
     if after >= len(readings):
         if not device_online or not statistics_fresh:
-            return None
-        if readings and readings[-1][0] > start:
             return None
         allocated = 0.0
     else:
