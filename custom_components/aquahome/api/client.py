@@ -134,6 +134,26 @@ class AquaHomeClient:
         #: after a 429, so a throttled account is not hammered further.
         self._backoff_until: float | None = None
 
+    @property
+    def base_url(self) -> str:
+        """Return the API base URL the client is bound to.
+
+        The live-mode manager derives the websocket host from it (the detected
+        host also decides the iqua2-specific session semantics).
+        """
+        return self._base_url
+
+    @property
+    def rest_backoff_active(self) -> bool:
+        """Return whether the shared REST 429 backoff window is currently open.
+
+        Live sessions are a luxury; while the account is being throttled on the
+        REST domain the live-mode manager hard-disables them even though /live
+        is a separate throttle domain.
+        """
+        until = self._backoff_until
+        return until is not None and self._monotonic() < until
+
     # -- Devices -----------------------------------------------------------
 
     async def async_get_devices(self, *, props: bool = False) -> list[Device]:

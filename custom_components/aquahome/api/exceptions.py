@@ -84,5 +84,16 @@ class DeviceOfflineError(ApiError):
     """A command could not be processed because the device is offline."""
 
 
+class LiveTicketExpiredError(AquaHomeError):
+    """The websocket handshake was rejected because the live ticket expired.
+
+    Tickets from ``GET /devices/{id}/live`` expire ~300 s after issue; the
+    server answers a stale ticket's handshake with HTTP 400. The live-mode
+    manager reacts by fetching one fresh ticket and reconnecting — distinct
+    from :class:`AquaHomeConnectionError` so a stale ticket is never mistaken
+    for a network failure (which would arm the reconnect backoff).
+    """
+
+
 class ForbiddenCommandError(AquaHomeError):
     """Refusing to send a command that is unsafe for the device or account."""
