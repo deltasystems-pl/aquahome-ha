@@ -59,6 +59,7 @@ from homeassistant.components.recorder.statistics import (
     get_last_statistics,
     statistics_during_period,
 )
+from homeassistant.components.recorder.tasks import SynchronizeTask
 from homeassistant.const import UnitOfVolume
 from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -433,13 +434,17 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
         # The call above only QUEUES the import on the recorder's task thread,
         # while readers (the analytics engine, this coordinator's own anchor
         # lookup) go through the recorder's executor pool, which is not
-        # ordered behind that queue. Drain here so every refresh completes
-        # with its rows actually readable. NB async_block_till_done() is NOT
-        # a usable barrier: the recorder dequeues a job before running it, so
-        # the queue reads empty for the whole duration of the import and the
-        # coroutine returns immediately (measured 20 % missed reads); the
-        # synchronous block_till_done queues its wait marker unconditionally.
-        await self.hass.async_add_executor_job(get_instance(self.hass).block_till_done)
+        # ordered behind that queue. Queue a synchronize marker behind the
+        # import so every refresh completes with its rows actually readable.
+        # Neither ready-made drain works here: async_block_till_done()
+        # short-circuits whenever the queue reads empty — which is exactly the
+        # state while an already-dequeued import is still running (measured
+        # 20 % missed reads) — and the synchronous block_till_done() is
+        # documented "only called in tests" and hung a live instance's
+        # startup pipeline outright (observed 2026-07-27).
+        synchronized: asyncio.Future[None] = self.hass.loop.create_future()
+        get_instance(self.hass).queue_task(SynchronizeTask(synchronized))
+        await synchronized
         _LOGGER.debug(
             "Imported %s water statistics rows for %s (%s to %s)",
             len(rows),
