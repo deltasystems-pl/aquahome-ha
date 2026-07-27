@@ -336,6 +336,10 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
         #: Device-local day the cancel budget below is counted for.
         self._cancel_day: date | None = None
         self._cancels_today = 0
+        #: Refused cancel attempts today. Bounded separately from the sent
+        #: cancels so a cloud flake neither eats a success slot nor lets the
+        #: enforcement retry a refusing cloud on every ten-minute poll.
+        self._cancel_failures_today = 0
         self._budget_logged = False
         #: Whether the current deferral already announced that it ran past the
         #: resin-hygiene cap. Reset when a new deferral starts.
@@ -469,16 +473,20 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
     async def _async_follow_vacation(self, result: AnalyticsResult | None) -> None:
         """Mirror the vacation detector into the deferral flag when asked to.
 
-        Only an ``auto`` deferral is released again when the household returns:
-        a deferral the user (or a blueprint) started manually is theirs to end.
-        A verdict of ``None`` — nothing to assess — moves nothing in either
-        direction, the same silence rule the detection tier follows.
+        Arming is gated on the ``auto_vacation`` opt-in. Releasing is gated on
+        the deferral's *source* instead: an ``auto`` deferral is one the system
+        started on the household's behalf — by this follower or by a confirmed
+        vacation-defer suggestion, which promises it resumes when water use
+        returns — so it releases whatever the follower flag says now. A
+        deferral the user (or a blueprint) started manually stays theirs to
+        end. A verdict of ``None`` — nothing to assess — moves nothing in
+        either direction, the same silence rule the detection tier follows.
         """
         state = self.state
-        if not state.auto_vacation or result is None:
+        if result is None:
             return
         detected = result.vacation.active
-        if detected is True and not state.vacation_deferral:
+        if detected is True and state.auto_vacation and not state.vacation_deferral:
             await self._async_apply_deferral(True, source=DEFERRAL_SOURCE_AUTO)
         elif (
             detected is False
@@ -567,9 +575,13 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
         if not self._claim_cancel_budget(now):
             return
         if not await self._async_command(_ACTION_CANCEL):
+            self._cancel_failures_today += 1
             await self._async_record(DECISION_SKIPPED_COMMAND_FAILED, now)
             return
         self._cancels_today += 1
+        # A sent cancel undoes the day's scheduled regeneration, so the
+        # once-per-day schedule latch must re-open for a same-day catch-up.
+        self._scheduled_day = None
         self._fire_event(
             EVENT_TYPE_REGEN_DEFERRED, {"deferral_source": state.deferral_source}
         )
@@ -586,8 +598,12 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
         if self._cancel_day != day:
             self._cancel_day = day
             self._cancels_today = 0
+            self._cancel_failures_today = 0
             self._budget_logged = False
-        if self._cancels_today < REGEN_CANCEL_DAILY_BUDGET:
+        if (
+            self._cancels_today < REGEN_CANCEL_DAILY_BUDGET
+            and self._cancel_failures_today < REGEN_CANCEL_DAILY_BUDGET
+        ):
             return True
         if not self._budget_logged:
             self._budget_logged = True
@@ -638,6 +654,7 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
         if not _recharge_scheduled(self.fast.data):
             return
         if await self._async_command(_ACTION_CANCEL):
+            self._scheduled_day = None
             self._fire_event(EVENT_TYPE_REGEN_DEFERRED, {"deferral_source": source})
 
     async def _async_catch_up(self, now: datetime) -> None:
@@ -655,6 +672,13 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
         if not _capacity_low(capacity, forecast):
             return
         if _can_schedule(device) is False or not _recharge_ready(device):
+            return
+        # The same once-per-device-local-day bound the nightly path honours:
+        # the device view only refreshes on the poll, so repeated deferral OFF
+        # transitions inside one window would otherwise re-send the command.
+        # A sent cancel re-opens the latch, so a genuine cancel-then-return
+        # day still gets its catch-up.
+        if self._scheduled_day == self._local_date(now):
             return
         await self._async_schedule(capacity, forecast, REGEN_REASON_CATCH_UP, now)
 
