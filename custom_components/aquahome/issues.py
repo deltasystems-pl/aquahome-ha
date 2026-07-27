@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .analytics.engine import AquaHomeAnalyticsEngine
+    from .analytics.model import AnalyticsResult
     from .api import Device
     from .coordinator import AquaHomeConfigEntry, AquaHomeCoordinator
 
@@ -184,7 +185,9 @@ def async_setup_leak_issues(
     def _evaluate() -> None:
         """Sync the repair issue with the engine's latest leak verdict."""
         nonlocal reported_liters
-        result = engine.data
+        # ``data`` is populated once the first pass completes, but stays typed
+        # non-optional on the coordinator — annotate so the guard survives.
+        result: AnalyticsResult | None = engine.data
         if result is None:
             return
         leak = result.leak

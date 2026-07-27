@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, Literal
 
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.core import CALLBACK_TYPE, callback
@@ -76,7 +76,11 @@ _RECORDER_DOMAIN: Final = "recorder"
 #: Statistics column the meter series is rebuilt from. ``sum`` is the imported
 #: cumulative usage — meter-read semantics survive the import, so consecutive
 #: sums diff to the water used between readings with resets already absorbed.
-_SUM_TYPES: Final[set[str]] = {"sum"}
+#: (Typed with the recorder API's full literal vocabulary so the call to
+#: ``statistics_during_period`` type-checks under strict mypy.)
+_SUM_TYPES: Final[
+    set[Literal["change", "last_reset", "max", "mean", "min", "state", "sum"]]
+] = {"sum"}
 
 #: Number of device weekday-average slots (slot 1 = Saturday, live-verified Map B).
 _WEEKDAY_SLOT_COUNT: Final = 7
@@ -244,6 +248,7 @@ class AquaHomeAnalyticsEngine(DataUpdateCoordinator[AnalyticsResult]):
             tz_key=tz_key,
             now=dt_util.utcnow(),
             device_online=self._fast.device_online,
+            statistics_fresh=self._statistics.last_update_success,
         )
 
     def _fire_transitions(
