@@ -48,6 +48,18 @@ def device_slug(device: Device) -> str:
     return slugify(device.serial_number or device.id)
 
 
+def device_display_name(device: Device) -> str:
+    """Return the human-facing device name (nickname, then model, then brand).
+
+    The single source of the naming fallback chain: the device-registry card,
+    the external-statistics metadata, and the low-salt repair issue all render
+    a device through this function so the three can never drift apart.
+    """
+    enriched = device.enriched_data
+    model = enriched.model if enriched is not None else None
+    return device.nickname or model or "AquaHome"
+
+
 def build_device_info(device: Device) -> DeviceInfo:
     """Assemble the shared device-registry entry for an AquaHome device.
 
@@ -63,7 +75,7 @@ def build_device_info(device: Device) -> DeviceInfo:
         serial_number=device.serial_number,
         manufacturer=MANUFACTURER,
         model=model or device.system_type_display,
-        name=device.nickname or model or "AquaHome",
+        name=device_display_name(device),
         sw_version=enriched.control_version if enriched is not None else None,
         hw_version=enriched.pwa if enriched is not None else None,
     )

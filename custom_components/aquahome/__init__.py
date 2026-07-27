@@ -50,6 +50,7 @@ from .coordinator import (
     AquaHomeRuntimeData,
     AquaHomeSettingsCoordinator,
 )
+from .entity import device_display_name
 from .issues import async_setup_salt_issues
 from .statistics import (
     AquaHomeStatisticsCoordinator,
@@ -137,7 +138,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
             client,
             device_id=device.id,
             device_slug=coordinator.device_slug,
-            device_name=_device_display_name(coordinator.data),
+            device_name=device_display_name(coordinator.data),
             tz_id=_device_tz_id(coordinator.data),
         )
 
@@ -258,17 +259,6 @@ def _async_wire_activity_triggers(
             hass.async_create_task(activity.async_request_refresh())
 
     entry.async_on_unload(fast.async_add_listener(_handle_fast_update))
-
-
-def _device_display_name(device: Device) -> str:
-    """Return the human-facing device name for statistics metadata.
-
-    Mirrors the fallback chain of :func:`~.entity.build_device_info` so the
-    external statistic is listed under the same name as the device card.
-    """
-    enriched = device.enriched_data
-    model = enriched.model if enriched is not None else None
-    return device.nickname or model or "AquaHome"
 
 
 def _device_tz_id(device: Device) -> str | None:
