@@ -167,6 +167,17 @@
       },
       "night_flow": {
         "name": "Night flow"
+      },
+      "current_water_flow": {
+        "name": "Water flow"
+      },
+      "live_mode_status": {
+        "name": "Live mode",
+        "state": {
+          "idle": "Idle",
+          "live": "Live",
+          "backoff": "Reconnect backoff"
+        }
       }
     },
     "button": {
@@ -221,6 +232,15 @@
       },
       "smart_regeneration": {
         "name": "Smart regeneration scheduling"
+      },
+      "live_view": {
+        "name": "Live view"
+      },
+      "smart_live_windows": {
+        "name": "Smart live windows"
+      },
+      "continuous_live_flow": {
+        "name": "Continuous live flow"
       }
     },
     "event": {
@@ -303,6 +323,14 @@
       },
       "vacation_detected": {
         "name": "Vacation detected"
+      }
+    },
+    "number": {
+      "live_sessions_per_day": {
+        "name": "Live sessions per day"
+      },
+      "live_min_gap": {
+        "name": "Live session minimum gap"
       }
     }
   },
@@ -401,6 +429,10 @@
           "entry_not_loaded": "The AquaHome integration is not loaded; try again after it has started."
         }
       }
+    },
+    "live_mode_failing": {
+      "title": "Live updates are failing on {device}",
+      "description": "The live websocket connection for {device} has failed several times in a row while the device itself is online (last error: {error}). The integration has fallen back to regular polling, so entities keep updating at the normal cadence. This issue clears itself as soon as a live session succeeds again."
     }
   },
   "selector": {

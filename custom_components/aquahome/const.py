@@ -394,5 +394,113 @@ REGEN_MODE_CANCEL: Final = "cancel"
 # Ceiling on the get_usage_forecast days field (one weekly cycle).
 FORECAST_MAX_DAYS: Final = 7
 
+# --- Live mode (Phase 9). One per-device manager owns the single websocket
+# lifecycle; every trigger path shares one grant budget. The /live endpoint is
+# its own measured throttle domain (token bucket, 6 tickets per 600 s with
+# burst 60 — distinct from the REST bucket), so sustained live use must stay
+# at or below one ticket per ~100 s; the ~5-minute window renewal cycle sits
+# comfortably inside that.
+
+# Properties subscribed on every live session. current_time_secs is the
+# device's ~10 s liveness heartbeat and app_active the fast-reporting-window
+# signal; neither is ever pushed into the coordinator (they would rewrite
+# every entity's state every few seconds for no user-visible change).
+LIVE_SUBSCRIBED_PROPERTIES: Final[tuple[str, ...]] = (
+    "total_outlet_water_gals",
+    "water_counter_gals",
+    "gallons_used_today",
+    "treated_water_avail_gals",
+    "current_water_flow_gpm",
+    "regen_time_rem_secs",
+    "rf_signal_strength_dbm",
+    "app_active",
+    "app_active_timeout",
+    "current_time_secs",
+)
+
+# The subset of subscribed properties that entity value paths actually bind;
+# only these are merged into the fast coordinator's device view.
+LIVE_PUSHED_PROPERTIES: Final = frozenset(
+    {
+        "total_outlet_water_gals",
+        "water_counter_gals",
+        "gallons_used_today",
+        "treated_water_avail_gals",
+        "current_water_flow_gpm",
+        "regen_time_rem_secs",
+        "rf_signal_strength_dbm",
+    }
+)
+
+# Session-grant budget defaults (owner decision 2026-07-27): at most this many
+# trigger grants per device-local day with a minimum gap between grants.
+# Renewals within one held session consume tickets but never grants. Both
+# knobs are user-configurable through CONFIG number entities.
+LIVE_SESSIONS_PER_DAY_DEFAULT: Final = 48
+LIVE_MIN_GAP_SECONDS_DEFAULT: Final = 120.0
+LIVE_SESSIONS_PER_DAY_MIN: Final = 4
+LIVE_SESSIONS_PER_DAY_MAX: Final = 200
+LIVE_MIN_GAP_SECONDS_MIN: Final = 60.0
+LIVE_MIN_GAP_SECONDS_MAX: Final = 900.0
+
+# Fast-reporting window sizing. The device advertises its own window via the
+# app_active_timeout property (minutes; 5 on the reference device) — the
+# fallback covers a payload that lacks it. The grace keeps the client-side
+# window timer from racing the server's own app_active=false frame. On the
+# iqua2 host sessions reportedly run ~an hour and the server pushes
+# app_active=false when it wants a reconnect (fork observation — no iqua2
+# account exists to verify against).
+LIVE_WINDOW_FALLBACK_SECONDS: Final = 300.0
+LIVE_WINDOW_GRACE_SECONDS: Final = 30.0
+LIVE_IQUA2_WINDOW_SECONDS: Final = 3600.0
+
+# The manual Live-view hold renews window after window while the switch is on;
+# this cap flips it off if the user forgets it (the continuous-flow switch is
+# the deliberate always-on mode).
+LIVE_VIEW_HOLD_MAX_SECONDS: Final = 1800.0
+
+# Poll-detected active use (trigger e): a today-counter rise of at least this
+# many gallons between two consecutive fresh polls starts a session, with a
+# cooldown so routine household use cannot drain the daily budget. Night
+# sessions are deliberately allowed — per-gallon streaming during unexpected
+# night flow is leak evidence.
+LIVE_ACTIVE_USE_DELTA_GALLONS: Final = 2.0
+LIVE_ACTIVE_USE_COOLDOWN_SECONDS: Final = 1800.0
+
+# Analytics-driven smart windows (trigger c): after this many consecutive
+# smart sessions that saw no water movement, suspend further smart windows for
+# the rest of the device-local day.
+LIVE_SMART_NO_FLOW_SUSPEND: Final = 3
+
+# Websocket failure recovery: bounded exponential backoff between reconnect
+# attempts, silent fallback to polling throughout, and a Repairs issue only
+# after several consecutive failures while the device itself is online
+# (auto-dismissed by the next success).
+LIVE_BACKOFF_INITIAL_SECONDS: Final = 60.0
+LIVE_BACKOFF_MAX_SECONDS: Final = 1800.0
+LIVE_FAILURES_FOR_ISSUE: Final = 5
+
+# Streamed frames are applied to the coordinator coalesced, so a connect
+# snapshot burst becomes one entity update instead of a dozen.
+LIVE_COALESCE_SECONDS: Final = 1.0
+
+# entry.options key holding the persisted per-device live-mode configuration.
+OPTION_LIVE: Final = "live"
+
+# LiveState.status literals — also the connection-status enum sensor options.
+# The sensor is deliberately non-churning: state changes on grant, end, and
+# failure only, never on the renewals inside a held session.
+LIVE_STATUS_IDLE: Final = "idle"
+LIVE_STATUS_LIVE: Final = "live"
+LIVE_STATUS_BACKOFF: Final = "backoff"
+
+# Session source literals (observability attributes).
+LIVE_SOURCE_MANUAL: Final = "manual"
+LIVE_SOURCE_SMART: Final = "smart_window"
+LIVE_SOURCE_REGEN: Final = "regen_burst"
+LIVE_SOURCE_ANOMALY: Final = "anomaly_burst"
+LIVE_SOURCE_ACTIVE_USE: Final = "active_use"
+LIVE_SOURCE_CONTINUOUS: Final = "continuous"
+
 CONFIG_VERSION: Final = 1
 CONFIG_MINOR_VERSION: Final = 1
