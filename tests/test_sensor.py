@@ -132,21 +132,23 @@ async def test_all_sensor_entities(
 ) -> None:
     """Every sensor's registry entry and state matches the stored snapshot.
 
-    ``rf_signal_strength`` is disabled by default, so it is enabled in the
-    registry and the entry reloaded before snapshotting — ``snapshot_platform``
-    requires every entity to be enabled, which lets the snapshot cover all
-    fourteen sensors including the diagnostic RF one.
+    ``rf_signal_strength`` and ``salt_depletion_estimate`` are disabled by
+    default, so they are enabled in the registry and the entry reloaded before
+    snapshotting — ``snapshot_platform`` requires every entity to be enabled,
+    which lets the snapshot cover the full platform including the disabled
+    diagnostics.
     """
     freezer.move_to(FROZEN_INSTANT)
     add_device_routes(mock_api)
     with _ONLY_SENSOR:
         await setup_integration(hass, mock_config_entry)
-        rf_entity_id = _entity_id(hass, "rf_signal_strength")
         registry = er.async_get(hass)
-        rf_entry = registry.async_get(rf_entity_id)
-        assert rf_entry is not None
-        assert rf_entry.disabled_by is not None
-        registry.async_update_entity(rf_entity_id, disabled_by=None)
+        for key in ("rf_signal_strength", "salt_depletion_estimate"):
+            entity_id = _entity_id(hass, key)
+            entry = registry.async_get(entity_id)
+            assert entry is not None
+            assert entry.disabled_by is not None
+            registry.async_update_entity(entity_id, disabled_by=None)
         await hass.config_entries.async_reload(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 

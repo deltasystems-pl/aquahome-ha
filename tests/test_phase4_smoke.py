@@ -94,7 +94,9 @@ NUMBER_NAME = "brine_dose"
 #   valve          1 water-shutoff valve
 #   event          1 alert event, unchanged
 # ---------------------------------------------------------------------------
-_DEV_SENSORS = 30
+# The Phase-3 sensor set of 30 plus the five Phase-6 salt sensors (daily
+# usage, days remaining, depletion timestamp, per-regeneration, efficiency).
+_DEV_SENSORS = 35
 _DEV_BINARY_SENSORS = 11
 _DEV_BUTTONS = 6
 _DEV_SELECTS = 15

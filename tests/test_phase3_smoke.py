@@ -49,7 +49,9 @@ SLUG = "7384243_20203_1120"
 #: off on the dev device). Selects: 17 select settings minus the two chem-feed
 #: settings conditionally hidden while ``aux_control_type`` is 0. The dev
 #: device has no valve, leak detectors, number settings, or switch settings.
-EXPECTED_SENSORS = 30
+#: Sensors: the Phase-3 set of 30 plus the five Phase-6 salt sensors (daily
+#: usage, days remaining, depletion timestamp, per-regeneration, efficiency).
+EXPECTED_SENSORS = 35
 EXPECTED_BINARY_SENSORS = 11
 EXPECTED_EVENTS = 1
 EXPECTED_BUTTONS = 6

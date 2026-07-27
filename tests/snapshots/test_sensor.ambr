@@ -588,6 +588,67 @@
     'state': 'r4.5 MPC01154',
   })
 # ---
+# name: test_all_sensor_entities[sensor.dom_daily_salt_usage_estimate-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.dom_daily_salt_usage_estimate',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Daily salt usage estimate',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 0,
+      }),
+    }),
+    'original_device_class': None,
+    'original_icon': None,
+    'original_name': 'Daily salt usage estimate',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'daily_salt_usage',
+    'unique_id': '7384243_20203_1120_daily_salt_usage',
+    'unit_of_measurement': 'g/d',
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_daily_salt_usage_estimate-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'friendly_name': 'Dom Daily salt usage estimate',
+      'inlet_hardness_dh': 24.65,
+      'inlet_hardness_source': 'device_setting',
+      'outlet_hardness_dh': 0.0,
+      'salt_efficiency_mol_per_kg': 3.072,
+      'salt_type': 'NaCl',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': 'g/d',
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.dom_daily_salt_usage_estimate',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '254.597687603625',
+  })
+# ---
 # name: test_all_sensor_entities[sensor.dom_days_powered_up-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
@@ -1186,6 +1247,175 @@
     'state': '-37',
   })
 # ---
+# name: test_all_sensor_entities[sensor.dom_salt_days_remaining_estimate-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
+    'entity_id': 'sensor.dom_salt_days_remaining_estimate',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Salt days remaining estimate',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 0,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.DURATION: 'duration'>,
+    'original_icon': None,
+    'original_name': 'Salt days remaining estimate',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'salt_days_remaining',
+    'unique_id': '7384243_20203_1120_salt_days_remaining',
+    'unit_of_measurement': <UnitOfTime.DAYS: 'd'>,
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_salt_days_remaining_estimate-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'chemistry_daily_salt_g': 254.6,
+      'deviation_pct': -7.2,
+      'device_class': 'duration',
+      'device_daily_salt_g': 236.2,
+      'device_estimate_days': 167.0,
+      'friendly_name': 'Dom Salt days remaining estimate',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': <UnitOfTime.DAYS: 'd'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.dom_salt_days_remaining_estimate',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '154.961457299535',
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_salt_depletion_estimate-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
+    'entity_id': 'sensor.dom_salt_depletion_estimate',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Salt depletion estimate',
+    'options': dict({
+    }),
+    'original_device_class': <SensorDeviceClass.TIMESTAMP: 'timestamp'>,
+    'original_icon': None,
+    'original_name': 'Salt depletion estimate',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'salt_depletion_estimate',
+    'unique_id': '7384243_20203_1120_salt_depletion_estimate',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_salt_depletion_estimate-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'timestamp',
+      'friendly_name': 'Dom Salt depletion estimate',
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.dom_salt_depletion_estimate',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '2026-12-21T23:00:00+00:00',
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_salt_efficiency-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
+    'entity_id': 'sensor.dom_salt_efficiency',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Salt efficiency',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 2,
+      }),
+    }),
+    'original_device_class': None,
+    'original_icon': None,
+    'original_name': 'Salt efficiency',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'salt_efficiency',
+    'unique_id': '7384243_20203_1120_salt_efficiency',
+    'unit_of_measurement': 'mol/kg',
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_salt_efficiency-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'friendly_name': 'Dom Salt efficiency',
+      'grains_per_pound': 2152,
+      'source': 'device_rated_property',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': 'mol/kg',
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.dom_salt_efficiency',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '3.07161647956497',
+  })
+# ---
 # name: test_all_sensor_entities[sensor.dom_salt_level-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
@@ -1237,6 +1467,66 @@
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '37.5',
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_salt_per_regeneration-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.dom_salt_per_regeneration',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Salt per regeneration',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 2,
+      }),
+      'sensor.private': dict({
+        'suggested_unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.WEIGHT: 'weight'>,
+    'original_icon': None,
+    'original_name': 'Salt per regeneration',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'salt_per_regeneration',
+    'unique_id': '7384243_20203_1120_salt_per_regeneration',
+    'unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_salt_per_regeneration-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'weight',
+      'friendly_name': 'Dom Salt per regeneration',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.dom_salt_per_regeneration',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '1.736396951597',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_serial_number-entry]
