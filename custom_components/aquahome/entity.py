@@ -30,6 +30,7 @@ from .const import DISPLAY_PREFERENCE_SETTINGS, DOMAIN, MANUFACTURER
 if TYPE_CHECKING:
     from homeassistant.helpers.entity import EntityDescription
 
+    from .analytics.engine import AquaHomeAnalyticsEngine
     from .api import Device, DeviceSetting, DeviceSettingsDocument, LeakDetector
     from .coordinator import (
         AquaHomeActivityCoordinator,
@@ -139,6 +140,35 @@ class AquaHomeActivityEntity(CoordinatorEntity["AquaHomeActivityCoordinator"]):
         device: Device,
     ) -> None:
         """Bind the entity to its activity coordinator, description, and device.
+
+        ``device`` is the paired fast coordinator's device view, used only to
+        build the shared :class:`~homeassistant.helpers.device_registry.DeviceInfo`
+        so the entity attaches to the same device as the telemetry entities.
+        """
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{coordinator.device_slug}_{description.key}"
+        self._attr_device_info = build_device_info(device)
+
+
+class AquaHomeAnalyticsEntity(CoordinatorEntity["AquaHomeAnalyticsEngine"]):
+    """Base entity bound to one device's analytics engine.
+
+    Availability follows the engine's own update success only: every analytics
+    verdict is derived from imported statistics and stays meaningful while the
+    softener itself is offline (a leak verdict matters most then), so — like
+    :class:`AquaHomeActivityEntity` — there is no device-online gate here.
+    """
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: AquaHomeAnalyticsEngine,
+        description: EntityDescription,
+        device: Device,
+    ) -> None:
+        """Bind the entity to its analytics engine, description, and device.
 
         ``device`` is the paired fast coordinator's device view, used only to
         build the shared :class:`~homeassistant.helpers.device_registry.DeviceInfo`

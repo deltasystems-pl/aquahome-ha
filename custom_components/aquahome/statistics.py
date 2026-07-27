@@ -388,7 +388,7 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
 
     async def _async_backfill(self) -> None:
         """Fetch, merge and import the readings this run is responsible for."""
-        tz = await self._async_resolve_timezone()
+        tz = await self.async_resolve_timezone()
         now = dt_util.utcnow()
         now_local = now.astimezone(tz)
         run = _RunState()
@@ -457,11 +457,13 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
             unit_of_measurement=UnitOfVolume.GALLONS,
         )
 
-    async def _async_resolve_timezone(self) -> tzinfo:
+    async def async_resolve_timezone(self) -> tzinfo:
         """Return the zone the cloud aligns this device's buckets to.
 
         The device's own reported zone wins; an absent or unknown one falls back
-        to the Home Assistant zone, which every installation has.
+        to the Home Assistant zone, which every installation has. Public because
+        the analytics engine anchors its local-time windows (and its daily run)
+        to the very same zone resolution.
         """
         if self._tz_id:
             zone = await dt_util.async_get_time_zone(self._tz_id)
