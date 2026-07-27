@@ -906,3 +906,97 @@ async def test_rest_backoff_does_not_gate_the_live_domain(
         )
 
     assert ticket.websocket_uri == "/ws/?p=ticket-a"
+
+
+# ---------------------------------------------------------------------------
+# Per-request accept-language override (datapoint graphs)
+# ---------------------------------------------------------------------------
+
+
+async def test_datapoint_graph_language_overrides_only_its_own_request(
+    session: aiohttp.ClientSession,
+) -> None:
+    """A pinned graph language does not leak into any later request."""
+    start = datetime(2026, 7, 20, tzinfo=WARSAW)
+    end = datetime(2026, 7, 27, tzinfo=WARSAW)
+    with aioresponses() as mocked:
+        # The server localizes the ``units`` string from accept-language, so the
+        # two graph routes are the real English and Polish captures in the order
+        # the two calls consume them.
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}/datapoints/[^/]+/graph"),
+            payload=load_fixture("graph-meter-daily.json"),
+        )
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}/datapoints/[^/]+/graph"),
+            payload=load_fixture("graph-usage-daily-pl.json"),
+        )
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}"),
+            payload=load_fixture("device-detail.json"),
+        )
+        client = _make_client(session, language="pl")
+        pinned = await client.async_get_datapoint_graph(
+            DEVICE_ID,
+            "total_outlet_water_gals",
+            period_type="day",
+            start=start,
+            end=end,
+            value_type="max",
+            language="en",
+        )
+        localized = await client.async_get_datapoint_graph(
+            DEVICE_ID,
+            "total_outlet_water_gals",
+            period_type="day",
+            start=start,
+            end=end,
+            value_type="max_diff",
+        )
+        await client.async_get_device(DEVICE_ID)
+
+        graph_calls = _calls_for(mocked, "GET", "/graph")
+        (device_call,) = _calls_for(mocked, "GET", f"/devices/{DEVICE_ID}")
+
+    assert [call.kwargs["headers"]["accept-language"] for call in graph_calls] == [
+        "en",
+        "pl",
+    ]
+    # A plain follow-up call still speaks the client's own language.
+    assert device_call.kwargs["headers"]["accept-language"] == "pl"
+    # ...which is exactly why the backfill pins one: the same field comes back
+    # localized, and only the pinned response is parseable.
+    assert pinned.units == "Liters"
+    assert localized.units == "Litry"
+
+
+async def test_datapoint_graph_without_language_keeps_the_client_language(
+    session: aiohttp.ClientSession,
+) -> None:
+    """``language=None`` sends no override, leaving the mimicry headers intact."""
+    start = datetime(2026, 7, 20, tzinfo=WARSAW)
+    end = datetime(2026, 7, 27, tzinfo=WARSAW)
+    with aioresponses() as mocked:
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}/datapoints/[^/]+/graph"),
+            payload=load_fixture("graph-meter-daily.json"),
+        )
+        client = _make_client(session, language="pl")
+        graph = await client.async_get_datapoint_graph(
+            DEVICE_ID,
+            "total_outlet_water_gals",
+            period_type="day",
+            start=start,
+            end=end,
+            value_type="max",
+            language=None,
+        )
+
+        (call,) = _calls_for(mocked, "GET", "/graph")
+
+    assert isinstance(graph, DatapointGraph)
+    headers = call.kwargs["headers"]
+    assert headers["accept-language"] == "pl"
+    assert headers["User-Agent"] == "okhttp/4.9.2"
+    assert headers["x-app-version"] == "version=1.5.2,build=2794"
+    assert headers["Authorization"] == f"Bearer {ACCESS_TOKEN}"
