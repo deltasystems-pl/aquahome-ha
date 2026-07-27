@@ -1,0 +1,16 @@
+{
+  "services": {
+    "analyze_usage": {
+      "service": "mdi:chart-box-outline"
+    },
+    "get_usage_forecast": {
+      "service": "mdi:chart-line"
+    },
+    "set_vacation_mode": {
+      "service": "mdi:beach"
+    },
+    "schedule_regeneration": {
+      "service": "mdi:calendar-clock"
+    }
+  }
+}

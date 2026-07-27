@@ -1,0 +1,63 @@
+# Action descriptions for the AquaHome integration. Names, descriptions and
+# selector option labels live in strings.json so they can be translated; this
+# file carries only the target and field structure the UI builds its form from.
+
+analyze_usage:
+  target:
+    entity:
+      integration: aquahome
+      domain: sensor
+  fields:
+    refresh:
+      required: false
+      default: false
+      example: true
+      selector:
+        boolean:
+
+get_usage_forecast:
+  target:
+    entity:
+      integration: aquahome
+      domain: sensor
+  fields:
+    days:
+      required: false
+      default: 1
+      example: 3
+      selector:
+        number:
+          min: 1
+          max: 7
+          step: 1
+          mode: box
+
+set_vacation_mode:
+  target:
+    entity:
+      integration: aquahome
+      domain: switch
+  fields:
+    vacation:
+      required: true
+      example: true
+      selector:
+        boolean:
+
+schedule_regeneration:
+  target:
+    entity:
+      integration: aquahome
+      domain: button
+  fields:
+    mode:
+      required: false
+      default: schedule
+      example: schedule
+      selector:
+        select:
+          translation_key: regeneration_mode
+          options:
+            - schedule
+            - now
+            - cancel

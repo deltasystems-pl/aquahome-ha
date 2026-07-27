@@ -9,6 +9,12 @@ detection entities. Verdict transitions additionally fire
 :data:`~..const.EVENT_AQUAHOME` bus events so automations can react without
 polling entity state.
 
+Alongside the published pass the engine answers one on-demand question:
+:meth:`AquaHomeAnalyticsEngine.async_compute_forecasts` resolves the coming
+days' expectations for the forecast service. It gathers the same inputs and
+dispatches to the same executor, but publishes nothing and fires no event — a
+question about the future must never move a detector's verdict.
+
 The engine is deliberately stateless across runs: every verdict, including the
 multi-night leak debounce, is recomputed from the statistics window, so a Home
 Assistant restart can never lose or fabricate detector state (owner decision
@@ -52,10 +58,18 @@ from custom_components.aquahome.const import (
     NOMINAL_REGEN_DURATION,
 )
 
-from .detectors import compute_analytics
-from .model import AnalyticsInputs, AnalyticsResult, Reading, WeekdaySlot
+from .detectors import compute_analytics, compute_forecasts
+from .model import (
+    AnalyticsInputs,
+    AnalyticsResult,
+    ForecastState,
+    Reading,
+    WeekdaySlot,
+)
 
 if TYPE_CHECKING:
+    from datetime import date
+
     from homeassistant.components.recorder.statistics import StatisticsRow
     from homeassistant.core import HomeAssistant
 
@@ -146,6 +160,26 @@ class AquaHomeAnalyticsEngine(DataUpdateCoordinator[AnalyticsResult]):
         )
         self._fire_transitions(previous, result)
         return result
+
+    async def async_compute_forecasts(
+        self, days: int
+    ) -> tuple[tuple[date, ForecastState], ...]:
+        """Return the coming ``days`` device-local daily forecasts, newest last.
+
+        A read-only sibling of :meth:`_async_update_data`: the same readings,
+        the same timezone resolution and the same executor dispatch, but the
+        result is handed straight back to the caller — no coordinator update,
+        no transition events, and no effect whatsoever on the published
+        verdicts. A recorder failure surfaces as :class:`UpdateFailed` exactly
+        as it does for a full pass, which the service layer turns into a
+        user-facing error.
+        """
+        readings = await self._async_load_readings()
+        tz = await self._statistics.async_resolve_timezone()
+        tz_key = getattr(tz, "key", None) or "UTC"
+        return await self.hass.async_add_executor_job(
+            compute_forecasts, self._build_inputs(readings, tz_key), days
+        )
 
     async def async_schedule(self) -> None:
         """Arm the daily run at the next device-local run time.

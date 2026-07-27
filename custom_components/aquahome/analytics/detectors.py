@@ -950,6 +950,23 @@ def _forecast(
     )
 
 
+def _history_and_learned(
+    inputs: AnalyticsInputs, tz: tzinfo
+) -> tuple[list[_NoonDay], baseline.LearnedDaily]:
+    """Return the baseline window's noon-days and the statistics learned from them.
+
+    The prep step every expectation rests on, shared verbatim by the full pass
+    and by the forecast-only entry point so both resolve a day against exactly
+    the same learned distribution — a forecast that disagreed with the sensor
+    showing it would be worse than no forecast at all.
+    """
+    history = _noon_days(inputs.readings, BASELINE_WINDOW_DAYS, inputs.now, tz)
+    learned = baseline.LearnedDaily.from_days(
+        [(entry.day, entry.total_liters, entry.assessable) for entry in history]
+    )
+    return history, learned
+
+
 def compute_analytics(inputs: AnalyticsInputs) -> AnalyticsResult:
     """Return one complete analytics pass over a device's usage history.
 
@@ -967,10 +984,7 @@ def compute_analytics(inputs: AnalyticsInputs) -> AnalyticsResult:
     reading_hours = series.reading_hours(readings, tz)
     median, mad, n = baseline.build_grid(hour_knowledge)
 
-    history = _noon_days(readings, BASELINE_WINDOW_DAYS, inputs.now, tz)
-    learned = baseline.LearnedDaily.from_days(
-        [(entry.day, entry.total_liters, entry.assessable) for entry in history]
-    )
+    history, learned = _history_and_learned(inputs, tz)
     observed = [
         entry.total_liters
         for entry in history
@@ -1019,4 +1033,31 @@ def compute_analytics(inputs: AnalyticsInputs) -> AnalyticsResult:
         ),
         forecast=_forecast(inputs, learned, tz),
         grid=grid,
+    )
+
+
+def compute_forecasts(
+    inputs: AnalyticsInputs, days: int
+) -> tuple[tuple[date, ForecastState], ...]:
+    """Return the expectation for each of the ``days`` local days after today.
+
+    The multi-day companion to :func:`compute_analytics`, pure and total in the
+    same way and built on the very same prep chain — the imported series is
+    folded into noon-days, those into the learned daily statistics, and each
+    requested day is then resolved through :func:`~.baseline.forecast_for`. The
+    first entry is always tomorrow in the *device's* zone (the day the published
+    forecast sensor shows), so a caller asking for one day gets exactly the
+    sensor's number.
+
+    Every day is resolved independently: a day whose weekday has no usable
+    expectation yields a :class:`~.model.ForecastState` with ``None`` figures
+    rather than borrowing a neighbour's, and a non-positive ``days`` yields the
+    empty tuple.
+    """
+    tz = _resolve_zone(inputs.tz_key)
+    _history, learned = _history_and_learned(inputs, tz)
+    tomorrow = inputs.now.astimezone(tz).date() + timedelta(days=1)
+    return tuple(
+        (day, baseline.forecast_for(day, inputs, learned))
+        for day in (tomorrow + timedelta(days=offset) for offset in range(days))
     )
