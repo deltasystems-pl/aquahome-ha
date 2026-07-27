@@ -212,6 +212,15 @@
     "switch": {
       "leak_detector_scan": {
         "name": "Leak detector scan"
+      },
+      "vacation_deferral": {
+        "name": "Vacation deferral"
+      },
+      "auto_vacation": {
+        "name": "Auto vacation deferral"
+      },
+      "smart_regeneration": {
+        "name": "Smart regeneration scheduling"
       }
     },
     "event": {
@@ -327,6 +336,15 @@
     },
     "valve_action_blocked": {
       "message": "The valve does not currently allow this action"
+    },
+    "service_wrong_entity": {
+      "message": "This action must target {expected}"
+    },
+    "analytics_not_ready": {
+      "message": "Usage analytics have not produced a result yet; try again after the next analysis run"
+    },
+    "regen_not_allowed": {
+      "message": "The device is not accepting this regeneration action right now"
     }
   },
   "issues": {
@@ -345,6 +363,92 @@
     "leak_urgent": {
       "title": "Severe continuous water flow on {device}",
       "description": "Water has been flowing continuously through {device} at roughly {liters_per_day} liters per day, including every overnight hour between 01:00 and 07:00 on consecutive nights. If nobody has been deliberately running water, check for a burst pipe, a running toilet, or an open tap, and consider shutting off the supply."
+    },
+    "leak_while_away": {
+      "title": "Water is flowing while nobody is home on {device}",
+      "description": "A continuous leak ({tier} tier, roughly {liters_per_day} liters per day) is being detected on {device} while the household appears to be away. Water flowing through an empty house is rarely intentional — check for a burst pipe, a running toilet, or an open tap, and consider shutting off the supply remotely if you can."
+    },
+    "vacation_defer": {
+      "title": "Vacation detected — defer regenerations on {device}?",
+      "description": "No meaningful water use has been seen on {device} for {consecutive_days} days, which looks like an absence. Regenerating a softener that is treating no water wastes salt and water.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Defer regenerations on {device}",
+            "description": "Scheduled regenerations will be cancelled while the house stays empty and resume automatically when water use returns. A regeneration is still allowed through after 21 deferred days to protect the resin bed."
+          }
+        },
+        "abort": {
+          "entry_not_loaded": "The AquaHome integration is not loaded; try again after it has started."
+        }
+      }
+    },
+    "regen_time": {
+      "title": "Regeneration time on {device} overlaps household water use",
+      "description": "Regenerations on {device} are configured for {current}, but learned usage patterns show water is regularly used at that hour. Softened water is unavailable during a regeneration, so a quieter hour ({proposed}) would fit this household better.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Move the regeneration time on {device}",
+            "description": "The regeneration time setting will be changed from {current} to {proposed}. You can change it back at any time from the device settings."
+          }
+        },
+        "abort": {
+          "write_failed": "Writing the new regeneration time failed; the device setting was not changed.",
+          "entry_not_loaded": "The AquaHome integration is not loaded; try again after it has started."
+        }
+      }
+    }
+  },
+  "selector": {
+    "regeneration_mode": {
+      "options": {
+        "schedule": "Schedule for the next regeneration time",
+        "now": "Regenerate now",
+        "cancel": "Cancel a scheduled regeneration"
+      }
+    }
+  },
+  "services": {
+    "analyze_usage": {
+      "name": "Analyze usage",
+      "description": "Returns the full water-usage analysis for a device: nightly leak verdicts, daily usage assessments, anomaly and vacation detection state, tomorrow's forecast, and the learned activity grid.",
+      "fields": {
+        "refresh": {
+          "name": "Refresh first",
+          "description": "Recompute the analysis from the latest imported statistics before returning it."
+        }
+      }
+    },
+    "get_usage_forecast": {
+      "name": "Get usage forecast",
+      "description": "Returns the expected daily water usage for the coming days, derived from the device's own averages and learned statistics.",
+      "fields": {
+        "days": {
+          "name": "Days",
+          "description": "How many days ahead to forecast, starting tomorrow."
+        }
+      }
+    },
+    "set_vacation_mode": {
+      "name": "Set vacation mode",
+      "description": "Turns regeneration deferral on or off. While on, scheduled regenerations are cancelled (with a resin-protection limit) and a catch-up regeneration is scheduled on return if capacity is low. This does not change the vacation tile in the iQua app.",
+      "fields": {
+        "vacation": {
+          "name": "Vacation",
+          "description": "Whether the household is away."
+        }
+      }
+    },
+    "schedule_regeneration": {
+      "name": "Schedule regeneration",
+      "description": "Schedules, starts, or cancels a regeneration on the targeted device.",
+      "fields": {
+        "mode": {
+          "name": "Mode",
+          "description": "Which regeneration action to perform."
+        }
+      }
     }
   }
 }

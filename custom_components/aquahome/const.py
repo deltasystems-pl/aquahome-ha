@@ -328,5 +328,71 @@ EVENT_TYPE_USAGE_ANOMALY_CLEARED: Final = "usage_anomaly_cleared"
 EVENT_TYPE_VACATION_STARTED: Final = "vacation_started"
 EVENT_TYPE_VACATION_ENDED: Final = "vacation_ended"
 
+# --- Automation tier (Phase 8). Every device-affecting automation is opt-in
+# (default-off switches / explicit confirmations), driven by daily-level
+# signals from the analytics tier, and built ONLY on the live-verified
+# regenerate/schedule/cancel command surface (the vacation-mode /command
+# payloads remain unverified — gap-analysis ledger P1).
+
+# Schedule a regeneration when the remaining treated-water capacity drops below
+# tomorrow's forecast times this factor (a 50 % reserve).
+FORECAST_RESERVE_FACTOR: Final = 1.5
+
+# Resin-hygiene cap on vacation deferral: after this many deferred days the
+# next scheduled regeneration is let through rather than cancelled (the device
+# default max_days_between_recharges is 14; 21 = 1.5x headroom).
+REGEN_DEFERRAL_MAX_DAYS: Final = 21
+
+# Maximum deferral cancels per local day, so a disagreement with the device's
+# own scheduling logic can never turn into a command fight on the throttled
+# cloud.
+REGEN_CANCEL_DAILY_BUDGET: Final = 3
+
+# Night hours a quiet-hour regeneration-time proposal may pick from. The
+# proposal itself is only ever a fixable Repairs suggestion, never a silent
+# settings write (owner decision 2026-07-27).
+QUIET_REGEN_CANDIDATE_HOURS: Final = (22, 23, 0, 1, 2, 3, 4, 5)
+
+# recharge_ui.state values the scheduler acts on (observed live 2026-07-21).
+RECHARGE_STATE_READY: Final = "ready"
+RECHARGE_STATE_SCHEDULED: Final = "scheduled"
+
+# entry.options key holding the persisted per-device automation flags.
+OPTION_AUTOMATION: Final = "automation"
+
+# aquahome_event types fired by the automation tier.
+EVENT_TYPE_LEAK_WHILE_AWAY: Final = "leak_while_away"
+EVENT_TYPE_REGEN_SCHEDULED: Final = "regen_scheduled"
+EVENT_TYPE_REGEN_DEFERRED: Final = "regen_deferred"
+EVENT_TYPE_REGEN_DEFERRAL_EXPIRED: Final = "regen_deferral_expired"
+
+# Scheduler event payload reasons.
+REGEN_REASON_LOW_CAPACITY: Final = "low_capacity"
+REGEN_REASON_CATCH_UP: Final = "catch_up"
+
+# Deferral actor labels. A MANUAL deferral (switch, service, blueprint) is
+# never auto-released; an AUTO deferral (auto-vacation follower or a confirmed
+# repair suggestion) releases itself when the household returns.
+DEFERRAL_SOURCE_MANUAL: Final = "manual"
+DEFERRAL_SOURCE_AUTO: Final = "auto"
+
+# Service names and field attributes.
+SERVICE_ANALYZE_USAGE: Final = "analyze_usage"
+SERVICE_GET_USAGE_FORECAST: Final = "get_usage_forecast"
+SERVICE_SET_VACATION_MODE: Final = "set_vacation_mode"
+SERVICE_SCHEDULE_REGENERATION: Final = "schedule_regeneration"
+ATTR_REFRESH: Final = "refresh"
+ATTR_DAYS: Final = "days"
+ATTR_VACATION: Final = "vacation"
+ATTR_MODE: Final = "mode"
+
+# schedule_regeneration mode field values.
+REGEN_MODE_SCHEDULE: Final = "schedule"
+REGEN_MODE_NOW: Final = "now"
+REGEN_MODE_CANCEL: Final = "cancel"
+
+# Ceiling on the get_usage_forecast days field (one weekly cycle).
+FORECAST_MAX_DAYS: Final = 7
+
 CONFIG_VERSION: Final = 1
 CONFIG_MINOR_VERSION: Final = 1
