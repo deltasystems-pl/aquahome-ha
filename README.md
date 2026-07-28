@@ -195,7 +195,7 @@ no leak detectors) registers 83 entities.
 | --- | --- |
 | Usage forecast | Expected water use tomorrow, with the reasoning in its attributes. |
 | Night flow | Minimum overnight flow, the leak-watch input. Diagnostic. |
-| Water flow | Current flow rate. Updates within seconds during a live session; see [Live mode](#live-mode). |
+| Water flow | Current flow rate. Live only in practice: the cloud carries a fresh flow value just during live sessions, so between them the sensor reads 0 even while the daily counter climbs — a poll almost never catches a draw mid-flow. See [Live mode](#live-mode). |
 | Live mode | Idle / live / reconnect backoff, with session bookkeeping in its attributes. Diagnostic. |
 
 **Device and diagnostics**
