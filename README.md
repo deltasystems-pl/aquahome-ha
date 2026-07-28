@@ -140,8 +140,9 @@ fresh without hammering the cloud:
 
 A **Refresh data** button asks the device to push fresh state and then polls it,
 for when you do not want to wait out the interval. Device capabilities are
-re-detected on the settings cadence, so entities for hardware added later (a
-leak detector, a shutoff valve) appear on their own.
+re-detected on the device poll (two consecutive sightings, so a glitch never
+creates hardware), and entities for hardware added later (a leak detector, a
+shutoff valve) appear on their own within about twenty minutes.
 
 ## Entities
 
@@ -233,7 +234,7 @@ no leak detectors) registers 83 entities.
 | Leak suspected | From the usage analysis, not from a leak sensor. Attributes carry the tier, rate and evidence. |
 | Usage anomaly | Unusually high water use for this household and hour. |
 | Vacation detected | Sustained multi-day absence inferred from water use. |
-| Leak detected, Low battery, Tampered, Connectivity | Per leak detector; the last two are diagnostic. |
+| Leak detected, Low battery, Tampered, Connectivity | Per leak detector; Low battery and Connectivity are diagnostic. |
 
 ### Buttons
 
@@ -301,6 +302,17 @@ the phone app.
 | --- | --- |
 | Alert | Fires on each new device alert with a normalized `event_type` (low salt, excessive water use, shutoff valve opened, connection online/offline, other) and the raw alert in its attributes. |
 
+Alongside the event entity, the integration fires `aquahome_event` on the Home
+Assistant event bus: once per new device alert (`type: alert`), on every
+analysis transition (`leak_suspected`/`leak_cleared`,
+`usage_anomaly`/`usage_anomaly_cleared`, `vacation_started`/`vacation_ended`,
+`leak_while_away`), and for the automation tier's own moves (`regen_scheduled`,
+`regen_deferred`, `regen_deferral_expired`). Every event carries `device_id`,
+`device` (the slug), `type`, and the evidence behind it, shows up in the
+logbook with a readable description, and is what the bundled blueprints
+trigger on. Listen with a standard event trigger:
+`event_type: aquahome_event`.
+
 ## Live mode
 
 Polling every 10 minutes is fine for salt and capacity, and useless for
@@ -313,7 +325,9 @@ the poll feeds — it never creates a second set.
 
 1. **Live view switch** — turn it on and a session is held open, renewing
    itself window after window, until you turn it off or the 30-minute cap
-   expires.
+   expires. The switch also turns itself off when the session cannot continue
+   (the device drops offline, the cloud throttles): the manual hold is
+   deliberately ephemeral, so flip it back on when you want live data again.
 2. **The live dashboard blueprint** — the same switch, driven from an
    "app is open" indicator, so live data runs exactly while you are looking at
    a dashboard. See [Blueprints](#blueprints).
@@ -418,6 +432,12 @@ while the integration is reloading.
 The two read-only actions return response data and change nothing, which makes
 them safe to call from a template sensor or a script loop.
 
+One reading note: the analysis works in **noon-to-noon** days (a `day` labeled
+2026-07-27 spans 2026-07-27 12:00 to 2026-07-28 12:00 device-local), because
+household water use bridges midnight and a calendar-day cut would split every
+evening from its night. The daily totals in a response therefore deliberately
+differ from the Energy dashboard's midnight-to-midnight bars.
+
 ```yaml
 actions:
   - action: aquahome.get_usage_forecast
@@ -467,10 +487,12 @@ Both are selectable in **Settings → Dashboards → Energy → Water consumptio
 Pick **one source only**: both series count the same water, and adding both —
 or keeping a water source from another integration for the same meter — makes
 the dashboard double-count. This is a configuration page, not an automation,
-so no blueprint can set it up; it is a two-click, one-time choice.
-**Pick exactly one.** Adding both counts every litre twice — choose the
-imported statistic if you want the full history, the sensor if you would rather
-keep the Energy dashboard on a live entity.
+so no blueprint can set it up; it is a two-click, one-time choice. The
+imported statistic is the recommended source for a second reason besides
+history: it is built from the cloud's own meter records, while the **Total
+water** sensor's statistic samples a lifetime counter that occasionally lags
+and then catches up in one step — a catch-up lands as a single inflated hour
+on the dashboard, over-stating that day.
 
 ## Blueprints
 
