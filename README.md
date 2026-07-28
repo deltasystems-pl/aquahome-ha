@@ -10,6 +10,15 @@ Custom Home Assistant integration for **AquaHome 20 Smart** and other water
 treatment devices supported by the iQua mobile app. It talks to the same iQua
 cloud API the official app uses — no local access, no extra hardware, no YAML.
 
+**Works with** softeners set up in the **iQua** app, whatever the badge on the
+cabinet: the **Viessmann Aquahome** line (Aquahome 20/30 Smart), **EcoWater**
+smart softeners of the same platform generation, and other iQua-connected
+rebrands. If the iQua app controls it, this integration should too. (Devices
+from the older, pre-iQua EcoWater cloud are out of scope — see
+[Honest limitations](#honest-limitations).) All product names and trademarks
+belong to their respective owners; this project is not affiliated with any of
+them.
+
 Beyond mirroring the app, it adds long-term water statistics imported from the
 cloud's own history, a read-only analytics tier (leak watch, usage anomalies,
 absence detection, usage forecast), strictly opt-in automation, and an
