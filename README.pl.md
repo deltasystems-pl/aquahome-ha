@@ -13,10 +13,10 @@ powinna też ta integracja.
 Dostajesz wszystkie dane widoczne w aplikacji: poziom soli, zużycie wody, stan
 regeneracji, alerty i ustawienia urządzenia. Do tego historię zużycia wody
 zaimportowaną z chmury — także sprzed instalacji — gotową do wpięcia w panel
-**Energia**; codzienną analizę tej historii, czyli podejrzenie wycieku,
-nietypowe zużycie, wykrytą nieobecność domowników i prognozę na jutro; oraz
-tryb podglądu na żywo, w którym licznik wody i przepływ zmieniają się w ciągu
-sekund, a nie co dziesięć minut.
+**Energia**; codzienną analizę tej historii (podejrzenie wycieku, nietypowe
+zużycie, wykryta nieobecność domowników, prognoza na jutro); oraz tryb podglądu
+na żywo, w którym licznik wody i przepływ zmieniają się w ciągu sekund, a nie
+co dziesięć minut.
 
 Czego integracja **nie** robi. Nie łączy się ze zmiękczaczem lokalnie — tak
 samo jak aplikacja, rozmawia z chmurą producenta, więc bez internetu nie
@@ -53,9 +53,9 @@ zadziałała, zrób to samo ręcznie:
 4. Znajdź na liście **AquaHome (iQua water softener)** i naciśnij **Pobierz**.
 
 **Na koniec zrestartuj Home Assistanta** (**Ustawienia → System → przycisk
-zasilania → Uruchom ponownie Home Assistant**). Restart jest konieczny, bo Home
-Assistant wczytuje integracje społecznościowe tylko przy starcie: HACS
-skopiował pliki na dysk, ale dopóki się nie zrestartujesz, nic o nich nie wie.
+zasilania → Uruchom ponownie Home Assistant**). Restart jest konieczny, bo
+integracje społecznościowe wczytują się tylko przy starcie: HACS skopiował
+pliki na dysk, ale dopóki się nie zrestartujesz, nic o nich nie wie.
 
 Instalacja ręczna (skopiowanie katalogu do `config/custom_components/`) też
 jest możliwa — opisuje ją angielski [README.md](README.md).
@@ -73,11 +73,11 @@ serwerów producenta, a integracja przy logowaniu sprawdza oba i zapamiętuje
 ten, który odpowiedział — pytanie o „typ API” byłoby pytaniem, na które i tak
 nikt nie potrafi odpowiedzieć.
 
-Hasło nie jest przechowywane: zostaje wymienione na tokeny i tylko one są
-zapisane. Gdyby przestały działać, Home Assistant sam poprosi o ponowne
+Hasło nie jest przechowywane — zostaje wymienione na tokeny i tylko one są
+zapisane; gdyby przestały działać, Home Assistant sam poprosi o ponowne
 uwierzytelnienie, a historia encji zostaje zachowana. Urządzenia z pierwszej
-generacji chmury EcoWater (obsługiwane starą aplikacją EcoWater, a nie iQua)
-korzystają z innego API i nie są wspierane.
+generacji chmury EcoWater (obsługiwane starą aplikacją, a nie iQua) korzystają
+z innego API i nie są wspierane.
 
 ## Co dostajesz
 
@@ -109,10 +109,9 @@ i **Przepływ nocny**. Wszystkie są wyłącznie do odczytu — analiza nigdy ni
 nie robi ze zmiękczaczem.
 
 Liczy przy tym doby **od południa do południa**, a nie od północy: dom zużywa
-wodę wieczorem i w nocy, a cięcie o północy rozdzieliłoby wieczór od jego nocy,
-więc jej dobowe sumy różnią się od słupków w panelu Energia. Gdy nie ma czego
-oceniać, te czujniki pokazują *nieznany* zamiast *wyłączony* — „nie znalazłem
-wycieku” i „nie umiem tego ocenić” to dwie różne odpowiedzi. Wykrywalność ma
+wodę wieczorem i w nocy, a cięcie o północy rozdzieliłoby wieczór od jego nocy
+— dlatego jej dobowe sumy różnią się od słupków w panelu Energia. Gdy nie ma
+czego oceniać, czujniki pokazują *nieznany*, a nie *wyłączony*. Wykrywalność ma
 też próg: wodomierz liczy pełne galony i melduje się tylko wtedy, gdy woda
 płynie, więc kapanie wolniejsze niż około 1 galon na godzinę (jakieś 91 litrów
 na dobę) jest dla niej niewidoczne.
@@ -122,11 +121,11 @@ na dobę) jest dla niej niewidoczne.
 **Tryb podglądu na żywo** pokazuje, czy trwa sesja: *Bezczynny*, *Na żywo* albo
 *Wstrzymany po błędzie*. Sterują nią trzy przełączniki opisane
 [niżej](#trzy-przełączniki-podglądu-na-żywo) oraz liczby **Sesje podglądu na
-żywo dziennie** i **Minimalny odstęp między sesjami podglądu**. Podgląd na żywo
-**nie dodaje nowych czujników** — przyspiesza te, które masz: w trakcie sesji
-liczniki wody, **Przepływ wody** i **Pozostały czas regeneracji** zmieniają się
-w ciągu sekund. Sesję otwiera też sama integracja (start regeneracji, zapalona
-**Anomalia zużycia**, skok licznika o co najmniej 2 galony) — to normalne.
+żywo dziennie** i **Minimalny odstęp między sesjami podglądu**. Podgląd **nie
+dodaje nowych czujników** — w trakcie sesji liczniki wody, **Przepływ wody**
+i **Pozostały czas regeneracji** po prostu zmieniają się w ciągu sekund. Sesję
+otwiera też sama integracja (start regeneracji, zapalona **Anomalia zużycia**,
+skok licznika o co najmniej 2 galony) — to normalne.
 
 ### Regeneracja
 
@@ -135,7 +134,7 @@ w ciągu sekund. Sesję otwiera też sama integracja (start regeneracji, zapalon
 regeneracja**, **Ostatnia regeneracja**, **Dni od ostatniej regeneracji**,
 **Łączna liczba regeneracji** i **Pozostały czas regeneracji** — ten ostatni
 pokazuje 0, gdy cykl nie trwa, bo chmura zostawia po sobie starą wartość,
-a integracja ją zeruje, żebyś nie oglądał „42 minuty do końca” pięć godzin po
+a integracja ją zeruje — inaczej oglądałbyś „42 minuty do końca” pięć godzin po
 fakcie. Przyciski **Regeneruj teraz**, **Zaplanuj regenerację** i **Anuluj
 regenerację** robią to, co obiecują, i tylko wtedy, gdy je naciśniesz.
 
@@ -158,11 +157,11 @@ dogoni ją później. Czytaj ją obok wskazania urządzenia, a nie zamiast niego
 ### Automatyka
 
 Trzy przełączniki: **Odroczenie regeneracji (urlop)**, **Automatyczne
-odroczenie regeneracji (urlop)** i **Inteligentne planowanie regeneracji**.
-Wszystkie są domyślnie wyłączone, opisuje je sekcja [Co integracja robi
-z urządzeniem](#co-integracja-robi-z-urządzeniem). Są przy tym dostępne zawsze,
-także gdy chmura milczy: trzymają *twoje* ustawienie, nie stan urządzenia, więc
-awaria nigdy nie odbierze ci możliwości wyłączenia automatyzacji.
+odroczenie regeneracji (urlop)** i **Inteligentne planowanie regeneracji** —
+wszystkie domyślnie wyłączone, opisane
+[niżej](#co-integracja-robi-z-urządzeniem). Są dostępne zawsze, także gdy
+chmura milczy: trzymają *twoje* ustawienie, nie stan urządzenia, więc awaria
+nigdy nie odbierze ci możliwości wyłączenia automatyzacji.
 
 ### Alarmy
 
@@ -180,11 +179,10 @@ restart nie zasypie cię powiadomieniami sprzed miesiąca.
 zależy dostępność większości pozostałych encji. Dalej dane techniczne —
 **Model**, **Numer seryjny**, **Oprogramowanie sterownika**, **Oprogramowanie
 modułu Wi-Fi**, **Dni od włączenia zasilania** — oraz przycisk **Odśwież
-dane**, który prosi urządzenie o natychmiastowe wysłanie stanu, gdy nie chcesz
-czekać do kolejnego odpytania. Ustawienia urządzenia (twardość wody, godzina
-regeneracji, rodzaj soli, tryb efektywności i inne) pojawiają się jako listy
-wyboru w sekcji *Konfiguracja*, nazwane wprost przez chmurę, w języku twojego
-Home Assistanta.
+dane**, który prosi urządzenie o wysłanie stanu od razu, gdy nie chcesz czekać
+do kolejnego odpytania. Ustawienia urządzenia (twardość wody, godzina
+regeneracji, rodzaj soli i inne) pojawiają się jako listy wyboru w sekcji
+*Konfiguracja*, nazwane wprost przez chmurę, w języku twojego Home Assistanta.
 
 ## Trzy przełączniki podglądu na żywo
 
@@ -193,7 +191,7 @@ Zwykle integracja pyta chmurę o nowości co dziesięć minut. Sesja podglądu n
 każdy galon na bieżąco. Otwierają ją trzy przełączniki:
 
 - **Podgląd na żywo** — ręczne „pokaż mi teraz”. Trzyma sesję otwartą, dopóki
-  go nie wyłączysz, najdalej przez 30 minut, po czym wyłącza się sam — podobnie
+  go nie wyłączysz, najdalej przez 30 minut — potem wyłącza się sam, podobnie
   jak wtedy, gdy sesji nie da się kontynuować (urządzenie wypadło z sieci,
   chmura odmawia). To celowo rzecz jednorazowa; gdy znów chcesz danych na żywo,
   włącz go ponownie.
@@ -210,11 +208,11 @@ każdy galon na bieżąco. Otwierają ją trzy przełączniki:
 
 Wszystkie sesje — także te otwierane automatycznie — dzielą jeden budżet:
 domyślnie **48 sesji na dobę** i **minimum 120 sekund przerwy** między nimi
-(wznowienia w ramach już otwartej sesji się nie liczą). Oba zmienisz encjami
-**Sesje podglądu na żywo dziennie** (4–200) i **Minimalny odstęp między sesjami
+(wznowienia w już otwartej sesji się nie liczą). Oba zmienisz encjami **Sesje
+podglądu na żywo dziennie** (4–200) i **Minimalny odstęp między sesjami
 podglądu** (60–900 s) — również w dół. Gdy budżet się wyczerpie albo chmura
-zacznie ograniczać żądania, sesja po prostu się nie otworzy, a zwykłe
-odpytywanie leci dalej.
+zacznie ograniczać żądania, sesja się nie otworzy, a zwykłe odpytywanie leci
+dalej.
 
 **Uczciwie o obciążeniu chmury.** Odpytywanie co 10 minut jest ustalone na
 sztywno i nie ma suwaka, którym dałoby się je przyspieszyć. To decyzja, a nie
@@ -268,19 +266,18 @@ ją jako osobną serię statystyk, tak głęboko wstecz, jak sięgają zapisy.
 4. Zapisz. Zakładka **Woda** wypełni się danymi wstecz.
 
 **Wybierz tylko jedno źródło.** Zaimportowana historia i czujnik **Łączne
-zużycie wody** liczą tę samą wodę — dodanie obu (albo dorzucenie licznika
-z innej integracji dla tego samego wodomierza) sprawi, że panel policzy
-wszystko podwójnie. Historia z importu jest lepsza z dwóch powodów: obejmuje
-miesiące sprzed instalacji i powstaje z godzinowych zapisów wodomierza, podczas
-gdy **Łączne zużycie wody** bywa wysyłane z opóźnieniem i nadrabia jednym
-skokiem — a taki skok ląduje na wykresie jako jedna gigantyczna godzina.
+zużycie wody** liczą tę samą wodę, więc dodanie obu (albo licznika z innej
+integracji dla tego samego wodomierza) sprawi, że panel policzy wszystko
+podwójnie. Historia z importu jest lepsza: obejmuje miesiące sprzed instalacji
+i powstaje z godzinowych zapisów wodomierza, podczas gdy **Łączne zużycie
+wody** bywa wysyłane z opóźnieniem i nadrabia jednym skokiem — a taki skok
+ląduje na wykresie jako jedna gigantyczna godzina.
 
 ## Gotowy dashboard i etykiety
 
 Strona urządzenia grupuje encje tylko według rodzaju (sterowanie, czujniki,
-konfiguracja, diagnostyka). Jeśli wolisz podział według funkcji — woda,
-analiza, na żywo, regeneracja, sól, automatyka, alarmy, urządzenie —
-w repozytorium czeka gotowy plik
+konfiguracja, diagnostyka). Jeśli wolisz podział według funkcji — tak jak
+w sekcji [Co dostajesz](#co-dostajesz) — w repozytorium czeka gotowy plik
 [`dashboards/aquahome-dashboard.yaml`](dashboards/aquahome-dashboard.yaml).
 Utwórz pusty dashboard (**Ustawienia → Panele → Dodaj dashboard**), otwórz
 edytor surowej konfiguracji (menu **⋮** → *Raw configuration editor*), wklej
@@ -308,22 +305,21 @@ Albo twoje urządzenie nie ma danego wyposażenia (zaworu odcinającego, alarmu
 dźwiękowego, czujników wycieku) i encja w ogóle nie powstaje, albo chmura nie
 przysyła dla twojego modelu tego bloku danych, albo encja jest **wyłączona
 domyślnie** — tak jest z rzeczami serwisowymi i rzadko przydatnymi (np. **Siła
-sygnału RF** czy **Szacowana data wyczerpania soli**). Żeby taką encję włączyć:
-**Ustawienia → Urządzenia i usługi → AquaHome → twoje urządzenie**, znajdź ją
-na liście, otwórz ustawienia (ikona koła zębatego) i przestaw **Włączone**.
-Sprzęt dokupiony później dorobi swoje encje sam, w ciągu mniej więcej
-dwudziestu minut.
+sygnału RF**). Żeby taką encję włączyć: **Ustawienia → Urządzenia i usługi →
+AquaHome → twoje urządzenie**, znajdź ją na liście, otwórz ustawienia (ikona
+koła zębatego) i przestaw **Włączone**. Sprzęt dokupiony później dorobi swoje
+encje sam, w jakieś dwadzieścia minut.
 
 **Czy to obciąża chmurę iQua? Czy grozi mi blokada konta?**
 
 Integracja jest celowo oszczędna: stan urządzenia odpytuje co 10 minut, alerty
 i historię co 30 minut, ustawienia co 6 godzin, a historię zużycia co 12 godzin
 — i tego rytmu nie da się przyspieszyć, bo nie ma takiej opcji. Sesje podglądu
-na żywo mają własny budżet (domyślnie 48 na dobę, minimum 120 sekund przerwy),
-z zapasem mieszczący się w zmierzonych limitach. Uczciwie: to nieoficjalne API
-producenta, a producent może zmienić zasady bez uprzedzenia — dlatego
-ustawienia domyślne są ostrożne, a limity wystawione jako encje, żebyś mógł je
-jeszcze obniżyć.
+na żywo mają własny budżet (48 na dobę, minimum 120 sekund przerwy), z zapasem
+mieszczący się w zmierzonych limitach. Uczciwie: to nieoficjalne API
+producenta, a producent może zmienić zasady bez uprzedzenia — dlatego domyślne
+ustawienia są ostrożne, a limity wystawione jako encje, żebyś mógł je jeszcze
+obniżyć.
 
 **Co się dzieje, gdy chmura nie odpowiada?**
 
