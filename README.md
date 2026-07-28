@@ -6,6 +6,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![iot_class: cloud_polling](https://img.shields.io/badge/iot__class-cloud__polling-blue.svg)
 
+Po polsku: [README.pl.md](README.pl.md) — krótszy przewodnik dla osób, które
+dopiero zaczynają z Home Assistantem.
+
 Custom Home Assistant integration for **AquaHome 20 Smart** and other water
 treatment devices supported by the iQua mobile app. It talks to the same iQua
 cloud API the official app uses — no local access, no extra hardware, no YAML.
