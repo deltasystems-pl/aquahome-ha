@@ -3,12 +3,17 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
+# Release tags must always finish their run: a rapid follow-up push to main
+# cancelling the run that validates a just-tagged SHA is how a release ends up
+# published with zero passing checks (hassfest and HACS validation only run
+# here). Tag refs get their own group, and only branch runs may be cancelled.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
   lint:
