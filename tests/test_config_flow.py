@@ -153,6 +153,11 @@ def _add_devices_error(
     mock.get(devices_url(host), status=status, payload=body)
 
 
+def _add_devices_unreachable(mock: aioresponses, host: str) -> None:
+    """Register a ``GET /devices`` on ``host`` that fails at the transport layer."""
+    mock.get(devices_url(host), exception=aiohttp.ClientConnectionError())
+
+
 # ---------------------------------------------------------------------------
 # Request-record inspection helpers
 # ---------------------------------------------------------------------------
@@ -295,6 +300,34 @@ async def test_iqua2_fallback_stores_iqua2_host(
     assert result["data"][CONF_REFRESH_TOKEN] == "iqua2-refresh"
 
 
+async def test_device_list_failure_falls_back_to_iqua2(
+    hass: HomeAssistant, mock_api: aioresponses
+) -> None:
+    """A host that authenticates but cannot list devices loses to one that can."""
+    with patch(_SETUP_TARGET, return_value=True):
+        flow_id = await _start_user_flow(hass)
+        # Legacy authenticates, then its device listing fails with a 5xx: the
+        # probe must record that and keep going rather than give up on the host.
+        _add_login_ok(mock_api, API_BASE_URL, user_id=TEST_USER_ID)
+        _add_devices_error(mock_api, API_BASE_URL, status=500, body=_SERVER_ERROR)
+        payload = _add_login_ok(
+            mock_api,
+            IQUA2_BASE_URL,
+            user_id=TEST_USER_ID,
+            refresh_token="iqua2-refresh",
+        )
+        _add_devices(mock_api, IQUA2_BASE_URL)
+        result = await _submit_credentials(hass, flow_id)
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_HOST] == IQUA2_BASE_URL
+    assert result["data"][CONF_ACCESS_TOKEN] == payload["access_token"]
+    assert result["data"][CONF_REFRESH_TOKEN] == "iqua2-refresh"
+    assert result["result"].unique_id == TEST_USER_ID
+    assert {"api.myiquaapp.com", "api.iqua2.com"} <= _hosts_hit(mock_api)
+
+
 async def test_device_tiebreak_prefers_host_with_devices(
     hass: HomeAssistant, mock_api: aioresponses
 ) -> None:
@@ -363,14 +396,28 @@ def _legacy_401_iqua2_unreachable(mock: aioresponses) -> None:
     _add_login_unreachable(mock, IQUA2_BASE_URL)
 
 
+def _both_device_lists_fail(mock: aioresponses) -> None:
+    """Both hosts authenticate, but neither can return its device list."""
+    _add_login_ok(mock, API_BASE_URL, user_id=TEST_USER_ID)
+    _add_devices_error(mock, API_BASE_URL, status=500, body=_SERVER_ERROR)
+    _add_login_ok(mock, IQUA2_BASE_URL, user_id=OTHER_USER_ID)
+    _add_devices_unreachable(mock, IQUA2_BASE_URL)
+
+
 @pytest.mark.parametrize(
     ("arrange", "expected_error"),
     [
         (_both_reject_credentials, "invalid_auth"),
         (_both_unreachable, "cannot_connect"),
         (_legacy_401_iqua2_unreachable, "cannot_connect"),
+        (_both_device_lists_fail, "cannot_connect"),
     ],
-    ids=["both-401", "both-unreachable", "mixed-401-and-unreachable"],
+    ids=[
+        "both-401",
+        "both-unreachable",
+        "mixed-401-and-unreachable",
+        "both-device-lists-fail",
+    ],
 )
 async def test_user_step_probe_failures_map_to_form_errors(
     hass: HomeAssistant,
@@ -507,6 +554,83 @@ async def test_verify_correct_code_creates_entry(
     assert result["data"][CONF_ACCESS_TOKEN] == payload["access_token"]
     assert result["result"].unique_id == TEST_USER_ID
     assert _count_posts(mock_api, "/auth/validate-user") == 1
+
+
+def _validate_user_throttled(mock: aioresponses) -> None:
+    """Register a ``POST /auth/validate-user`` the server throttles."""
+    mock.post(f"{API_BASE_URL}/auth/validate-user", status=429, payload=_THROTTLED)
+
+
+def _validate_user_unreachable(mock: aioresponses) -> None:
+    """Register a ``POST /auth/validate-user`` that fails at the transport layer."""
+    mock.post(
+        f"{API_BASE_URL}/auth/validate-user", exception=aiohttp.ClientConnectionError()
+    )
+
+
+@pytest.mark.parametrize(
+    ("arrange", "expected_error"),
+    [
+        (_validate_user_throttled, "rate_limited"),
+        (_validate_user_unreachable, "cannot_connect"),
+    ],
+    ids=["throttled", "unreachable"],
+)
+async def test_verify_transient_failure_redraws_then_retry_succeeds(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    arrange: Callable[[aioresponses], None],
+    expected_error: str,
+) -> None:
+    """A code submission that gets no verdict redraws verify and stays usable.
+
+    Neither a throttle nor an unreachable cloud says anything about the code, so
+    the step must keep the challenge open: the retry below clears it.
+    """
+    with patch(_SETUP_TARGET, return_value=True):
+        flow_id = await _start_user_flow(hass)
+        _add_login_error(mock_api, API_BASE_URL, status=403, body=_UNVERIFIED)
+        mock_api.post(
+            f"{API_BASE_URL}/auth/resend-confirmation-code",
+            status=200,
+            payload={"status": "ok"},
+        )
+        # The first code submission fails; the retry is accepted (FIFO ordering).
+        arrange(mock_api)
+        mock_api.post(
+            f"{API_BASE_URL}/auth/validate-user", status=200, payload={"status": "ok"}
+        )
+        payload = _add_login_ok(
+            mock_api,
+            API_BASE_URL,
+            user_id=TEST_USER_ID,
+            refresh_token="verified-refresh",
+        )
+        _add_devices(mock_api, API_BASE_URL)
+
+        challenge = await _submit_credentials(hass, flow_id)
+        assert challenge["step_id"] == "verify"
+        blocked = await hass.config_entries.flow.async_configure(
+            flow_id, {CONF_CODE: "123456"}
+        )
+        assert blocked["type"] is FlowResultType.FORM
+        assert blocked["step_id"] == "verify"
+        assert blocked["errors"] == {"base": expected_error}
+        assert blocked["description_placeholders"] == {CONF_EMAIL: TEST_EMAIL}
+
+        result = await hass.config_entries.flow.async_configure(
+            flow_id, {CONF_CODE: "123456"}
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_HOST] == API_BASE_URL
+    assert result["data"][CONF_ACCESS_TOKEN] == payload["access_token"]
+    assert result["data"][CONF_REFRESH_TOKEN] == "verified-refresh"
+    assert _count_posts(mock_api, "/auth/validate-user") == 2
+    # Only the challenged login and the post-verification re-probe: a submission
+    # that never reached a verdict must not have re-probed the account.
+    assert _count_posts(mock_api, "/auth/login") == 2
 
 
 async def test_verify_reached_even_when_resend_fails(

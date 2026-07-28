@@ -173,8 +173,10 @@ async def _async_probe_account(
         raise connection_error
     if auth_error is not None:
         raise auth_error
-    msg = "No API hosts were provided to probe"
-    raise AquaHomeConnectionError(msg)
+    # Unreachable while _PROBE_HOSTS is a non-empty module constant, so it is
+    # excluded from coverage rather than deleted.
+    msg = "No API hosts were provided to probe"  # pragma: no cover
+    raise AquaHomeConnectionError(msg)  # pragma: no cover
 
 
 class AquaHomeConfigFlow(ConfigFlow, domain=DOMAIN):
