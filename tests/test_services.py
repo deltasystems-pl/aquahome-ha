@@ -15,8 +15,8 @@ Covered here:
   Assistant with no config entry at all (the ``action-setup`` quality rule), and
   the two read-only ones are registered response-only;
 * ``analyze_usage``: the full serialized result, the "nothing assessed" shape
-  where every key is present and ``None``, the hour-of-week grid folded to
-  ``weekday -> [hour, ...]``, ``refresh: true`` recomputing exactly once (and
+  where every key is present and ``None``, both views of the hour-of-week grid
+  folded to ``weekday -> [hour, ...]``, ``refresh: true`` recomputing once (and
   ``false`` never), and the honest refusal while the engine has never run;
 * ``get_usage_forecast``: the real engine path (readings, timezone resolution,
   executor dispatch) with only the pure computation stubbed, the day-count
@@ -109,7 +109,7 @@ from tests.conftest import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
 
     from aioresponses import aioresponses
     from freezegun.api import FrozenDateTimeFactory
@@ -129,8 +129,10 @@ FROZEN_INSTANT = "2026-07-21T12:00:00+00:00"
 FROZEN_UTC = datetime(2026, 7, 21, 12, 0, tzinfo=UTC)
 
 #: Width of the analytics hour-of-week grid (7 x 24), mirrored from the engine's
-#: model so the crafted grids below are always full-size.
+#: model so the crafted grids below are always full-size, and the number of
+#: weekday rows the peak hours are published in.
 GRID_HOURS = 168
+WEEKDAYS = 7
 
 #: The four actions and the entity domain each is registered for.
 SERVICE_DOMAINS: tuple[tuple[str, str], ...] = (
@@ -184,14 +186,28 @@ NEUTRAL_FORECAST = ForecastState(
 
 
 def _grid(
-    active: Iterable[int] = (), *, mature_buckets: int = 0, hourly_samples: int = 0
+    active: Iterable[int] = (),
+    *,
+    peaks: Mapping[int, Sequence[int]] | None = None,
+    mature_buckets: int = 0,
+    hourly_samples: int = 0,
 ) -> GridSummary:
-    """Build a full-size hour-of-week grid with ``active`` indices switched on."""
+    """Build a full-size hour-of-week grid with ``active`` indices switched on.
+
+    ``peaks`` names the peak hours of individual weekdays (``Monday = 0``) and
+    fills the rest of the week in as empty rows, the way the analytics pipeline
+    always publishes them. Left out entirely, the grid carries the model's "not
+    computed" default — what a result assembled before the peaks existed looks
+    like.
+    """
     switched_on = set(active)
     return GridSummary(
         active_hours=tuple(index in switched_on for index in range(GRID_HOURS)),
         mature_buckets=mature_buckets,
         hourly_samples=hourly_samples,
+        peak_hours=()
+        if peaks is None
+        else tuple(tuple(peaks.get(weekday, ())) for weekday in range(WEEKDAYS)),
     )
 
 
@@ -285,10 +301,16 @@ RICH_FORECAST = ForecastState(
     weekday="tuesday",
     persons=3,
 )
-#: Monday 07:00 + 08:00, Wednesday 13:00, Sunday 23:00 — one index per grid row
-#: arithmetic case (first row, a middle row, the last row).
+#: Monday 07:00-09:00, Wednesday 13:00, Sunday 23:00 — one index per grid row
+#: arithmetic case (first row, a middle row, the last row). The peaks are a
+#: deliberately *different* fold of the same week: two of Monday's three active
+#: hours and Sunday's one, leaving Wednesday with an active hour and no peak, so
+#: neither block can be serving the other's answer.
 RICH_GRID = _grid(
-    (7, 8, 2 * 24 + 13, 6 * 24 + 23), mature_buckets=42, hourly_samples=907
+    (7, 8, 9, 2 * 24 + 13, 6 * 24 + 23),
+    peaks={0: (7, 9), 6: (23,)},
+    mature_buckets=42,
+    hourly_samples=907,
 )
 
 
@@ -347,7 +369,8 @@ RICH_RESPONSE: dict[str, Any] = {
     "grid": {
         "mature_buckets": 42,
         "hourly_samples": 907,
-        "active_hours": {"monday": [7, 8], "wednesday": [13], "sunday": [23]},
+        "active_hours": {"monday": [7, 8, 9], "wednesday": [13], "sunday": [23]},
+        "peak_hours": {"monday": [7, 9], "sunday": [23]},
     },
     "nights": [
         {"night": "2026-07-19", "verdict": "no_leak", "min_hour_liters": 0.0},
@@ -768,7 +791,12 @@ async def test_analyze_usage_publishes_every_key_when_nothing_assessed(
             "weekday": None,
             "persons": None,
         },
-        "grid": {"mature_buckets": 0, "hourly_samples": 0, "active_hours": {}},
+        "grid": {
+            "mature_buckets": 0,
+            "hourly_samples": 0,
+            "active_hours": {},
+            "peak_hours": {},
+        },
         "nights": [],
         "days": [],
     }
@@ -785,7 +813,9 @@ async def test_analyze_usage_folds_active_hours_by_weekday(
 
     The grid is indexed ``weekday(Monday = 0) * 24 + hour``; a whole active
     Tuesday therefore has to come back as every hour of one row and nothing
-    else, which pins both halves of the index arithmetic at once.
+    else, which pins both halves of the index arithmetic at once. This result
+    predates the peak rows entirely, and their block is still published — empty
+    rather than missing.
     """
     await boot(hass, mock_config_entry, mock_api, freezer)
     tuesday = _grid(range(24, 48), mature_buckets=7, hourly_samples=168)
@@ -798,7 +828,65 @@ async def test_analyze_usage_folds_active_hours_by_weekday(
         "mature_buckets": 7,
         "hourly_samples": 168,
         "active_hours": {"tuesday": list(range(24))},
+        "peak_hours": {},
     }
+
+
+async def test_analyze_usage_folds_peak_hours_the_same_way(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """The peak rows fold by the active grid's rules, and independently of it.
+
+    One row per weekday rather than 168 flags, so the arithmetic being pinned
+    here is the row-to-name mapping: weekday 1 is Tuesday and weekday 3 is
+    Thursday, hours come back ascending, and the five weekdays that peak in
+    nothing are omitted exactly as quiet days are from ``active_hours``. The
+    crafted Thursday peaks with no active Thursday hour prove the two blocks are
+    serialized from their own field — the views answer different questions, and
+    neither is derived from the other.
+    """
+    await boot(hass, mock_config_entry, mock_api, freezer)
+    tuesday = _grid(
+        range(24, 48), peaks={1: (7, 19), 3: (6,)}, mature_buckets=7, hourly_samples=168
+    )
+    await push(hass, mock_config_entry, _result(grid=tuesday))
+
+    entity_id = entity_id_of(entity_registry, SENSOR_DOMAIN, "usage_forecast")
+    payload = (await call_analyze(hass, entity_id))[entity_id]
+
+    assert payload["grid"] == {
+        "mature_buckets": 7,
+        "hourly_samples": 168,
+        "active_hours": {"tuesday": list(range(24))},
+        "peak_hours": {"tuesday": [7, 19], "thursday": [6]},
+    }
+
+
+async def test_analyze_usage_publishes_the_peak_block_before_the_grid_matures(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """Seven empty weekday rows publish an empty mapping, not seven empty lists.
+
+    The pipeline always hands over all seven rows, and until the buckets mature
+    every one of them is empty. Folding them into ``{"monday": [], ...}`` would
+    make a template ask whether a peak list is truthy *and* present; the
+    weekday-omitted rule says the same thing with one check.
+    """
+    await boot(hass, mock_config_entry, mock_api, freezer)
+    await push(hass, mock_config_entry, _result(grid=_grid(peaks={})))
+
+    entity_id = entity_id_of(entity_registry, SENSOR_DOMAIN, "usage_forecast")
+    payload = (await call_analyze(hass, entity_id))[entity_id]
+
+    assert payload["grid"]["peak_hours"] == {}
 
 
 # ---------------------------------------------------------------------------

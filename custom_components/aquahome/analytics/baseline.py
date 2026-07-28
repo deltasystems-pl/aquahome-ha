@@ -35,7 +35,10 @@ output of :func:`~.series.hour_knowledge`) are fed in, and an hour the device
 never pushed a reading for is absent rather than zero — so an empty bucket stays
 ``nan`` with ``n = 0``: unknown, never imputed. ``nan`` is the grid's honest
 "unknown" and it never leaves this module; every expectation and forecast is
-finiteness-guarded before it is returned.
+finiteness-guarded before it is returned. Two views of that grid are published:
+:func:`activity_grid` answers "is this hour normally wet?", and
+:func:`peak_hours` answers the sharper question of *when* the household draws
+the most — the handful of buckets each weekday actually turns on.
 
 Units: device slots are GALLONS, the whole analytics tier is LITERS. The
 conversion happens exactly once, here, at the slot boundary.
@@ -55,6 +58,7 @@ from custom_components.aquahome.const import (
     LEARNED_DAILY_MIN_DAYS,
     MIN_BUCKET_SAMPLES,
     OCCUPANCY_LITERS_PER_PERSON,
+    PEAK_HOURS_PER_WEEKDAY,
     WEEKDAY_SLOT_FRESHNESS_DAYS,
     WEEKDAY_SLOTS,
 )
@@ -80,6 +84,9 @@ GRID_BUCKETS: Final = 168
 
 #: Days in a week — the width of every per-weekday statistic below.
 _WEEK_DAYS: Final = 7
+
+#: Hours in a day — the width of one row of the hour-of-week grid.
+_HOURS_PER_DAY: Final = 24
 
 #: MAD -> sigma consistency factor for normally distributed data.
 MAD_SCALE: Final = 1.4826
@@ -231,6 +238,52 @@ def activity_grid(
     )
     active = (counts >= MIN_BUCKET_SAMPLES) & (fraction >= _ACTIVE_NONZERO_FRACTION)
     return tuple(bool(flag) for flag in active)
+
+
+def peak_hours(
+    median: npt.NDArray[np.float64], n: npt.NDArray[np.int64]
+) -> tuple[tuple[int, ...], ...]:
+    """Return, per weekday, the hours of day the household draws the most in.
+
+    :func:`activity_grid` answers "is the household awake?", which on a real
+    household resolves to "07:00-24:00" and carries almost no information. The
+    peaks answer the question a consumer of this grid actually has — *when*
+    does water move — by ranking each weekday's mature buckets by median volume
+    and keeping the top :data:`~..const.PEAK_HOURS_PER_WEEKDAY`, which covers
+    the clusters a household really has (wake-up, meals, evening appliances)
+    without diluting back into the binary grid's answer.
+
+    A bucket competes only once it has matured
+    (:data:`~..const.MIN_BUCKET_SAMPLES` samples) and holds a finite, strictly
+    positive median: an immature bucket is unknown rather than busy, and a
+    matured bucket whose median is zero has no draw to rank. Ties go to the
+    earlier hour, so the same grid always yields the same peaks and the result
+    is safe to cache. Night hours are deliberately not excluded — the analytics
+    stays honest about when water moves, and a consumer with a night rule (the
+    live tier has one) applies it on top rather than having it baked in here.
+
+    Seven rows are always returned, indexed by python weekday
+    (``Monday = 0``), each sorted ascending by hour and empty where nothing
+    qualified; a grid narrower than a full week has no peaks at all.
+    """
+    if min(int(median.size), int(n.size)) < GRID_BUCKETS:
+        return ((),) * _WEEK_DAYS
+    peaks: list[tuple[int, ...]] = []
+    for weekday in range(_WEEK_DAYS):
+        ranked: list[tuple[float, int]] = []
+        for hour in range(_HOURS_PER_DAY):
+            bucket = weekday * _HOURS_PER_DAY + hour
+            volume = float(median[bucket])
+            if int(n[bucket]) < MIN_BUCKET_SAMPLES:
+                continue
+            if not math.isfinite(volume) or volume <= 0.0:
+                continue
+            # Negating the volume ranks it descending while the hour still
+            # breaks ties toward the earlier one, under one ascending sort.
+            ranked.append((-volume, hour))
+        ranked.sort()
+        peaks.append(tuple(sorted(hour for _, hour in ranked[:PEAK_HOURS_PER_WEEKDAY])))
+    return tuple(peaks)
 
 
 def slot_fresh(slot: WeekdaySlot, now: datetime) -> bool:

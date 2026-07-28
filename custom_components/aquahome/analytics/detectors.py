@@ -1003,6 +1003,7 @@ def compute_analytics(inputs: AnalyticsInputs) -> AnalyticsResult:
         active_hours=baseline.activity_grid(median, mad, n, hour_knowledge),
         mature_buckets=mature_buckets,
         hourly_samples=int(np.sum(n)) if n.size else 0,
+        peak_hours=baseline.peak_hours(median, n),
     )
 
     return AnalyticsResult(

@@ -58,6 +58,8 @@ from custom_components.aquahome.const import (
     LEAK_CONSECUTIVE_NIGHTS,
     LEAK_TIER_INFO_LITERS_PER_DAY,
     LEAK_TIER_WARNING_LITERS_PER_DAY,
+    MIN_BUCKET_SAMPLES,
+    PEAK_HOURS_PER_WEEKDAY,
     PERSISTENT_FLOW_HOURS,
     VACATION_MAX_EVENTS,
     VACATION_MIN_DAYS,
@@ -444,6 +446,31 @@ def test_real_history_replay_grid_matures_over_the_captured_hours() -> None:
     assert grid.hourly_samples == 438
     assert sum(grid.active_hours) == 46
     assert len(grid.active_hours) == 168
+
+
+def test_real_history_replay_publishes_peaks_for_every_weekday() -> None:
+    """The pass hands the published grid's own peaks through, seven rows of them.
+
+    Peaks computed from a different grid than the one published — or dropped on
+    the way out — would leave every consumer arming on an empty tuple forever,
+    which is exactly what the binary grid's shape makes easy to miss. On this
+    household every peak is also an active hour, since the maturity gate the
+    two views share is the binding one.
+    """
+    median, _mad, counts = baseline.build_grid(
+        series.hour_knowledge(real_readings(), TZ)
+    )
+
+    grid = _replay().grid
+
+    assert grid.peak_hours == baseline.peak_hours(median, counts)
+    assert len(grid.peak_hours) == 7
+    assert all(len(row) <= PEAK_HOURS_PER_WEEKDAY for row in grid.peak_hours)
+    assert all(
+        grid.active_hours[weekday * 24 + hour]
+        for weekday, row in enumerate(grid.peak_hours)
+        for hour in row
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1237,3 +1264,95 @@ def test_a_day_holding_readings_is_never_a_gap_interior() -> None:
     )
 
     assert verdict is None
+
+
+# ---------------------------------------------------------------------------
+# compute_forecasts — the multi-day entry point behind the forecast action.
+# ---------------------------------------------------------------------------
+
+
+def test_forecast_series_opens_on_the_day_the_sensor_publishes() -> None:
+    """Day one of the series is the number the forecast sensor already shows.
+
+    The action and the sensor resolve tomorrow against the same learned
+    statistics, so a household reading them side by side must never see two
+    different forecasts for the same day; the days after it follow in local
+    calendar order, each resolved on its own weekday. Asking for no days at all
+    is answered with nothing, not with tomorrow.
+    """
+    inputs = _analytics_inputs(
+        real_readings(),
+        real_regen_windows(),
+        now=REPLAY_NOW,
+        weekday_slots=_real_weekday_slots(),
+        overall_average=_device_slot("avg_daily_use_gals", None),
+    )
+    tomorrow = REPLAY_NOW.astimezone(TZ).date() + timedelta(days=1)
+
+    forecasts = detectors.compute_forecasts(inputs, 3)
+
+    assert [day for day, _forecast in forecasts] == [
+        tomorrow + timedelta(days=offset) for offset in range(3)
+    ]
+    assert forecasts[0][1] == compute_analytics(inputs).forecast
+    assert detectors.compute_forecasts(inputs, 0) == ()
+
+
+# ---------------------------------------------------------------------------
+# Degenerate input — no window and no scale mean no verdict, never a crash.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "values",
+    [[], [_DRIFT_LEVEL], [_DRIFT_LEVEL] * 7],
+    ids=["no-history", "one-day", "one-weekly-cycle"],
+)
+def test_drift_charts_stay_silent_until_they_have_a_window(
+    values: list[float],
+) -> None:
+    """A chart earns a vote only once it has a window to vote on.
+
+    CUSUM needs two values before its cumulative sum means anything, and the
+    EWMA chart needs more than one weekly cycle, over which its control limits
+    are still widening from their startup value. A fresh install therefore
+    publishes "no drift" rather than an artefact of the burn-in, and an empty
+    series reaches the filter and both charts without raising.
+    """
+    assert detectors.cusum_alarm(values) is False
+    assert detectors.ewma_alarm(values) is False
+
+
+def test_drift_charts_refuse_a_series_without_a_scale() -> None:
+    """A household with no measurable variation can never be drifting.
+
+    Sigma is the unit both decision limits are measured in, and a constant
+    series has none: with a zero scale every limit collapses to zero and the
+    first floating-point wobble would read as a sustained shift. The Hampel
+    filter takes the same position one window earlier — constant data has no
+    outliers, only an undefined scale — and replaces nothing.
+    """
+    flat = [_DRIFT_LEVEL] * (_DRIFT_STABLE_DAYS + _DRIFT_SHIFTED_DAYS)
+
+    assert np.allclose(detectors.hampel_clean(flat), np.asarray(flat))
+    assert detectors.cusum_alarm(flat) is False
+    assert detectors.ewma_alarm(flat) is False
+
+
+def test_point_detector_refuses_a_grid_that_is_not_a_full_week() -> None:
+    """A grid narrower than a week is refused outright, not indexed into.
+
+    Buckets are addressed ``weekday * 24 + hour`` across the whole week, so a
+    short grid answers with another weekday's statistics long before it runs off
+    the end — and the hour offered here (400 L against a 1 L bucket) is one it
+    would happily call anomalous.
+    """
+    tz = ZoneInfo(TZ_KEY)
+    now = datetime(2026, 7, 20, 9, 30, tzinfo=tz)
+    knowledge = {datetime(2026, 7, 20, 7, tzinfo=tz): 400.0}
+    one_day = 24
+    median = np.full(one_day, 1.0, dtype=np.float64)
+    mad = np.full(one_day, 1.0, dtype=np.float64)
+    counts = np.full(one_day, MIN_BUCKET_SAMPLES, dtype=np.int64)
+
+    assert detectors.point_anomaly_hours(knowledge, median, mad, counts, now, tz) == 0

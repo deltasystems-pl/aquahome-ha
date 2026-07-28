@@ -254,6 +254,23 @@ def _serialize_active_hours(grid: GridSummary) -> dict[str, list[int]]:
     return hours
 
 
+def _serialize_peak_hours(grid: GridSummary) -> dict[str, list[int]]:
+    """Return the learned peak hours as ``weekday -> [hour, ...]``.
+
+    The companion of :func:`_serialize_active_hours`, folded by exactly the same
+    rules: weekday-name keys, ascending hour lists, and a weekday without a
+    single peak left out rather than mapped to an empty list. The engine already
+    carries these as one ascending row per weekday, so the rows are zipped
+    against the names instead of indexed — a grid whose peaks were never
+    computed simply contributes no rows.
+    """
+    return {
+        weekday: list(peaks)
+        for weekday, peaks in zip(_WEEKDAY_NAMES, grid.peak_hours, strict=False)
+        if peaks
+    }
+
+
 def _serialize_result(result: AnalyticsResult) -> dict[str, Any]:
     """Return one complete analytics pass as a JSON-safe response payload.
 
@@ -306,6 +323,7 @@ def _serialize_result(result: AnalyticsResult) -> dict[str, Any]:
             "mature_buckets": grid.mature_buckets,
             "hourly_samples": grid.hourly_samples,
             "active_hours": _serialize_active_hours(grid),
+            "peak_hours": _serialize_peak_hours(grid),
         },
         "nights": [_serialize_night(night) for night in result.nights],
         "days": [

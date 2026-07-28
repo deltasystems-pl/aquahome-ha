@@ -41,6 +41,7 @@ down on each fallback test.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Final
@@ -59,6 +60,7 @@ from custom_components.aquahome.analytics.baseline import (
     build_grid,
     expected_daily_liters,
     forecast_for,
+    peak_hours,
     slot_for_day,
     slot_fresh,
 )
@@ -74,6 +76,7 @@ from custom_components.aquahome.const import (
     LEARNED_DAILY_MIN_DAYS,
     MIN_BUCKET_SAMPLES,
     OCCUPANCY_LITERS_PER_PERSON,
+    PEAK_HOURS_PER_WEEKDAY,
     WEEKDAY_SLOT_FRESHNESS_DAYS,
     WEEKDAY_SLOTS,
 )
@@ -126,6 +129,11 @@ FRIDAY: Final = date(2026, 7, 24)
 
 #: The local day after the capture ends — the day the forecast describes.
 FORECAST_DAY: Final = date(2026, 7, 28)
+
+#: The Monday every crafted grid below is laid out from, one sample per week.
+#: July carries no daylight-saving transition, so every crafted sample lands on
+#: the local hour its bucket is named after.
+GRID_MONDAY: Final = date(2026, 7, 6)
 
 
 def make_inputs(
@@ -188,6 +196,27 @@ def uniform_learned(
         overall_count=0,
         overall_mean=None,
     )
+
+
+def crafted_peaks(
+    plan: Mapping[tuple[int, int], Sequence[float]],
+) -> tuple[tuple[int, ...], ...]:
+    """Return the peak hours of a grid built from crafted bucket samples.
+
+    ``plan`` maps ``(python weekday, hour)`` to that bucket's samples, laid down
+    one per week from :data:`GRID_MONDAY`, so a bucket's maturity is simply how
+    many samples it was handed and its median is theirs. Buckets left out of the
+    plan are never sampled and stay unknown.
+    """
+    knowledge: dict[datetime, float] = {}
+    for (weekday, hour), samples in plan.items():
+        first = datetime.combine(
+            GRID_MONDAY + timedelta(days=weekday), time(hour), tzinfo=WARSAW
+        )
+        for week, liters in enumerate(samples):
+            knowledge[first + timedelta(days=7 * week)] = liters
+    median, _mad, counts = build_grid(knowledge)
+    return peak_hours(median, counts)
 
 
 def bucket_values(bucket: int) -> list[float]:
@@ -390,6 +419,188 @@ def test_activity_grid_never_promotes_an_immature_bucket() -> None:
     ]
     assert immature  # the real grid is sparse; the gate has work to do
     assert not any(active[index] for index in immature)
+
+
+def test_peak_hours_rank_a_weekday_by_median_volume() -> None:
+    """The busiest mature buckets of a weekday, published ascending by hour.
+
+    Six mature Monday hours with distinct medians: the four biggest are the
+    peaks, and they come back in clock order rather than ranking order — a
+    consumer walks them forward through the day, it does not re-sort them.
+    """
+    peaks = crafted_peaks(
+        {
+            (0, 6): [4.0] * MIN_BUCKET_SAMPLES,
+            (0, 7): [40.0] * MIN_BUCKET_SAMPLES,
+            (0, 12): [25.0] * MIN_BUCKET_SAMPLES,
+            (0, 15): [2.0] * MIN_BUCKET_SAMPLES,
+            (0, 19): [30.0] * MIN_BUCKET_SAMPLES,
+            (0, 21): [10.0] * MIN_BUCKET_SAMPLES,
+        }
+    )
+
+    assert peaks[0] == (7, 12, 19, 21)
+    assert peaks[1:] == ((),) * 6
+
+
+def test_peak_hours_never_promote_an_immature_bucket() -> None:
+    """One sample short of maturity, however large, is not a peak.
+
+    An unknown hour must never out-rank a known one: the biggest median of the
+    row rests on ``MIN_BUCKET_SAMPLES - 1`` samples and stays out, leaving a
+    modest matured hour to carry the weekday.
+    """
+    peaks = crafted_peaks(
+        {
+            (2, 3): [500.0] * (MIN_BUCKET_SAMPLES - 1),
+            (2, 8): [12.0] * MIN_BUCKET_SAMPLES,
+        }
+    )
+
+    assert peaks[2] == (8,)
+
+
+def test_peak_hours_ignore_a_matured_dry_bucket() -> None:
+    """An hour proven dry four times over is a known quiet hour, not a peak.
+
+    A multi-week absence matures buckets at median zero; ranking them would
+    hand a household back four "peaks" it never draws a drop in.
+    """
+    peaks = crafted_peaks(
+        {
+            (4, 2): [0.0] * MIN_BUCKET_SAMPLES,
+            (4, 18): [9.0] * MIN_BUCKET_SAMPLES,
+        }
+    )
+
+    assert peaks[4] == (18,)
+
+
+def test_peak_hours_ignore_an_unknown_median_on_a_matured_bucket() -> None:
+    """A ``nan`` median never ranks, whatever its bucket's sample count says.
+
+    ``nan`` is the grid's "unknown" and it compares false against everything,
+    so an unguarded ranking would order it by sort stability alone and publish
+    an hour nothing is known about.
+    """
+    median = np.full(GRID_BUCKETS, np.nan, dtype=np.float64)
+    median[bucket_index(datetime(2026, 7, 6, 17, tzinfo=WARSAW))] = 14.0
+    counts = np.full(GRID_BUCKETS, MIN_BUCKET_SAMPLES, dtype=np.int64)
+
+    peaks = peak_hours(median, counts)
+
+    assert peaks[0] == (17,)
+    assert peaks[1:] == ((),) * 6
+
+
+def test_peak_hours_break_ties_toward_the_earlier_hour() -> None:
+    """Five identical medians resolve to the four earliest hours, every pass.
+
+    Determinism is the point: the same grid has to publish the same peaks each
+    time, or a consumer that arms on them re-arms on the tie-break's whim.
+    """
+    peaks = crafted_peaks(
+        {(1, hour): [7.0] * MIN_BUCKET_SAMPLES for hour in (5, 9, 14, 18, 22)}
+    )
+
+    assert peaks[1] == (5, 9, 14, 18)
+
+
+def test_peak_hours_publish_at_most_the_configured_count() -> None:
+    """Ten qualifying hours still yield K of them, and they are the K largest."""
+    peaks = crafted_peaks(
+        {(6, hour): [float(hour)] * MIN_BUCKET_SAMPLES for hour in range(10, 20)}
+    )
+
+    assert len(peaks[6]) == PEAK_HOURS_PER_WEEKDAY
+    assert peaks[6] == (16, 17, 18, 19)
+
+
+def test_peak_hours_keep_the_weekdays_independent() -> None:
+    """A heavy weekday never lends its hours to a quiet one.
+
+    Wednesday's evening out-draws every Sunday hour by two orders of magnitude,
+    yet Sunday keeps its own peak: the ranking is per row, so a household with
+    one laundry day still gets usable peaks for the other six.
+    """
+    peaks = crafted_peaks(
+        {
+            (2, 19): [200.0] * MIN_BUCKET_SAMPLES,
+            (2, 20): [180.0] * MIN_BUCKET_SAMPLES,
+            (6, 9): [3.0] * MIN_BUCKET_SAMPLES,
+        }
+    )
+
+    assert peaks[2] == (19, 20)
+    assert peaks[6] == (9,)
+    assert [row for index, row in enumerate(peaks) if index not in (2, 6)] == [()] * 5
+
+
+def test_peak_hours_do_not_exclude_the_night() -> None:
+    """A household that genuinely draws at 03:00 gets 03:00 as a peak.
+
+    The night rule belongs to whoever acts on the peaks (the live tier skips
+    01:00-07:00); the analytics has no business hiding water that moved.
+    """
+    peaks = crafted_peaks(
+        {
+            (3, 3): [60.0] * MIN_BUCKET_SAMPLES,
+            (3, 18): [12.0] * MIN_BUCKET_SAMPLES,
+        }
+    )
+
+    assert peaks[3] == (3, 18)
+
+
+def test_peak_hours_of_an_empty_grid_are_seven_empty_rows() -> None:
+    """A cold start publishes the shape consumers guard on, holding nothing."""
+    median, _mad, counts = build_grid({})
+
+    assert peak_hours(median, counts) == ((),) * 7
+
+
+def test_peak_hours_of_a_short_grid_are_seven_empty_rows() -> None:
+    """A grid narrower than a full week is unusable, not partly usable.
+
+    Indexing a short grid by ``weekday * 24 + hour`` reads the wrong weekday
+    long before it runs off the end, so the whole grid is refused instead.
+    """
+    median = np.full(GRID_BUCKETS - 1, 10.0, dtype=np.float64)
+    counts = np.full(GRID_BUCKETS - 1, MIN_BUCKET_SAMPLES, dtype=np.int64)
+
+    assert peak_hours(median, counts) == ((),) * 7
+
+
+def test_real_grid_peaks_thin_each_weekday_to_its_busiest_hours() -> None:
+    """The real household's 46 mature buckets thin to 26 peaks across the week.
+
+    Monday and Sunday mature 13 and 12 buckets and still publish four hours
+    each — the point of the top-K rule, since the binary grid marks all 46 as
+    active. Saturday matured only two buckets, and a row shorter than K is the
+    honest answer there rather than a padded one.
+    """
+    median, _mad, counts = build_grid(REAL_KNOWLEDGE)
+
+    peaks = peak_hours(median, counts)
+
+    assert peaks == (
+        (9, 10, 20, 22),
+        (10, 11, 17, 18),
+        (10, 12, 19, 20),
+        (10, 11, 12, 15),
+        (7, 13, 19, 22),
+        (8, 9),
+        (12, 13, 17, 19),
+    )
+    assert sum(len(row) for row in peaks) == 26
+    mature = {
+        index
+        for index in range(GRID_BUCKETS)
+        if int(counts[index]) >= MIN_BUCKET_SAMPLES
+    }
+    assert {
+        weekday * 24 + hour for weekday, row in enumerate(peaks) for hour in row
+    } <= mature
 
 
 def test_slot_freshness_splits_the_real_device_slots() -> None:
