@@ -9,7 +9,11 @@ from homeassistant.core import HomeAssistant
 
 from custom_components.aquahome.const import DOMAIN
 
-MANIFEST = Path("custom_components/aquahome/manifest.json")
+# Resolved from this file, not the process CWD, so the test passes no matter
+# which directory pytest is invoked from.
+MANIFEST = (
+    Path(__file__).parent.parent / "custom_components" / "aquahome" / "manifest.json"
+)
 
 
 def test_manifest_is_consistent() -> None:
