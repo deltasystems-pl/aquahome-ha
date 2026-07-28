@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_all_sensor_entities[sensor.dom_average_daily_water_use-entry]
+# name: test_all_sensor_entities[sensor.demo_average_daily_water_use-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -14,7 +14,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_average_daily_water_use',
+    'entity_id': 'sensor.demo_average_daily_water_use',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -39,27 +39,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'average_daily_water_use',
-    'unique_id': '7384243_20203_1120_average_daily_water_use',
+    'unique_id': '4213377_30105_2242_average_daily_water_use',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_daily_water_use-state]
+# name: test_all_sensor_entities[sensor.demo_average_daily_water_use-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Average daily water use',
+      'friendly_name': 'Demo Average daily water use',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_average_daily_water_use',
+    'entity_id': 'sensor.demo_average_daily_water_use',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '177.914353848',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_friday-entry]
+# name: test_all_sensor_entities[sensor.demo_average_use_friday-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -74,7 +74,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_average_use_friday',
+    'entity_id': 'sensor.demo_average_use_friday',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -99,28 +99,28 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'average_daily_use_day_7',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_7',
+    'unique_id': '4213377_30105_2242_average_daily_use_day_7',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_friday-state]
+# name: test_all_sensor_entities[sensor.demo_average_use_friday-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Average use Friday',
+      'friendly_name': 'Demo Average use Friday',
       'reported': '2026-06-14T02:53:37+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_average_use_friday',
+    'entity_id': 'sensor.demo_average_use_friday',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '37.85411784',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_monday-entry]
+# name: test_all_sensor_entities[sensor.demo_average_use_monday-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -135,7 +135,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_average_use_monday',
+    'entity_id': 'sensor.demo_average_use_monday',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -160,28 +160,28 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'average_daily_use_day_3',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_3',
+    'unique_id': '4213377_30105_2242_average_daily_use_day_3',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_monday-state]
+# name: test_all_sensor_entities[sensor.demo_average_use_monday-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Average use Monday',
+      'friendly_name': 'Demo Average use Monday',
       'reported': '2026-07-21T00:01:03+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_average_use_monday',
+    'entity_id': 'sensor.demo_average_use_monday',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '162.772706712',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_saturday-entry]
+# name: test_all_sensor_entities[sensor.demo_average_use_saturday-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -196,7 +196,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_average_use_saturday',
+    'entity_id': 'sensor.demo_average_use_saturday',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -221,28 +221,28 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'average_daily_use_day_1',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_1',
+    'unique_id': '4213377_30105_2242_average_daily_use_day_1',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_saturday-state]
+# name: test_all_sensor_entities[sensor.demo_average_use_saturday-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Average use Saturday',
+      'friendly_name': 'Demo Average use Saturday',
       'reported': '2026-07-19T00:01:01+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_average_use_saturday',
+    'entity_id': 'sensor.demo_average_use_saturday',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '155.201883144',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_sunday-entry]
+# name: test_all_sensor_entities[sensor.demo_average_use_sunday-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -257,7 +257,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_average_use_sunday',
+    'entity_id': 'sensor.demo_average_use_sunday',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -282,28 +282,28 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'average_daily_use_day_2',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_2',
+    'unique_id': '4213377_30105_2242_average_daily_use_day_2',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_sunday-state]
+# name: test_all_sensor_entities[sensor.demo_average_use_sunday-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Average use Sunday',
+      'friendly_name': 'Demo Average use Sunday',
       'reported': '2026-07-20T00:01:02+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_average_use_sunday',
+    'entity_id': 'sensor.demo_average_use_sunday',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '215.768471688',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_thursday-entry]
+# name: test_all_sensor_entities[sensor.demo_average_use_thursday-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -318,7 +318,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_average_use_thursday',
+    'entity_id': 'sensor.demo_average_use_thursday',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -343,28 +343,28 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'average_daily_use_day_6',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_6',
+    'unique_id': '4213377_30105_2242_average_daily_use_day_6',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_thursday-state]
+# name: test_all_sensor_entities[sensor.demo_average_use_thursday-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Average use Thursday',
+      'friendly_name': 'Demo Average use Thursday',
       'reported': '2026-07-17T00:01:02+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_average_use_thursday',
+    'entity_id': 'sensor.demo_average_use_thursday',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '151.41647136',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_tuesday-entry]
+# name: test_all_sensor_entities[sensor.demo_average_use_tuesday-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -379,7 +379,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_average_use_tuesday',
+    'entity_id': 'sensor.demo_average_use_tuesday',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -404,28 +404,28 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'average_daily_use_day_4',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_4',
+    'unique_id': '4213377_30105_2242_average_daily_use_day_4',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_tuesday-state]
+# name: test_all_sensor_entities[sensor.demo_average_use_tuesday-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Average use Tuesday',
+      'friendly_name': 'Demo Average use Tuesday',
       'reported': '2026-07-18T00:01:01+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_average_use_tuesday',
+    'entity_id': 'sensor.demo_average_use_tuesday',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '132.48941244',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_wednesday-entry]
+# name: test_all_sensor_entities[sensor.demo_average_use_wednesday-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -440,7 +440,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_average_use_wednesday',
+    'entity_id': 'sensor.demo_average_use_wednesday',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -465,28 +465,28 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'average_daily_use_day_5',
-    'unique_id': '7384243_20203_1120_average_daily_use_day_5',
+    'unique_id': '4213377_30105_2242_average_daily_use_day_5',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_average_use_wednesday-state]
+# name: test_all_sensor_entities[sensor.demo_average_use_wednesday-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Average use Wednesday',
+      'friendly_name': 'Demo Average use Wednesday',
       'reported': '2026-07-16T00:01:01+00:00',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_average_use_wednesday',
+    'entity_id': 'sensor.demo_average_use_wednesday',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '174.128942064',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_capacity_remaining-entry]
+# name: test_all_sensor_entities[sensor.demo_capacity_remaining-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -501,7 +501,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_capacity_remaining',
+    'entity_id': 'sensor.demo_capacity_remaining',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -520,26 +520,26 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'capacity_remaining',
-    'unique_id': '7384243_20203_1120_capacity_remaining',
+    'unique_id': '4213377_30105_2242_capacity_remaining',
     'unit_of_measurement': '%',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_capacity_remaining-state]
+# name: test_all_sensor_entities[sensor.demo_capacity_remaining-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Capacity remaining',
+      'friendly_name': 'Demo Capacity remaining',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': '%',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_capacity_remaining',
+    'entity_id': 'sensor.demo_capacity_remaining',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '100.0',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_controller_firmware-entry]
+# name: test_all_sensor_entities[sensor.demo_controller_firmware-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -552,7 +552,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_controller_firmware',
+    'entity_id': 'sensor.demo_controller_firmware',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -571,24 +571,24 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'control_version',
-    'unique_id': '7384243_20203_1120_control_version',
+    'unique_id': '4213377_30105_2242_control_version',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_controller_firmware-state]
+# name: test_all_sensor_entities[sensor.demo_controller_firmware-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Controller firmware',
+      'friendly_name': 'Demo Controller firmware',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_controller_firmware',
+    'entity_id': 'sensor.demo_controller_firmware',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'r4.5 MPC01154',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_daily_salt_usage_estimate-entry]
+# name: test_all_sensor_entities[sensor.demo_daily_salt_usage_estimate-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -603,7 +603,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_daily_salt_usage_estimate',
+    'entity_id': 'sensor.demo_daily_salt_usage_estimate',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -625,14 +625,14 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'daily_salt_usage',
-    'unique_id': '7384243_20203_1120_daily_salt_usage',
+    'unique_id': '4213377_30105_2242_daily_salt_usage',
     'unit_of_measurement': 'g/d',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_daily_salt_usage_estimate-state]
+# name: test_all_sensor_entities[sensor.demo_daily_salt_usage_estimate-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Daily salt usage estimate',
+      'friendly_name': 'Demo Daily salt usage estimate',
       'inlet_hardness_dh': 24.65,
       'inlet_hardness_source': 'device_setting',
       'outlet_hardness_dh': 0.0,
@@ -642,14 +642,14 @@
       'unit_of_measurement': 'g/d',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_daily_salt_usage_estimate',
+    'entity_id': 'sensor.demo_daily_salt_usage_estimate',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '254.597687603625',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_days_powered_up-entry]
+# name: test_all_sensor_entities[sensor.demo_days_powered_up-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -664,7 +664,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_days_powered_up',
+    'entity_id': 'sensor.demo_days_powered_up',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -686,27 +686,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'days_powered_up',
-    'unique_id': '7384243_20203_1120_days_powered_up',
+    'unique_id': '4213377_30105_2242_days_powered_up',
     'unit_of_measurement': <UnitOfTime.DAYS: 'd'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_days_powered_up-state]
+# name: test_all_sensor_entities[sensor.demo_days_powered_up-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'duration',
-      'friendly_name': 'Dom Days powered up',
+      'friendly_name': 'Demo Days powered up',
       'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
       'unit_of_measurement': <UnitOfTime.DAYS: 'd'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_days_powered_up',
+    'entity_id': 'sensor.demo_days_powered_up',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '2342',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_days_since_last_recharge-entry]
+# name: test_all_sensor_entities[sensor.demo_days_since_last_recharge-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -721,7 +721,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_days_since_last_recharge',
+    'entity_id': 'sensor.demo_days_since_last_recharge',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -743,27 +743,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'days_since_last_recharge',
-    'unique_id': '7384243_20203_1120_days_since_last_recharge',
+    'unique_id': '4213377_30105_2242_days_since_last_recharge',
     'unit_of_measurement': <UnitOfTime.DAYS: 'd'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_days_since_last_recharge-state]
+# name: test_all_sensor_entities[sensor.demo_days_since_last_recharge-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'duration',
-      'friendly_name': 'Dom Days since last recharge',
+      'friendly_name': 'Demo Days since last recharge',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfTime.DAYS: 'd'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_days_since_last_recharge',
+    'entity_id': 'sensor.demo_days_since_last_recharge',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '4',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_hardness_setting-entry]
+# name: test_all_sensor_entities[sensor.demo_hardness_setting-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -778,7 +778,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_hardness_setting',
+    'entity_id': 'sensor.demo_hardness_setting',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -797,26 +797,26 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'hardness_setting',
-    'unique_id': '7384243_20203_1120_hardness_setting',
+    'unique_id': '4213377_30105_2242_hardness_setting',
     'unit_of_measurement': 'gpg',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_hardness_setting-state]
+# name: test_all_sensor_entities[sensor.demo_hardness_setting-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Hardness setting',
+      'friendly_name': 'Demo Hardness setting',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': 'gpg',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_hardness_setting',
+    'entity_id': 'sensor.demo_hardness_setting',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '26.0',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_last_regeneration-entry]
+# name: test_all_sensor_entities[sensor.demo_last_regeneration-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -829,7 +829,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_last_regeneration',
+    'entity_id': 'sensor.demo_last_regeneration',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -848,25 +848,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'last_regeneration',
-    'unique_id': '7384243_20203_1120_last_regeneration',
+    'unique_id': '4213377_30105_2242_last_regeneration',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_last_regeneration-state]
+# name: test_all_sensor_entities[sensor.demo_last_regeneration-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'timestamp',
-      'friendly_name': 'Dom Last regeneration',
+      'friendly_name': 'Demo Last regeneration',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_last_regeneration',
+    'entity_id': 'sensor.demo_last_regeneration',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '2026-07-17T00:01:01+00:00',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_latest_alert-entry]
+# name: test_all_sensor_entities[sensor.demo_latest_alert-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -879,7 +879,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_latest_alert',
+    'entity_id': 'sensor.demo_latest_alert',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -898,30 +898,30 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'latest_alert',
-    'unique_id': '7384243_20203_1120_latest_alert',
+    'unique_id': '4213377_30105_2242_latest_alert',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_latest_alert-state]
+# name: test_all_sensor_entities[sensor.demo_latest_alert-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'alert_id': 'db768cd7-b1f6-4c99-8910-5c6f2a999cbe',
       'alert_type': 'connection_status_offline',
-      'friendly_name': 'Dom Latest alert',
+      'friendly_name': 'Demo Latest alert',
       'is_read': False,
       'level': 'critical',
       'timestamp': '2026-05-14T00:20:42+00:00',
       'title': 'Disconnected',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_latest_alert',
+    'entity_id': 'sensor.demo_latest_alert',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'Device went offline',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_live_mode-entry]
+# name: test_all_sensor_entities[sensor.demo_live_mode-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -940,7 +940,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_live_mode',
+    'entity_id': 'sensor.demo_live_mode',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -959,17 +959,17 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'live_mode_status',
-    'unique_id': '7384243_20203_1120_live_mode_status',
+    'unique_id': '4213377_30105_2242_live_mode_status',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_live_mode-state]
+# name: test_all_sensor_entities[sensor.demo_live_mode-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'backoff_until': None,
       'consecutive_failures': 0,
       'device_class': 'enum',
-      'friendly_name': 'Dom Live mode',
+      'friendly_name': 'Demo Live mode',
       'icon': 'mdi:access-point',
       'last_error': None,
       'last_session_end': None,
@@ -985,14 +985,14 @@
       'windows_in_session': 0,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_live_mode',
+    'entity_id': 'sensor.demo_live_mode',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'idle',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_model-entry]
+# name: test_all_sensor_entities[sensor.demo_model-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1005,7 +1005,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_model',
+    'entity_id': 'sensor.demo_model',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1024,24 +1024,24 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'model',
-    'unique_id': '7384243_20203_1120_model',
+    'unique_id': '4213377_30105_2242_model',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_model-state]
+# name: test_all_sensor_entities[sensor.demo_model-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Model',
+      'friendly_name': 'Demo Model',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_model',
+    'entity_id': 'sensor.demo_model',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'AquaHome 20 Smart',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_next_regeneration-entry]
+# name: test_all_sensor_entities[sensor.demo_next_regeneration-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1054,7 +1054,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_next_regeneration',
+    'entity_id': 'sensor.demo_next_regeneration',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1073,25 +1073,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'next_regeneration',
-    'unique_id': '7384243_20203_1120_next_regeneration',
+    'unique_id': '4213377_30105_2242_next_regeneration',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_next_regeneration-state]
+# name: test_all_sensor_entities[sensor.demo_next_regeneration-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'timestamp',
-      'friendly_name': 'Dom Next regeneration',
+      'friendly_name': 'Demo Next regeneration',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_next_regeneration',
+    'entity_id': 'sensor.demo_next_regeneration',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'unknown',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_night_flow-entry]
+# name: test_all_sensor_entities[sensor.demo_night_flow-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1106,7 +1106,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_night_flow',
+    'entity_id': 'sensor.demo_night_flow',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1128,29 +1128,29 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'night_flow',
-    'unique_id': '7384243_20203_1120_night_flow',
+    'unique_id': '4213377_30105_2242_night_flow',
     'unit_of_measurement': <UnitOfVolumeFlowRate.LITERS_PER_HOUR: 'L/h'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_night_flow-state]
+# name: test_all_sensor_entities[sensor.demo_night_flow-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_flow_rate',
-      'friendly_name': 'Dom Night flow',
+      'friendly_name': 'Demo Night flow',
       'night': None,
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolumeFlowRate.LITERS_PER_HOUR: 'L/h'>,
       'verdict': None,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_night_flow',
+    'entity_id': 'sensor.demo_night_flow',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'unknown',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_out_of_salt_estimate-entry]
+# name: test_all_sensor_entities[sensor.demo_out_of_salt_estimate-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1163,7 +1163,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_out_of_salt_estimate',
+    'entity_id': 'sensor.demo_out_of_salt_estimate',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1182,25 +1182,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'out_of_salt_estimate',
-    'unique_id': '7384243_20203_1120_out_of_salt_estimate',
+    'unique_id': '4213377_30105_2242_out_of_salt_estimate',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_out_of_salt_estimate-state]
+# name: test_all_sensor_entities[sensor.demo_out_of_salt_estimate-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'timestamp',
-      'friendly_name': 'Dom Out of salt estimate',
+      'friendly_name': 'Demo Out of salt estimate',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_out_of_salt_estimate',
+    'entity_id': 'sensor.demo_out_of_salt_estimate',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '2027-01-03T23:00:00+00:00',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_regeneration_status-entry]
+# name: test_all_sensor_entities[sensor.demo_regeneration_status-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1223,7 +1223,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_regeneration_status',
+    'entity_id': 'sensor.demo_regeneration_status',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1242,15 +1242,15 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'regeneration_status',
-    'unique_id': '7384243_20203_1120_regeneration_status',
+    'unique_id': '4213377_30105_2242_regeneration_status',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_regeneration_status-state]
+# name: test_all_sensor_entities[sensor.demo_regeneration_status-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'enum',
-      'friendly_name': 'Dom Regeneration status',
+      'friendly_name': 'Demo Regeneration status',
       'options': list([
         'regenerating',
         'scheduled',
@@ -1262,14 +1262,14 @@
       ]),
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_regeneration_status',
+    'entity_id': 'sensor.demo_regeneration_status',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'none',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_regeneration_time_remaining-entry]
+# name: test_all_sensor_entities[sensor.demo_regeneration_time_remaining-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1282,7 +1282,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_regeneration_time_remaining',
+    'entity_id': 'sensor.demo_regeneration_time_remaining',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1304,26 +1304,26 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'regeneration_time_remaining',
-    'unique_id': '7384243_20203_1120_regeneration_time_remaining',
+    'unique_id': '4213377_30105_2242_regeneration_time_remaining',
     'unit_of_measurement': <UnitOfTime.SECONDS: 's'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_regeneration_time_remaining-state]
+# name: test_all_sensor_entities[sensor.demo_regeneration_time_remaining-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'duration',
-      'friendly_name': 'Dom Regeneration time remaining',
+      'friendly_name': 'Demo Regeneration time remaining',
       'unit_of_measurement': <UnitOfTime.SECONDS: 's'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_regeneration_time_remaining',
+    'entity_id': 'sensor.demo_regeneration_time_remaining',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '0',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_rf_signal_strength-entry]
+# name: test_all_sensor_entities[sensor.demo_rf_signal_strength-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1338,7 +1338,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_rf_signal_strength',
+    'entity_id': 'sensor.demo_rf_signal_strength',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1357,27 +1357,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'rf_signal_strength',
-    'unique_id': '7384243_20203_1120_rf_signal_strength',
+    'unique_id': '4213377_30105_2242_rf_signal_strength',
     'unit_of_measurement': 'dBm',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_rf_signal_strength-state]
+# name: test_all_sensor_entities[sensor.demo_rf_signal_strength-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'signal_strength',
-      'friendly_name': 'Dom RF signal strength',
+      'friendly_name': 'Demo RF signal strength',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': 'dBm',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_rf_signal_strength',
+    'entity_id': 'sensor.demo_rf_signal_strength',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '-37.0',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_salt_days_remaining_estimate-entry]
+# name: test_all_sensor_entities[sensor.demo_salt_days_remaining_estimate-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1392,7 +1392,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_salt_days_remaining_estimate',
+    'entity_id': 'sensor.demo_salt_days_remaining_estimate',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1414,11 +1414,11 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'salt_days_remaining',
-    'unique_id': '7384243_20203_1120_salt_days_remaining',
+    'unique_id': '4213377_30105_2242_salt_days_remaining',
     'unit_of_measurement': <UnitOfTime.DAYS: 'd'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_salt_days_remaining_estimate-state]
+# name: test_all_sensor_entities[sensor.demo_salt_days_remaining_estimate-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'chemistry_daily_salt_g': 254.6,
@@ -1426,19 +1426,19 @@
       'device_class': 'duration',
       'device_daily_salt_g': 236.2,
       'device_estimate_days': 167.0,
-      'friendly_name': 'Dom Salt days remaining estimate',
+      'friendly_name': 'Demo Salt days remaining estimate',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfTime.DAYS: 'd'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_salt_days_remaining_estimate',
+    'entity_id': 'sensor.demo_salt_days_remaining_estimate',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '154.961457299535',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_salt_depletion_estimate-entry]
+# name: test_all_sensor_entities[sensor.demo_salt_depletion_estimate-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1451,7 +1451,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_salt_depletion_estimate',
+    'entity_id': 'sensor.demo_salt_depletion_estimate',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1470,25 +1470,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'salt_depletion_estimate',
-    'unique_id': '7384243_20203_1120_salt_depletion_estimate',
+    'unique_id': '4213377_30105_2242_salt_depletion_estimate',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_salt_depletion_estimate-state]
+# name: test_all_sensor_entities[sensor.demo_salt_depletion_estimate-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'timestamp',
-      'friendly_name': 'Dom Salt depletion estimate',
+      'friendly_name': 'Demo Salt depletion estimate',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_salt_depletion_estimate',
+    'entity_id': 'sensor.demo_salt_depletion_estimate',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '2026-12-21T23:00:00+00:00',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_salt_efficiency-entry]
+# name: test_all_sensor_entities[sensor.demo_salt_efficiency-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1503,7 +1503,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_salt_efficiency',
+    'entity_id': 'sensor.demo_salt_efficiency',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1525,28 +1525,28 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'salt_efficiency',
-    'unique_id': '7384243_20203_1120_salt_efficiency',
+    'unique_id': '4213377_30105_2242_salt_efficiency',
     'unit_of_measurement': 'mol/kg',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_salt_efficiency-state]
+# name: test_all_sensor_entities[sensor.demo_salt_efficiency-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Salt efficiency',
+      'friendly_name': 'Demo Salt efficiency',
       'grains_per_pound': 2152,
       'source': 'device_rated_property',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': 'mol/kg',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_salt_efficiency',
+    'entity_id': 'sensor.demo_salt_efficiency',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '3.07161647956497',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_salt_level-entry]
+# name: test_all_sensor_entities[sensor.demo_salt_level-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1561,7 +1561,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_salt_level',
+    'entity_id': 'sensor.demo_salt_level',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1580,26 +1580,26 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'salt_level',
-    'unique_id': '7384243_20203_1120_salt_level',
+    'unique_id': '4213377_30105_2242_salt_level',
     'unit_of_measurement': '%',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_salt_level-state]
+# name: test_all_sensor_entities[sensor.demo_salt_level-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Salt level',
+      'friendly_name': 'Demo Salt level',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': '%',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_salt_level',
+    'entity_id': 'sensor.demo_salt_level',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '37.5',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_salt_per_regeneration-entry]
+# name: test_all_sensor_entities[sensor.demo_salt_per_regeneration-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1614,7 +1614,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_salt_per_regeneration',
+    'entity_id': 'sensor.demo_salt_per_regeneration',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1639,27 +1639,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'salt_per_regeneration',
-    'unique_id': '7384243_20203_1120_salt_per_regeneration',
+    'unique_id': '4213377_30105_2242_salt_per_regeneration',
     'unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_salt_per_regeneration-state]
+# name: test_all_sensor_entities[sensor.demo_salt_per_regeneration-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'weight',
-      'friendly_name': 'Dom Salt per regeneration',
+      'friendly_name': 'Demo Salt per regeneration',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_salt_per_regeneration',
+    'entity_id': 'sensor.demo_salt_per_regeneration',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '1.736396951597',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_serial_number-entry]
+# name: test_all_sensor_entities[sensor.demo_serial_number-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1672,7 +1672,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_serial_number',
+    'entity_id': 'sensor.demo_serial_number',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1691,24 +1691,24 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'serial_number',
-    'unique_id': '7384243_20203_1120_serial_number',
+    'unique_id': '4213377_30105_2242_serial_number',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_serial_number-state]
+# name: test_all_sensor_entities[sensor.demo_serial_number-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Serial number',
+      'friendly_name': 'Demo Serial number',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_serial_number',
+    'entity_id': 'sensor.demo_serial_number',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '7384243-20203-1120',
+    'state': '4213377-30105-2242',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_total_hardness_removed-entry]
+# name: test_all_sensor_entities[sensor.demo_total_hardness_removed-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1723,7 +1723,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_total_hardness_removed',
+    'entity_id': 'sensor.demo_total_hardness_removed',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1748,27 +1748,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'total_rock_removed',
-    'unique_id': '7384243_20203_1120_total_rock_removed',
+    'unique_id': '4213377_30105_2242_total_rock_removed',
     'unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_total_hardness_removed-state]
+# name: test_all_sensor_entities[sensor.demo_total_hardness_removed-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'weight',
-      'friendly_name': 'Dom Total hardness removed',
+      'friendly_name': 'Demo Total hardness removed',
       'state_class': <SensorStateClass.TOTAL: 'total'>,
       'unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_total_hardness_removed',
+    'entity_id': 'sensor.demo_total_hardness_removed',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '79.560101698',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_total_recharges-entry]
+# name: test_all_sensor_entities[sensor.demo_total_recharges-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1783,7 +1783,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_total_recharges',
+    'entity_id': 'sensor.demo_total_recharges',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1802,25 +1802,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'total_recharges',
-    'unique_id': '7384243_20203_1120_total_recharges',
+    'unique_id': '4213377_30105_2242_total_recharges',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_total_recharges-state]
+# name: test_all_sensor_entities[sensor.demo_total_recharges-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Total recharges',
+      'friendly_name': 'Demo Total recharges',
       'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_total_recharges',
+    'entity_id': 'sensor.demo_total_recharges',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '149',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_total_salt_used-entry]
+# name: test_all_sensor_entities[sensor.demo_total_salt_used-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1835,7 +1835,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_total_salt_used',
+    'entity_id': 'sensor.demo_total_salt_used',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1860,27 +1860,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'total_salt_used',
-    'unique_id': '7384243_20203_1120_total_salt_used',
+    'unique_id': '4213377_30105_2242_total_salt_used',
     'unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_total_salt_used-state]
+# name: test_all_sensor_entities[sensor.demo_total_salt_used-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'weight',
-      'friendly_name': 'Dom Total salt used',
+      'friendly_name': 'Demo Total salt used',
       'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
       'unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_total_salt_used',
+    'entity_id': 'sensor.demo_total_salt_used',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '258.729087848',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_total_water-entry]
+# name: test_all_sensor_entities[sensor.demo_total_water-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1895,7 +1895,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_total_water',
+    'entity_id': 'sensor.demo_total_water',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1920,27 +1920,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'total_water',
-    'unique_id': '7384243_20203_1120_total_water',
+    'unique_id': '4213377_30105_2242_total_water',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_total_water-state]
+# name: test_all_sensor_entities[sensor.demo_total_water-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'water',
-      'friendly_name': 'Dom Total water',
+      'friendly_name': 'Demo Total water',
       'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_total_water',
+    'entity_id': 'sensor.demo_total_water',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '179727.566092536',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_treated_water_available-entry]
+# name: test_all_sensor_entities[sensor.demo_treated_water_available-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -1955,7 +1955,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_treated_water_available',
+    'entity_id': 'sensor.demo_treated_water_available',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -1980,27 +1980,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'treated_water_available',
-    'unique_id': '7384243_20203_1120_treated_water_available',
+    'unique_id': '4213377_30105_2242_treated_water_available',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_treated_water_available-state]
+# name: test_all_sensor_entities[sensor.demo_treated_water_available-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Treated water available',
+      'friendly_name': 'Demo Treated water available',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_treated_water_available',
+    'entity_id': 'sensor.demo_treated_water_available',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '700.30118004',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_usage_forecast-entry]
+# name: test_all_sensor_entities[sensor.demo_usage_forecast-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -2015,7 +2015,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_usage_forecast',
+    'entity_id': 'sensor.demo_usage_forecast',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -2040,16 +2040,16 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'usage_forecast',
-    'unique_id': '7384243_20203_1120_usage_forecast',
+    'unique_id': '4213377_30105_2242_usage_forecast',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_usage_forecast-state]
+# name: test_all_sensor_entities[sensor.demo_usage_forecast-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'band_liters': 114,
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Usage forecast',
+      'friendly_name': 'Demo Usage forecast',
       'liters': 174,
       'persons': None,
       'source': 'device_average',
@@ -2058,14 +2058,14 @@
       'weekday': 'wednesday',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_usage_forecast',
+    'entity_id': 'sensor.demo_usage_forecast',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '174.128942064',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_water_flow-entry]
+# name: test_all_sensor_entities[sensor.demo_water_flow-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -2080,7 +2080,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_water_flow',
+    'entity_id': 'sensor.demo_water_flow',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -2105,27 +2105,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'current_water_flow',
-    'unique_id': '7384243_20203_1120_current_water_flow',
+    'unique_id': '4213377_30105_2242_current_water_flow',
     'unit_of_measurement': <UnitOfVolumeFlowRate.LITERS_PER_MINUTE: 'L/min'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_water_flow-state]
+# name: test_all_sensor_entities[sensor.demo_water_flow-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_flow_rate',
-      'friendly_name': 'Dom Water flow',
+      'friendly_name': 'Demo Water flow',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolumeFlowRate.LITERS_PER_MINUTE: 'L/min'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_water_flow',
+    'entity_id': 'sensor.demo_water_flow',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '0.0',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_water_used_today-entry]
+# name: test_all_sensor_entities[sensor.demo_water_used_today-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -2140,7 +2140,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_water_used_today',
+    'entity_id': 'sensor.demo_water_used_today',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -2165,27 +2165,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'water_used_today',
-    'unique_id': '7384243_20203_1120_water_used_today',
+    'unique_id': '4213377_30105_2242_water_used_today',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_water_used_today-state]
+# name: test_all_sensor_entities[sensor.demo_water_used_today-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'water',
-      'friendly_name': 'Dom Water used today',
+      'friendly_name': 'Demo Water used today',
       'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
       'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_water_used_today',
+    'entity_id': 'sensor.demo_water_used_today',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '11.356235352',
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_wi_fi_module_firmware-entry]
+# name: test_all_sensor_entities[sensor.demo_wi_fi_module_firmware-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -2198,7 +2198,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_wi_fi_module_firmware',
+    'entity_id': 'sensor.demo_wi_fi_module_firmware',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -2217,17 +2217,17 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'wifi_module_version',
-    'unique_id': '7384243_20203_1120_wifi_module_version',
+    'unique_id': '4213377_30105_2242_wifi_module_version',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_sensor_entities[sensor.dom_wi_fi_module_firmware-state]
+# name: test_all_sensor_entities[sensor.demo_wi_fi_module_firmware-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Wi-Fi module firmware',
+      'friendly_name': 'Demo Wi-Fi module firmware',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_wi_fi_module_firmware',
+    'entity_id': 'sensor.demo_wi_fi_module_firmware',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,

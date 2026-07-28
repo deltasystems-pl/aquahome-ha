@@ -64,8 +64,8 @@ if TYPE_CHECKING:
     from pytest_homeassistant_custom_component.common import MockConfigEntry
     from syrupy.assertion import SnapshotAssertion
 
-#: Slug derived from the fixture serial ``7384243-20203-1120``.
-SLUG = "7384243_20203_1120"
+#: Slug derived from the fixture serial ``4213377-30105-2242``.
+SLUG = "4213377_30105_2242"
 #: Fixed instant every setup test freezes to (2026-07-21T12:00:00Z).
 FROZEN_INSTANT = "2026-07-21T12:00:00+00:00"
 #: Countdown carried by the ``out_of_salt_estimate_days`` fixture property.
@@ -462,7 +462,7 @@ async def test_value_sensors_unknown_when_enriched_absent(
     # A device-root field survives regardless of the enriched block.
     serial_state = hass.states.get(_entity_id(hass, "serial_number"))
     assert serial_state is not None
-    assert serial_state.state == "7384243-20203-1120"
+    assert serial_state.state == "4213377-30105-2242"
     assert serial_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
 
 

@@ -36,7 +36,7 @@ from tests.live_server import FakeIquaLiveServer, frame
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-DEVICE_ID = "d32caa70-dca3-4cc9-bd3e-28b8c44df23c"
+DEVICE_ID = "e5a7c1f3-8b2d-4e6a-b9c8-3d5f7a9b1c2e"
 
 #: Ceiling for every frame-reading loop: a hung stream must fail the test
 #: rather than block the suite (production code applies no timeout by design).

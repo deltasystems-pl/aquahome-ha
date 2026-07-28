@@ -54,11 +54,11 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-#: Entity ids the device nickname ``Dom`` yields under ``has_entity_name``.
-SALT_LEVEL = "sensor.dom_salt_level"
-TOTAL_RECHARGES = "sensor.dom_total_recharges"
-ONLINE = "binary_sensor.dom_online"
-SALT_LEVEL_ALERT = "binary_sensor.dom_salt_level_alert"
+#: Entity ids the device nickname ``Demo`` yields under ``has_entity_name``.
+SALT_LEVEL = "sensor.demo_salt_level"
+TOTAL_RECHARGES = "sensor.demo_total_recharges"
+ONLINE = "binary_sensor.demo_online"
+SALT_LEVEL_ALERT = "binary_sensor.demo_salt_level_alert"
 
 #: Coordinator logger used to scope the caplog assertions.
 COORDINATOR_LOGGER = "custom_components.aquahome.coordinator"

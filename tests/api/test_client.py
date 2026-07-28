@@ -43,7 +43,7 @@ from custom_components.aquahome.api.models import (
 from tests.api.conftest import FAKE_NOW, FakeClock, make_jwt
 from tests.conftest import load_fixture
 
-DEVICE_ID = "d32caa70-dca3-4cc9-bd3e-28b8c44df23c"
+DEVICE_ID = "e5a7c1f3-8b2d-4e6a-b9c8-3d5f7a9b1c2e"
 ACCESS_TOKEN = make_jwt(FAKE_NOW)
 REFRESH_URL = f"{API_BASE_URL}/auth/refresh"
 #: Europe/Warsaw summer offset carried by the datapoint fixture's period labels.
@@ -285,7 +285,7 @@ async def test_get_summary_parses_fixture(session: aiohttp.ClientSession) -> Non
         summary = await client.async_get_summary(DEVICE_ID)
 
     assert isinstance(summary, DeviceSummary)
-    assert summary.nickname == "Dom"
+    assert summary.nickname == "Demo"
     assert summary.user is not None
     assert summary.user.email == "dev@example.com"
 

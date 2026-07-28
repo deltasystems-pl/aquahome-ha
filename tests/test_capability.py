@@ -66,8 +66,8 @@ if TYPE_CHECKING:
 
     from custom_components.aquahome.coordinator import AquaHomeConfigEntry
 
-#: Slug of the captured device's serial ``7384243-20203-1120``.
-SLUG = "7384243_20203_1120"
+#: Slug of the captured device's serial ``4213377-30105-2242``.
+SLUG = "4213377_30105_2242"
 #: Unique-id suffix of the single water-shutoff valve entity.
 _VALVE_UID = f"{SLUG}_water_shutoff_valve"
 #: Unique-id suffix of the feature-gated ``wsov_closed`` binary sensor.

@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_automation_switches_snapshot[switch.dom_auto_vacation_deferral-entry]
+# name: test_automation_switches_snapshot[switch.demo_auto_vacation_deferral-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -12,7 +12,7 @@
     'disabled_by': None,
     'domain': 'switch',
     'entity_category': <EntityCategory.CONFIG: 'config'>,
-    'entity_id': 'switch.dom_auto_vacation_deferral',
+    'entity_id': 'switch.demo_auto_vacation_deferral',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -31,25 +31,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'auto_vacation',
-    'unique_id': '7384243_20203_1120_auto_vacation',
+    'unique_id': '4213377_30105_2242_auto_vacation',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_automation_switches_snapshot[switch.dom_auto_vacation_deferral-state]
+# name: test_automation_switches_snapshot[switch.demo_auto_vacation_deferral-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Auto vacation deferral',
+      'friendly_name': 'Demo Auto vacation deferral',
       'icon': 'mdi:home-export-outline',
     }),
     'context': <ANY>,
-    'entity_id': 'switch.dom_auto_vacation_deferral',
+    'entity_id': 'switch.demo_auto_vacation_deferral',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_automation_switches_snapshot[switch.dom_smart_regeneration_scheduling-entry]
+# name: test_automation_switches_snapshot[switch.demo_smart_regeneration_scheduling-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -62,7 +62,7 @@
     'disabled_by': None,
     'domain': 'switch',
     'entity_category': <EntityCategory.CONFIG: 'config'>,
-    'entity_id': 'switch.dom_smart_regeneration_scheduling',
+    'entity_id': 'switch.demo_smart_regeneration_scheduling',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -81,27 +81,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'smart_regeneration',
-    'unique_id': '7384243_20203_1120_smart_regeneration',
+    'unique_id': '4213377_30105_2242_smart_regeneration',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_automation_switches_snapshot[switch.dom_smart_regeneration_scheduling-state]
+# name: test_automation_switches_snapshot[switch.demo_smart_regeneration_scheduling-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Smart regeneration scheduling',
+      'friendly_name': 'Demo Smart regeneration scheduling',
       'icon': 'mdi:auto-fix',
       'last_decision': 'skipped_off',
       'last_decision_at': '2026-07-21T12:00:00+00:00',
     }),
     'context': <ANY>,
-    'entity_id': 'switch.dom_smart_regeneration_scheduling',
+    'entity_id': 'switch.demo_smart_regeneration_scheduling',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_automation_switches_snapshot[switch.dom_vacation_deferral-entry]
+# name: test_automation_switches_snapshot[switch.demo_vacation_deferral-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -114,7 +114,7 @@
     'disabled_by': None,
     'domain': 'switch',
     'entity_category': None,
-    'entity_id': 'switch.dom_vacation_deferral',
+    'entity_id': 'switch.demo_vacation_deferral',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -133,21 +133,21 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'vacation_deferral',
-    'unique_id': '7384243_20203_1120_vacation_deferral',
+    'unique_id': '4213377_30105_2242_vacation_deferral',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_automation_switches_snapshot[switch.dom_vacation_deferral-state]
+# name: test_automation_switches_snapshot[switch.demo_vacation_deferral-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'days_deferred': None,
       'deferral_source': None,
       'deferral_started': None,
-      'friendly_name': 'Dom Vacation deferral',
+      'friendly_name': 'Demo Vacation deferral',
       'icon': 'mdi:calendar-remove',
     }),
     'context': <ANY>,
-    'entity_id': 'switch.dom_vacation_deferral',
+    'entity_id': 'switch.demo_vacation_deferral',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,

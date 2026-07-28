@@ -47,9 +47,9 @@ if TYPE_CHECKING:
 
     from homeassistant.core import HomeAssistant
 
-#: Slug derived from the fixture serial ``7384243-20203-1120`` (see entity.py).
-DEVICE_SLUG = "7384243_20203_1120"
-DEVICE_SERIAL = "7384243-20203-1120"
+#: Slug derived from the fixture serial ``4213377-30105-2242`` (see entity.py).
+DEVICE_SLUG = "4213377_30105_2242"
+DEVICE_SERIAL = "4213377-30105-2242"
 LOGIN_URL = f"{API_BASE_URL}/auth/login"
 REFRESH_URL = f"{API_BASE_URL}/auth/refresh"
 
@@ -124,7 +124,7 @@ async def test_setup_registers_device(
     assert device is not None
     assert device.serial_number == DEVICE_SERIAL
     assert device.manufacturer == "iQua"
-    assert device.name == "Dom"
+    assert device.name == "Demo"
     assert device.model == "AquaHome 20 Smart"
     assert device.sw_version == "r4.5 MPC01154"
 
@@ -139,10 +139,10 @@ async def test_unload_entry_removes_platforms(
     assert await setup_integration(hass, mock_config_entry) is True
 
     # Setup produced live entities on both platforms.
-    live = hass.states.get("sensor.dom_salt_level")
+    live = hass.states.get("sensor.demo_salt_level")
     assert live is not None
     assert live.state == "37.5"
-    assert hass.states.get("binary_sensor.dom_online") is not None
+    assert hass.states.get("binary_sensor.demo_online") is not None
 
     assert await hass.config_entries.async_unload(mock_config_entry.entry_id) is True
     await hass.async_block_till_done()

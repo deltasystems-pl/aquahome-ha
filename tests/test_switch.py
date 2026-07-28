@@ -70,8 +70,8 @@ if TYPE_CHECKING:
 #: The switch platform domain (``homeassistant.components.switch`` does not
 #: re-export ``DOMAIN`` for typing, so derive it from the platform enum).
 SWITCH_DOMAIN = Platform.SWITCH
-#: Slug derived from the fixture serial ``7384243-20203-1120``.
-SLUG = "7384243_20203_1120"
+#: Slug derived from the fixture serial ``4213377-30105-2242``.
+SLUG = "4213377_30105_2242"
 #: Unique-id suffixes of the two switches this file drives.
 SETTING_UNIQUE_ID = f"{SLUG}_setting_night_mode"
 LEAK_SCAN_UNIQUE_ID = f"{SLUG}_leak_detector_scan"

@@ -62,7 +62,7 @@ def _login_body(access_token: str, refresh_token: str) -> dict[str, object]:
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "user_id": "7f1e15b0-e9c7-44a1-8f0a-1844d67bf545",
+        "user_id": "1c9f8a4e-2b6d-4c3a-9e5f-7a1b3c5d7e9f",
         "is_verified": True,
         "is_admin": False,
         "is_customer_support": False,
@@ -108,7 +108,7 @@ async def test_login_success_parses_and_stores_tokens(
     assert isinstance(result, LoginResult)
     assert result.access_token == FRESH_TOKEN
     assert result.refresh_token == "refresh-abc"
-    assert result.user_id == "7f1e15b0-e9c7-44a1-8f0a-1844d67bf545"
+    assert result.user_id == "1c9f8a4e-2b6d-4c3a-9e5f-7a1b3c5d7e9f"
     assert result.is_verified is True
     # Login fires the persistence callback exactly once with the new pair.
     assert updates == [(FRESH_TOKEN, "refresh-abc")]

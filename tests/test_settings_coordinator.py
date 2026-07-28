@@ -72,16 +72,16 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-#: Slug derived from the fixture serial ``7384243-20203-1120``.
-SLUG = "7384243_20203_1120"
+#: Slug derived from the fixture serial ``4213377-30105-2242``.
+SLUG = "4213377_30105_2242"
 #: Fixed instant the end-to-end setup tests freeze to (2026-07-21T12:00:00Z).
 FROZEN_INSTANT = "2026-07-21T12:00:00+00:00"
 #: Settings count in the real ``settings.json`` fixture.
 SETTINGS_COUNT = 18
 #: A visible, registry-enabled select setting in the fixture (no conditional).
-SALT_TYPE_SELECT = "select.dom_salt_type"
+SALT_TYPE_SELECT = "select.demo_salt_type"
 #: A core telemetry sensor that must stay live even when settings fail.
-SALT_LEVEL_SENSOR = "sensor.dom_salt_level"
+SALT_LEVEL_SENSOR = "sensor.demo_salt_level"
 
 #: Coordinator logger scoped by the serve-stale log assertions.
 COORDINATOR_LOGGER = "custom_components.aquahome.coordinator"

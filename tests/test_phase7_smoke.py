@@ -88,8 +88,8 @@ if TYPE_CHECKING:
 
     from custom_components.aquahome.analytics.model import AnalyticsResult
 
-#: Slug derived from the fixture serial ``7384243-20203-1120`` (see entity.py).
-SLUG: Final = "7384243_20203_1120"
+#: Slug derived from the fixture serial ``4213377-30105-2242`` (see entity.py).
+SLUG: Final = "4213377_30105_2242"
 
 #: The device's own zone, as reported by its captured ``tz_id`` property.
 DEVICE_TZ: Final = ZoneInfo("Europe/Warsaw")

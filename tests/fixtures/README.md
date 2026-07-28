@@ -7,6 +7,12 @@ Modifications relative to the raw captures:
 
 - `summary.json` — account-holder name/email replaced with `Dev User /
   dev@example.com` (PII redaction; structure unchanged).
+- All identifiers are synthesized, not captured: the account and device UUIDs,
+  the AWS IoT `thing_name`, the product serial (`4213377-30105-2242`, and its
+  slugified `4213377_30105_2242` form in entity unique ids), the WiFi module
+  serial, the `pwa` hardware serial and the device nickname (`Demo`) are all
+  made-up values in the real formats. Only these identity fields were
+  substituted — every measurement, counter, timestamp and unit is untouched.
 - `device-detail.json` — **composed** from the real `summary` + `enriched-data`
   + `properties` payloads into the `DeviceObject` shape of
   `GET /devices/{id}?props=true` (no raw capture of that endpoint exists).

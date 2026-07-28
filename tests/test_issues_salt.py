@@ -57,17 +57,17 @@ if TYPE_CHECKING:
     from homeassistant.core import Event, HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-#: Slug of the captured device's serial ``7384243-20203-1120``.
-SLUG = "7384243_20203_1120"
+#: Slug of the captured device's serial ``4213377-30105-2242``.
+SLUG = "4213377_30105_2242"
 #: Issue id the captured device's nudge is filed under.
 ISSUE_ID = f"low_salt_{SLUG}"
 #: The captured device's nickname, rendered into the ``device`` placeholder.
-DEVICE_NAME = "Dom"
+DEVICE_NAME = "Demo"
 
 #: Identity of the synthetic second device used by the per-device scoping test.
 SECOND_DEVICE_ID = "9c4b1f22-0d5e-4a71-9b8c-2f6a3d0e71aa"
-SECOND_SERIAL = "7384243-20203-2240"
-SECOND_SLUG = "7384243_20203_2240"
+SECOND_SERIAL = "4213377-30105-2243"
+SECOND_SLUG = "4213377_30105_2243"
 SECOND_ISSUE_ID = f"low_salt_{SECOND_SLUG}"
 SECOND_DEVICE_NAME = "Cottage"
 

@@ -45,8 +45,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-#: Slug derived from the fixture serial ``7384243-20203-1120`` (see entity.py).
-SLUG: Final = "7384243_20203_1120"
+#: Slug derived from the fixture serial ``4213377-30105-2242`` (see entity.py).
+SLUG: Final = "4213377_30105_2242"
 
 #: Repair issue id the salt nudge maintains for the fixture device.
 ISSUE_ID: Final = f"low_salt_{SLUG}"
@@ -234,7 +234,7 @@ async def test_full_boot_raises_the_critical_salt_issue(  # noqa: PLR0913 - one 
     assert issue.severity is ir.IssueSeverity.ERROR
     assert issue.is_fixable is False
     assert issue.is_persistent is False
-    assert issue.translation_placeholders == {"device": "Dom", "days": "7"}
+    assert issue.translation_placeholders == {"device": "Demo", "days": "7"}
 
     # The sensors boot from the same payload: the cross-check re-times the
     # shortened countdown, and the rates behind it are unchanged.

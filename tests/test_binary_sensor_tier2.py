@@ -56,8 +56,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-#: Slug of the captured device's serial ``7384243-20203-1120``.
-SLUG = "7384243_20203_1120"
+#: Slug of the captured device's serial ``4213377-30105-2242``.
+SLUG = "4213377_30105_2242"
 
 #: Every Tier-2 recharge/regeneration binary key.
 TIER2_KEYS = (

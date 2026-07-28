@@ -124,8 +124,8 @@ if TYPE_CHECKING:
 
     from custom_components.aquahome.analytics.engine import AquaHomeAnalyticsEngine
 
-#: Slug derived from the fixture serial ``7384243-20203-1120``.
-SLUG = "7384243_20203_1120"
+#: Slug derived from the fixture serial ``4213377-30105-2242``.
+SLUG = "4213377_30105_2242"
 #: External statistic id the meter series lives under.
 STATISTIC_ID = statistic_id_for(SLUG)
 
@@ -308,7 +308,7 @@ def meter_metadata() -> StatisticMetaData:
     return StatisticMetaData(
         mean_type=StatisticMeanType.NONE,
         has_sum=True,
-        name="Dom water usage history",
+        name="Demo water usage history",
         source=DOMAIN,
         statistic_id=STATISTIC_ID,
         unit_class=VolumeConverter.UNIT_CLASS,

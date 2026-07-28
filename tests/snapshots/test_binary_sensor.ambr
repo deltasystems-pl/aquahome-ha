@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_connection_alert-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_connection_alert-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -12,7 +12,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'binary_sensor.dom_connection_alert',
+    'entity_id': 'binary_sensor.demo_connection_alert',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -31,25 +31,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'connection_alert',
-    'unique_id': '7384243_20203_1120_connection_alert',
+    'unique_id': '4213377_30105_2242_connection_alert',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_connection_alert-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_connection_alert-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'problem',
-      'friendly_name': 'Dom Connection alert',
+      'friendly_name': 'Demo Connection alert',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_connection_alert',
+    'entity_id': 'binary_sensor.demo_connection_alert',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_error_code_alert-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_error_code_alert-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -62,7 +62,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_error_code_alert',
+    'entity_id': 'binary_sensor.demo_error_code_alert',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -81,25 +81,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'error_code_alert',
-    'unique_id': '7384243_20203_1120_error_code_alert',
+    'unique_id': '4213377_30105_2242_error_code_alert',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_error_code_alert-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_error_code_alert-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'problem',
-      'friendly_name': 'Dom Error code alert',
+      'friendly_name': 'Demo Error code alert',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_error_code_alert',
+    'entity_id': 'binary_sensor.demo_error_code_alert',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_flow_monitor_alert-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_flow_monitor_alert-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -112,7 +112,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_flow_monitor_alert',
+    'entity_id': 'binary_sensor.demo_flow_monitor_alert',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -131,25 +131,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'flow_monitor_alert',
-    'unique_id': '7384243_20203_1120_flow_monitor_alert',
+    'unique_id': '4213377_30105_2242_flow_monitor_alert',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_flow_monitor_alert-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_flow_monitor_alert-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'problem',
-      'friendly_name': 'Dom Flow monitor alert',
+      'friendly_name': 'Demo Flow monitor alert',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_flow_monitor_alert',
+    'entity_id': 'binary_sensor.demo_flow_monitor_alert',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_leak_suspected-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_leak_suspected-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -162,7 +162,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_leak_suspected',
+    'entity_id': 'binary_sensor.demo_leak_suspected',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -181,16 +181,16 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_suspected',
-    'unique_id': '7384243_20203_1120_leak_suspected',
+    'unique_id': '4213377_30105_2242_leak_suspected',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_leak_suspected-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_leak_suspected-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'consecutive_nights': 0,
       'device_class': 'moisture',
-      'friendly_name': 'Dom Leak suspected',
+      'friendly_name': 'Demo Leak suspected',
       'implied_liters_per_day': None,
       'last_verdict_night': None,
       'masking_coverage': True,
@@ -199,14 +199,14 @@
       'tier': None,
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_leak_suspected',
+    'entity_id': 'binary_sensor.demo_leak_suspected',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'unknown',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_online-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_online-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -219,7 +219,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'binary_sensor.dom_online',
+    'entity_id': 'binary_sensor.demo_online',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -238,25 +238,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'online',
-    'unique_id': '7384243_20203_1120_online',
+    'unique_id': '4213377_30105_2242_online',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_online-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_online-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'connectivity',
-      'friendly_name': 'Dom Online',
+      'friendly_name': 'Demo Online',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_online',
+    'entity_id': 'binary_sensor.demo_online',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'on',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_recharge_off-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_recharge_off-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -269,7 +269,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_recharge_off',
+    'entity_id': 'binary_sensor.demo_recharge_off',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -288,24 +288,24 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'recharge_off',
-    'unique_id': '7384243_20203_1120_recharge_off',
+    'unique_id': '4213377_30105_2242_recharge_off',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_recharge_off-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_recharge_off-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Recharge off',
+      'friendly_name': 'Demo Recharge off',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_recharge_off',
+    'entity_id': 'binary_sensor.demo_recharge_off',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_regenerating-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_regenerating-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -318,7 +318,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_regenerating',
+    'entity_id': 'binary_sensor.demo_regenerating',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -337,25 +337,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'regenerating',
-    'unique_id': '7384243_20203_1120_regenerating',
+    'unique_id': '4213377_30105_2242_regenerating',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_regenerating-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_regenerating-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'running',
-      'friendly_name': 'Dom Regenerating',
+      'friendly_name': 'Demo Regenerating',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_regenerating',
+    'entity_id': 'binary_sensor.demo_regenerating',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_regeneration_suspended-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_regeneration_suspended-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -368,7 +368,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_regeneration_suspended',
+    'entity_id': 'binary_sensor.demo_regeneration_suspended',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -387,25 +387,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'regeneration_suspended',
-    'unique_id': '7384243_20203_1120_regeneration_suspended',
+    'unique_id': '4213377_30105_2242_regeneration_suspended',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_regeneration_suspended-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_regeneration_suspended-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'problem',
-      'friendly_name': 'Dom Regeneration suspended',
+      'friendly_name': 'Demo Regeneration suspended',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_regeneration_suspended',
+    'entity_id': 'binary_sensor.demo_regeneration_suspended',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_resin_alert-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_resin_alert-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -418,7 +418,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_resin_alert',
+    'entity_id': 'binary_sensor.demo_resin_alert',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -437,25 +437,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'resin_alert',
-    'unique_id': '7384243_20203_1120_resin_alert',
+    'unique_id': '4213377_30105_2242_resin_alert',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_resin_alert-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_resin_alert-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'problem',
-      'friendly_name': 'Dom Resin alert',
+      'friendly_name': 'Demo Resin alert',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_resin_alert',
+    'entity_id': 'binary_sensor.demo_resin_alert',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_salt_level_alert-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_salt_level_alert-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -468,7 +468,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_salt_level_alert',
+    'entity_id': 'binary_sensor.demo_salt_level_alert',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -487,25 +487,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'salt_level_alert',
-    'unique_id': '7384243_20203_1120_salt_level_alert',
+    'unique_id': '4213377_30105_2242_salt_level_alert',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_salt_level_alert-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_salt_level_alert-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'problem',
-      'friendly_name': 'Dom Salt level alert',
+      'friendly_name': 'Demo Salt level alert',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_salt_level_alert',
+    'entity_id': 'binary_sensor.demo_salt_level_alert',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_usage_anomaly-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_usage_anomaly-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -518,7 +518,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_usage_anomaly',
+    'entity_id': 'binary_sensor.demo_usage_anomaly',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -537,11 +537,11 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'usage_anomaly',
-    'unique_id': '7384243_20203_1120_usage_anomaly',
+    'unique_id': '4213377_30105_2242_usage_anomaly',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_usage_anomaly-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_usage_anomaly-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'actual_liters': None,
@@ -551,7 +551,7 @@
       'drift_cusum': False,
       'drift_ewma': False,
       'expected_liters': None,
-      'friendly_name': 'Dom Usage anomaly',
+      'friendly_name': 'Demo Usage anomaly',
       'point_hours': 0,
       'ratio': None,
       'ratio_bucket': None,
@@ -559,14 +559,14 @@
       ]),
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_usage_anomaly',
+    'entity_id': 'binary_sensor.demo_usage_anomaly',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'unknown',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_vacation_detected-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_vacation_detected-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -579,7 +579,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_vacation_detected',
+    'entity_id': 'binary_sensor.demo_vacation_detected',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -598,27 +598,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'vacation_detected',
-    'unique_id': '7384243_20203_1120_vacation_detected',
+    'unique_id': '4213377_30105_2242_vacation_detected',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_vacation_detected-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_vacation_detected-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'consecutive_days': 0,
-      'friendly_name': 'Dom Vacation detected',
+      'friendly_name': 'Demo Vacation detected',
       'icon': 'mdi:beach',
       'since': None,
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_vacation_detected',
+    'entity_id': 'binary_sensor.demo_vacation_detected',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'unknown',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_vacation_mode-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_vacation_mode-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -631,7 +631,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_vacation_mode',
+    'entity_id': 'binary_sensor.demo_vacation_mode',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -650,24 +650,24 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'vacation_mode',
-    'unique_id': '7384243_20203_1120_vacation_mode',
+    'unique_id': '4213377_30105_2242_vacation_mode',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_vacation_mode-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_vacation_mode-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Vacation mode',
+      'friendly_name': 'Demo Vacation mode',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_vacation_mode',
+    'entity_id': 'binary_sensor.demo_vacation_mode',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_water_usage_alert-entry]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_water_usage_alert-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -680,7 +680,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_water_usage_alert',
+    'entity_id': 'binary_sensor.demo_water_usage_alert',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -699,18 +699,18 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'water_usage_alert',
-    'unique_id': '7384243_20203_1120_water_usage_alert',
+    'unique_id': '4213377_30105_2242_water_usage_alert',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_all_binary_sensors_snapshot[binary_sensor.dom_water_usage_alert-state]
+# name: test_all_binary_sensors_snapshot[binary_sensor.demo_water_usage_alert-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'problem',
-      'friendly_name': 'Dom Water usage alert',
+      'friendly_name': 'Demo Water usage alert',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_water_usage_alert',
+    'entity_id': 'binary_sensor.demo_water_usage_alert',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,

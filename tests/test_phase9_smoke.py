@@ -92,8 +92,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-#: Slug derived from the fixture serial ``7384243-20203-1120`` (see entity.py).
-SLUG: Final = "7384243_20203_1120"
+#: Slug derived from the fixture serial ``4213377-30105-2242`` (see entity.py).
+SLUG: Final = "4213377_30105_2242"
 
 #: The instant every clock in this module reads: 12:30 Europe/Warsaw on the last
 #: day of the captured history, matching the earlier smokes exactly.

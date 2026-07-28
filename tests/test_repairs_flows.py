@@ -97,10 +97,10 @@ if TYPE_CHECKING:
     from custom_components.aquahome.analytics.engine import AquaHomeAnalyticsEngine
     from custom_components.aquahome.scheduler import AquaHomeRegenScheduler
 
-#: Slug of the captured device's serial ``7384243-20203-1120``.
-SLUG = "7384243_20203_1120"
+#: Slug of the captured device's serial ``4213377-30105-2242``.
+SLUG = "4213377_30105_2242"
 #: The captured device's nickname, rendered into every ``device`` placeholder.
-DEVICE_NAME = "Dom"
+DEVICE_NAME = "Demo"
 
 #: The three automation-tier issue ids, plus the detection tier's urgent one.
 LEAK_AWAY_ISSUE_ID = f"leak_while_away_{SLUG}"

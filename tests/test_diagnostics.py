@@ -46,11 +46,11 @@ _EMPTY_PLATFORMS: list[Platform] = []
 _NO_PLATFORMS = patch("custom_components.aquahome.PLATFORMS", _EMPTY_PLATFORMS)
 
 #: Raw fixture secrets that must never appear in the redacted dump.
-_TOP_SERIAL = "7384243-20203-1120"
-_PROP_SERIAL = "SL00034EEB25F3"
-_NICKNAME = "Dom"
+_TOP_SERIAL = "4213377-30105-2242"
+_PROP_SERIAL = "SL00AB12CD34EF"
+_NICKNAME = "Demo"
 _TZ_ID = "Europe/Warsaw"
-_THING_NAME = "e4d6349d-779f-42c8-b2d7-4eff4bc879a3"
+_THING_NAME = "3f8b6d2a-5c1e-4a7b-8d9f-2e4c6a8b0d1f"
 _IMAGE_URL = "https://app.myiquaapp.com/devices/watersofteners/Aquahome.png?v=1"
 _REFRESH_TOKEN_VALUE = "refresh-token-1"
 

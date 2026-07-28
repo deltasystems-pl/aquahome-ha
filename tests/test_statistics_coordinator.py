@@ -89,8 +89,8 @@ if TYPE_CHECKING:
 
     from custom_components.aquahome.statistics import AquaHomeStatisticsCoordinator
 
-#: Slug derived from the fixture serial ``7384243-20203-1120`` (see other suites).
-SLUG = "7384243_20203_1120"
+#: Slug derived from the fixture serial ``4213377-30105-2242`` (see other suites).
+SLUG = "4213377_30105_2242"
 #: External statistic id the backfill imports into.
 STATISTIC_ID = statistic_id_for(SLUG)
 
@@ -498,7 +498,7 @@ async def test_first_run_imports_the_full_meter_history(
     assert metadata[0]["unit_class"] == VolumeConverter.UNIT_CLASS
     assert metadata[0]["statistics_unit_of_measurement"] == UnitOfVolume.LITERS
     assert metadata[0]["statistic_id"] == STATISTIC_ID
-    assert metadata[0]["name"] == "Dom water usage history"
+    assert metadata[0]["name"] == "Demo water usage history"
     # An external statistic has no entity to convert it for display, so the
     # series is stored in the unit this installation reads — metric here — and
     # the volume unit class lets the user convert it later if they disagree.

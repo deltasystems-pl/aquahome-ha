@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_live_controls_snapshot[number.dom_live_session_minimum_gap-entry]
+# name: test_live_controls_snapshot[number.demo_live_session_minimum_gap-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -17,7 +17,7 @@
     'disabled_by': None,
     'domain': 'number',
     'entity_category': <EntityCategory.CONFIG: 'config'>,
-    'entity_id': 'number.dom_live_session_minimum_gap',
+    'entity_id': 'number.demo_live_session_minimum_gap',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -36,14 +36,14 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'live_min_gap',
-    'unique_id': '7384243_20203_1120_live_min_gap',
+    'unique_id': '4213377_30105_2242_live_min_gap',
     'unit_of_measurement': <UnitOfTime.SECONDS: 's'>,
   })
 # ---
-# name: test_live_controls_snapshot[number.dom_live_session_minimum_gap-state]
+# name: test_live_controls_snapshot[number.demo_live_session_minimum_gap-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Live session minimum gap',
+      'friendly_name': 'Demo Live session minimum gap',
       'icon': 'mdi:timer-outline',
       'max': 900.0,
       'min': 60.0,
@@ -52,14 +52,14 @@
       'unit_of_measurement': <UnitOfTime.SECONDS: 's'>,
     }),
     'context': <ANY>,
-    'entity_id': 'number.dom_live_session_minimum_gap',
+    'entity_id': 'number.demo_live_session_minimum_gap',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '120.0',
   })
 # ---
-# name: test_live_controls_snapshot[number.dom_live_sessions_per_day-entry]
+# name: test_live_controls_snapshot[number.demo_live_sessions_per_day-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -77,7 +77,7 @@
     'disabled_by': None,
     'domain': 'number',
     'entity_category': <EntityCategory.CONFIG: 'config'>,
-    'entity_id': 'number.dom_live_sessions_per_day',
+    'entity_id': 'number.demo_live_sessions_per_day',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -96,14 +96,14 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'live_sessions_per_day',
-    'unique_id': '7384243_20203_1120_live_sessions_per_day',
+    'unique_id': '4213377_30105_2242_live_sessions_per_day',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_live_controls_snapshot[number.dom_live_sessions_per_day-state]
+# name: test_live_controls_snapshot[number.demo_live_sessions_per_day-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Live sessions per day',
+      'friendly_name': 'Demo Live sessions per day',
       'icon': 'mdi:counter',
       'max': 200,
       'min': 4,
@@ -111,14 +111,14 @@
       'step': 1,
     }),
     'context': <ANY>,
-    'entity_id': 'number.dom_live_sessions_per_day',
+    'entity_id': 'number.demo_live_sessions_per_day',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '48.0',
   })
 # ---
-# name: test_live_controls_snapshot[switch.dom_continuous_live_flow-entry]
+# name: test_live_controls_snapshot[switch.demo_continuous_live_flow-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -131,7 +131,7 @@
     'disabled_by': None,
     'domain': 'switch',
     'entity_category': <EntityCategory.CONFIG: 'config'>,
-    'entity_id': 'switch.dom_continuous_live_flow',
+    'entity_id': 'switch.demo_continuous_live_flow',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -150,25 +150,25 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'continuous_live_flow',
-    'unique_id': '7384243_20203_1120_continuous_live_flow',
+    'unique_id': '4213377_30105_2242_continuous_live_flow',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_live_controls_snapshot[switch.dom_continuous_live_flow-state]
+# name: test_live_controls_snapshot[switch.demo_continuous_live_flow-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Continuous live flow',
+      'friendly_name': 'Demo Continuous live flow',
       'icon': 'mdi:waves-arrow-right',
     }),
     'context': <ANY>,
-    'entity_id': 'switch.dom_continuous_live_flow',
+    'entity_id': 'switch.demo_continuous_live_flow',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_live_controls_snapshot[switch.dom_live_view-entry]
+# name: test_live_controls_snapshot[switch.demo_live_view-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -181,7 +181,7 @@
     'disabled_by': None,
     'domain': 'switch',
     'entity_category': None,
-    'entity_id': 'switch.dom_live_view',
+    'entity_id': 'switch.demo_live_view',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -200,28 +200,28 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'live_view',
-    'unique_id': '7384243_20203_1120_live_view',
+    'unique_id': '4213377_30105_2242_live_view',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_live_controls_snapshot[switch.dom_live_view-state]
+# name: test_live_controls_snapshot[switch.demo_live_view-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Live view',
+      'friendly_name': 'Demo Live view',
       'icon': 'mdi:eye',
       'session_started': None,
       'source': None,
       'windows_in_session': 0,
     }),
     'context': <ANY>,
-    'entity_id': 'switch.dom_live_view',
+    'entity_id': 'switch.demo_live_view',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'off',
   })
 # ---
-# name: test_live_controls_snapshot[switch.dom_smart_live_windows-entry]
+# name: test_live_controls_snapshot[switch.demo_smart_live_windows-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -234,7 +234,7 @@
     'disabled_by': None,
     'domain': 'switch',
     'entity_category': <EntityCategory.CONFIG: 'config'>,
-    'entity_id': 'switch.dom_smart_live_windows',
+    'entity_id': 'switch.demo_smart_live_windows',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -253,18 +253,18 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'smart_live_windows',
-    'unique_id': '7384243_20203_1120_smart_live_windows',
+    'unique_id': '4213377_30105_2242_smart_live_windows',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_live_controls_snapshot[switch.dom_smart_live_windows-state]
+# name: test_live_controls_snapshot[switch.demo_smart_live_windows-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Smart live windows',
+      'friendly_name': 'Demo Smart live windows',
       'icon': 'mdi:eye-refresh',
     }),
     'context': <ANY>,
-    'entity_id': 'switch.dom_smart_live_windows',
+    'entity_id': 'switch.demo_smart_live_windows',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,

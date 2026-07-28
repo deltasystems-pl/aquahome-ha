@@ -5,19 +5,19 @@
   "total": 1,
   "data": [
     {
-      "id": "d32caa70-dca3-4cc9-bd3e-28b8c44df23c",
-      "thing_name": "e4d6349d-779f-42c8-b2d7-4eff4bc879a3",
+      "id": "e5a7c1f3-8b2d-4e6a-b9c8-3d5f7a9b1c2e",
+      "thing_name": "3f8b6d2a-5c1e-4a7b-8d9f-2e4c6a8b0d1f",
       "system_type": "demand softener",
       "system_type_display": "Demand Softener",
       "image_url": "https://app.myiquaapp.com/devices/watersofteners/Aquahome.png?v=1",
-      "serial_number": "7384243-20203-1120",
-      "nickname": "Dom",
+      "serial_number": "4213377-30105-2242",
+      "nickname": "Demo",
       "is_shared_with_dealer": false,
       "is_rental": null,
       "is_disabled": false,
       "is_online": true,
       "user": {
-        "id": "7f1e15b0-e9c7-44a1-8f0a-1844d67bf545",
+        "id": "1c9f8a4e-2b6d-4c3a-9e5f-7a1b3c5d7e9f",
         "first_name": "Dev",
         "last_name": "User",
         "email": "dev@example.com"
@@ -110,7 +110,7 @@
           },
           "rf_signal_strength_dbm": -37,
           "model": "AquaHome 20 Smart",
-          "pwa": "7383865",
+          "pwa": "4213299",
           "date_code": "20203",
           "control_version": "r4.5 MPC01154",
           "wifi_module_version": "7397335",
@@ -859,7 +859,7 @@
         },
         "nickname": {
           "name": "nickname",
-          "value": "Dom",
+          "value": "Demo",
           "created_at": "2025-08-21T22:16:01.601293Z",
           "updated_at": "2025-08-21T22:16:01.601293Z"
         },
@@ -917,7 +917,7 @@
         },
         "product_serial_number": {
           "name": "product_serial_number",
-          "value": "7384243-20203-1120",
+          "value": "4213377-30105-2242",
           "created_at": "2025-08-30T07:48:44Z",
           "updated_at": "2026-06-14T02:53:37Z"
         },
@@ -929,7 +929,7 @@
         },
         "pwa_number": {
           "name": "pwa_number",
-          "value": 7383865,
+          "value": 4213299,
           "created_at": "2025-10-30T03:21:04Z",
           "updated_at": "2025-10-30T03:21:05Z"
         },
@@ -1043,7 +1043,7 @@
         },
         "serial_number": {
           "name": "serial_number",
-          "value": "SL00034EEB25F3",
+          "value": "SL00AB12CD34EF",
           "created_at": "2000-01-01T00:00:00Z",
           "updated_at": "2026-06-14T02:53:37Z"
         },

@@ -191,10 +191,10 @@ def test_device_summary_parses_fixture() -> None:
     """Parse the summary fixture, including the nested user summary."""
     summary = DeviceSummary.from_dict(load_fixture("summary.json"))
 
-    assert summary.id == "d32caa70-dca3-4cc9-bd3e-28b8c44df23c"
+    assert summary.id == "e5a7c1f3-8b2d-4e6a-b9c8-3d5f7a9b1c2e"
     assert summary.system_type == "demand softener"
-    assert summary.nickname == "Dom"
-    assert summary.serial_number == "7384243-20203-1120"
+    assert summary.nickname == "Demo"
+    assert summary.serial_number == "4213377-30105-2242"
     assert summary.is_shared_with_dealer is False
     assert summary.is_rental is None
     assert summary.is_disabled is False
@@ -213,9 +213,9 @@ def test_device_parses_detail_fixture() -> None:
     """Parse the full device fixture: identity, enriched data, properties."""
     device = Device.from_dict(load_fixture("device-detail.json"))
 
-    assert device.id == "d32caa70-dca3-4cc9-bd3e-28b8c44df23c"
-    assert device.nickname == "Dom"
-    assert device.serial_number == "7384243-20203-1120"
+    assert device.id == "e5a7c1f3-8b2d-4e6a-b9c8-3d5f7a9b1c2e"
+    assert device.nickname == "Demo"
+    assert device.serial_number == "4213377-30105-2242"
     assert device.is_online is True
     assert device.user is not None
     assert device.user.email == "dev@example.com"
@@ -277,7 +277,7 @@ def test_devices_list_parses_first_device() -> None:
     assert payload["total"] == 1
 
     device = Device.from_dict(payload["data"][0])
-    assert device.id == "d32caa70-dca3-4cc9-bd3e-28b8c44df23c"
+    assert device.id == "e5a7c1f3-8b2d-4e6a-b9c8-3d5f7a9b1c2e"
     assert device.enriched_data is not None
     assert device.enriched_data.features == ("regeneration",)
 

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 #: Slug stem shared by every seeded entity (matches the device fixture serial).
-SLUG = "7384243_20203_1120"
+SLUG = "4213377_30105_2242"
 
 
 @pytest.fixture

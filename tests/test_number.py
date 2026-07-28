@@ -43,8 +43,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-#: Slug derived from the fixture serial ``7384243-20203-1120`` (see other suites).
-SLUG = "7384243_20203_1120"
+#: Slug derived from the fixture serial ``4213377-30105-2242`` (see other suites).
+SLUG = "4213377_30105_2242"
 #: Default synthetic number setting name (``make_number_setting``'s default).
 NUMBER_NAME = "brine_dose"
 

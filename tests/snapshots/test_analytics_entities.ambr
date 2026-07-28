@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_analytics_entities_snapshot[binary_sensor.dom_leak_suspected-entry]
+# name: test_analytics_entities_snapshot[binary_sensor.demo_leak_suspected-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -12,7 +12,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_leak_suspected',
+    'entity_id': 'binary_sensor.demo_leak_suspected',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -31,16 +31,16 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_suspected',
-    'unique_id': '7384243_20203_1120_leak_suspected',
+    'unique_id': '4213377_30105_2242_leak_suspected',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_analytics_entities_snapshot[binary_sensor.dom_leak_suspected-state]
+# name: test_analytics_entities_snapshot[binary_sensor.demo_leak_suspected-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'consecutive_nights': 0,
       'device_class': 'moisture',
-      'friendly_name': 'Dom Leak suspected',
+      'friendly_name': 'Demo Leak suspected',
       'implied_liters_per_day': None,
       'last_verdict_night': None,
       'masking_coverage': True,
@@ -49,14 +49,14 @@
       'tier': None,
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_leak_suspected',
+    'entity_id': 'binary_sensor.demo_leak_suspected',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'unknown',
   })
 # ---
-# name: test_analytics_entities_snapshot[binary_sensor.dom_usage_anomaly-entry]
+# name: test_analytics_entities_snapshot[binary_sensor.demo_usage_anomaly-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -69,7 +69,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_usage_anomaly',
+    'entity_id': 'binary_sensor.demo_usage_anomaly',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -88,11 +88,11 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'usage_anomaly',
-    'unique_id': '7384243_20203_1120_usage_anomaly',
+    'unique_id': '4213377_30105_2242_usage_anomaly',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_analytics_entities_snapshot[binary_sensor.dom_usage_anomaly-state]
+# name: test_analytics_entities_snapshot[binary_sensor.demo_usage_anomaly-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'actual_liters': None,
@@ -102,7 +102,7 @@
       'drift_cusum': False,
       'drift_ewma': False,
       'expected_liters': None,
-      'friendly_name': 'Dom Usage anomaly',
+      'friendly_name': 'Demo Usage anomaly',
       'point_hours': 0,
       'ratio': None,
       'ratio_bucket': None,
@@ -110,14 +110,14 @@
       ]),
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_usage_anomaly',
+    'entity_id': 'binary_sensor.demo_usage_anomaly',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'unknown',
   })
 # ---
-# name: test_analytics_entities_snapshot[binary_sensor.dom_vacation_detected-entry]
+# name: test_analytics_entities_snapshot[binary_sensor.demo_vacation_detected-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -130,7 +130,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_vacation_detected',
+    'entity_id': 'binary_sensor.demo_vacation_detected',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -149,27 +149,27 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'vacation_detected',
-    'unique_id': '7384243_20203_1120_vacation_detected',
+    'unique_id': '4213377_30105_2242_vacation_detected',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_analytics_entities_snapshot[binary_sensor.dom_vacation_detected-state]
+# name: test_analytics_entities_snapshot[binary_sensor.demo_vacation_detected-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'consecutive_days': 0,
-      'friendly_name': 'Dom Vacation detected',
+      'friendly_name': 'Demo Vacation detected',
       'icon': 'mdi:beach',
       'since': None,
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_vacation_detected',
+    'entity_id': 'binary_sensor.demo_vacation_detected',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'unknown',
   })
 # ---
-# name: test_analytics_entities_snapshot[sensor.dom_night_flow-entry]
+# name: test_analytics_entities_snapshot[sensor.demo_night_flow-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -184,7 +184,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_night_flow',
+    'entity_id': 'sensor.demo_night_flow',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -206,29 +206,29 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'night_flow',
-    'unique_id': '7384243_20203_1120_night_flow',
+    'unique_id': '4213377_30105_2242_night_flow',
     'unit_of_measurement': <UnitOfVolumeFlowRate.LITERS_PER_HOUR: 'L/h'>,
   })
 # ---
-# name: test_analytics_entities_snapshot[sensor.dom_night_flow-state]
+# name: test_analytics_entities_snapshot[sensor.demo_night_flow-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'volume_flow_rate',
-      'friendly_name': 'Dom Night flow',
+      'friendly_name': 'Demo Night flow',
       'night': None,
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfVolumeFlowRate.LITERS_PER_HOUR: 'L/h'>,
       'verdict': None,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_night_flow',
+    'entity_id': 'sensor.demo_night_flow',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': 'unknown',
   })
 # ---
-# name: test_analytics_entities_snapshot[sensor.dom_usage_forecast-entry]
+# name: test_analytics_entities_snapshot[sensor.demo_usage_forecast-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -243,7 +243,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_usage_forecast',
+    'entity_id': 'sensor.demo_usage_forecast',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -268,16 +268,16 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'usage_forecast',
-    'unique_id': '7384243_20203_1120_usage_forecast',
+    'unique_id': '4213377_30105_2242_usage_forecast',
     'unit_of_measurement': <UnitOfVolume.LITERS: 'L'>,
   })
 # ---
-# name: test_analytics_entities_snapshot[sensor.dom_usage_forecast-state]
+# name: test_analytics_entities_snapshot[sensor.demo_usage_forecast-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'band_liters': 114,
       'device_class': 'volume_storage',
-      'friendly_name': 'Dom Usage forecast',
+      'friendly_name': 'Demo Usage forecast',
       'liters': 174,
       'persons': None,
       'source': 'device_average',
@@ -286,7 +286,7 @@
       'weekday': 'wednesday',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_usage_forecast',
+    'entity_id': 'sensor.demo_usage_forecast',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,

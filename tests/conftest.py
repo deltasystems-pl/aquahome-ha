@@ -44,10 +44,10 @@ if TYPE_CHECKING:
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 #: Identity constants matching the captured fixtures and the fake-JWT factory.
-TEST_USER_ID = "7f1e15b0-e9c7-44a1-8f0a-1844d67bf545"
+TEST_USER_ID = "1c9f8a4e-2b6d-4c3a-9e5f-7a1b3c5d7e9f"
 TEST_EMAIL = "dev@example.com"
 TEST_PASSWORD = "test-password"
-TEST_DEVICE_ID = "d32caa70-dca3-4cc9-bd3e-28b8c44df23c"
+TEST_DEVICE_ID = "e5a7c1f3-8b2d-4e6a-b9c8-3d5f7a9b1c2e"
 
 
 def load_fixture(name: str) -> dict[str, Any]:

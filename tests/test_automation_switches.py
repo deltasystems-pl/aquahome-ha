@@ -105,8 +105,8 @@ if TYPE_CHECKING:
 #: re-export ``DOMAIN`` for typing, so derive it from the platform enum).
 SWITCH_DOMAIN = Platform.SWITCH
 
-#: Slug of the captured device's serial ``7384243-20203-1120``.
-SLUG = "7384243_20203_1120"
+#: Slug of the captured device's serial ``4213377-30105-2242``.
+SLUG = "4213377_30105_2242"
 
 #: Instant every test freezes to before setup, matching the sibling platform
 #: suites: inside the fixtures' capture window, so nothing depends on wall time.

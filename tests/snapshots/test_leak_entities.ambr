@@ -31,7 +31,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_connectivity',
-    'unique_id': '7384243_20203_1120_leak_2_leak_connectivity',
+    'unique_id': '4213377_30105_2242_leak_2_leak_connectivity',
     'unit_of_measurement': None,
   })
 # ---
@@ -81,7 +81,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_detected',
-    'unique_id': '7384243_20203_1120_leak_2_leak_detected',
+    'unique_id': '4213377_30105_2242_leak_2_leak_detected',
     'unit_of_measurement': None,
   })
 # ---
@@ -131,7 +131,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_low_battery',
-    'unique_id': '7384243_20203_1120_leak_2_leak_low_battery',
+    'unique_id': '4213377_30105_2242_leak_2_leak_low_battery',
     'unit_of_measurement': None,
   })
 # ---
@@ -181,7 +181,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_tampered',
-    'unique_id': '7384243_20203_1120_leak_2_leak_tampered',
+    'unique_id': '4213377_30105_2242_leak_2_leak_tampered',
     'unit_of_measurement': None,
   })
 # ---
@@ -199,7 +199,7 @@
     'state': 'off',
   })
 # ---
-# name: test_full_leak_entity_set_snapshot[binary_sensor.dom_leak_suspected-entry]
+# name: test_full_leak_entity_set_snapshot[binary_sensor.demo_leak_suspected-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
     }),
@@ -212,7 +212,7 @@
     'disabled_by': None,
     'domain': 'binary_sensor',
     'entity_category': None,
-    'entity_id': 'binary_sensor.dom_leak_suspected',
+    'entity_id': 'binary_sensor.demo_leak_suspected',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -231,18 +231,18 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_suspected',
-    'unique_id': '7384243_20203_1120_leak_suspected',
+    'unique_id': '4213377_30105_2242_leak_suspected',
     'unit_of_measurement': None,
   })
 # ---
-# name: test_full_leak_entity_set_snapshot[binary_sensor.dom_leak_suspected-state]
+# name: test_full_leak_entity_set_snapshot[binary_sensor.demo_leak_suspected-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'moisture',
-      'friendly_name': 'Dom Leak suspected',
+      'friendly_name': 'Demo Leak suspected',
     }),
     'context': <ANY>,
-    'entity_id': 'binary_sensor.dom_leak_suspected',
+    'entity_id': 'binary_sensor.demo_leak_suspected',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
@@ -281,7 +281,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_connectivity',
-    'unique_id': '7384243_20203_1120_leak_1_leak_connectivity',
+    'unique_id': '4213377_30105_2242_leak_1_leak_connectivity',
     'unit_of_measurement': None,
   })
 # ---
@@ -331,7 +331,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_detected',
-    'unique_id': '7384243_20203_1120_leak_1_leak_detected',
+    'unique_id': '4213377_30105_2242_leak_1_leak_detected',
     'unit_of_measurement': None,
   })
 # ---
@@ -381,7 +381,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_low_battery',
-    'unique_id': '7384243_20203_1120_leak_1_leak_low_battery',
+    'unique_id': '4213377_30105_2242_leak_1_leak_low_battery',
     'unit_of_measurement': None,
   })
 # ---
@@ -431,7 +431,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_tampered',
-    'unique_id': '7384243_20203_1120_leak_1_leak_tampered',
+    'unique_id': '4213377_30105_2242_leak_1_leak_tampered',
     'unit_of_measurement': None,
   })
 # ---
@@ -483,7 +483,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_signal_strength',
-    'unique_id': '7384243_20203_1120_leak_2_leak_signal_strength',
+    'unique_id': '4213377_30105_2242_leak_2_leak_signal_strength',
     'unit_of_measurement': 'dBm',
   })
 # ---
@@ -540,7 +540,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_temperature',
-    'unique_id': '7384243_20203_1120_leak_2_leak_temperature',
+    'unique_id': '4213377_30105_2242_leak_2_leak_temperature',
     'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
   })
 # ---
@@ -594,7 +594,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_signal_strength',
-    'unique_id': '7384243_20203_1120_leak_1_leak_signal_strength',
+    'unique_id': '4213377_30105_2242_leak_1_leak_signal_strength',
     'unit_of_measurement': 'dBm',
   })
 # ---
@@ -651,7 +651,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'leak_temperature',
-    'unique_id': '7384243_20203_1120_leak_1_leak_temperature',
+    'unique_id': '4213377_30105_2242_leak_1_leak_temperature',
     'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
   })
 # ---

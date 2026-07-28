@@ -49,7 +49,7 @@ def make_jwt(iat: float, lifetime: int = ACCESS_TOKEN_LIFETIME) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
     payload = {
         "typ": "a",
-        "sub": "7f1e15b0-e9c7-44a1-8f0a-1844d67bf545",
+        "sub": "1c9f8a4e-2b6d-4c3a-9e5f-7a1b3c5d7e9f",
         "email": "dev@example.com",
         "iat": int(iat),
         "exp": int(iat) + lifetime,

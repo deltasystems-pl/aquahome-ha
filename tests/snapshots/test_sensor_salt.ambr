@@ -14,7 +14,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_daily_salt_usage_estimate',
+    'entity_id': 'sensor.demo_daily_salt_usage_estimate',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -36,14 +36,14 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'daily_salt_usage',
-    'unique_id': '7384243_20203_1120_daily_salt_usage',
+    'unique_id': '4213377_30105_2242_daily_salt_usage',
     'unit_of_measurement': 'g/d',
   })
 # ---
 # name: test_salt_sensors_snapshot[daily_salt_usage-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Daily salt usage estimate',
+      'friendly_name': 'Demo Daily salt usage estimate',
       'inlet_hardness_dh': 24.65,
       'inlet_hardness_source': 'device_setting',
       'outlet_hardness_dh': 0.0,
@@ -53,7 +53,7 @@
       'unit_of_measurement': 'g/d',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_daily_salt_usage_estimate',
+    'entity_id': 'sensor.demo_daily_salt_usage_estimate',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
@@ -75,7 +75,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_salt_days_remaining_estimate',
+    'entity_id': 'sensor.demo_salt_days_remaining_estimate',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -97,7 +97,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'salt_days_remaining',
-    'unique_id': '7384243_20203_1120_salt_days_remaining',
+    'unique_id': '4213377_30105_2242_salt_days_remaining',
     'unit_of_measurement': <UnitOfTime.DAYS: 'd'>,
   })
 # ---
@@ -109,12 +109,12 @@
       'device_class': 'duration',
       'device_daily_salt_g': 236.2,
       'device_estimate_days': 167.0,
-      'friendly_name': 'Dom Salt days remaining estimate',
+      'friendly_name': 'Demo Salt days remaining estimate',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfTime.DAYS: 'd'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_salt_days_remaining_estimate',
+    'entity_id': 'sensor.demo_salt_days_remaining_estimate',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
@@ -134,7 +134,7 @@
     'disabled_by': <RegistryEntryDisabler.INTEGRATION: 'integration'>,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_salt_depletion_estimate',
+    'entity_id': 'sensor.demo_salt_depletion_estimate',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -153,7 +153,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'salt_depletion_estimate',
-    'unique_id': '7384243_20203_1120_salt_depletion_estimate',
+    'unique_id': '4213377_30105_2242_salt_depletion_estimate',
     'unit_of_measurement': None,
   })
 # ---
@@ -172,7 +172,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
-    'entity_id': 'sensor.dom_salt_efficiency',
+    'entity_id': 'sensor.demo_salt_efficiency',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -194,21 +194,21 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'salt_efficiency',
-    'unique_id': '7384243_20203_1120_salt_efficiency',
+    'unique_id': '4213377_30105_2242_salt_efficiency',
     'unit_of_measurement': 'mol/kg',
   })
 # ---
 # name: test_salt_sensors_snapshot[salt_efficiency-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Dom Salt efficiency',
+      'friendly_name': 'Demo Salt efficiency',
       'grains_per_pound': 2152,
       'source': 'device_rated_property',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': 'mol/kg',
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_salt_efficiency',
+    'entity_id': 'sensor.demo_salt_efficiency',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
@@ -230,7 +230,7 @@
     'disabled_by': None,
     'domain': 'sensor',
     'entity_category': None,
-    'entity_id': 'sensor.dom_salt_per_regeneration',
+    'entity_id': 'sensor.demo_salt_per_regeneration',
     'has_entity_name': True,
     'hidden_by': None,
     'icon': None,
@@ -255,7 +255,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'salt_per_regeneration',
-    'unique_id': '7384243_20203_1120_salt_per_regeneration',
+    'unique_id': '4213377_30105_2242_salt_per_regeneration',
     'unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
   })
 # ---
@@ -263,12 +263,12 @@
   StateSnapshot({
     'attributes': ReadOnlyDict({
       'device_class': 'weight',
-      'friendly_name': 'Dom Salt per regeneration',
+      'friendly_name': 'Demo Salt per regeneration',
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
       'unit_of_measurement': <UnitOfMass.KILOGRAMS: 'kg'>,
     }),
     'context': <ANY>,
-    'entity_id': 'sensor.dom_salt_per_regeneration',
+    'entity_id': 'sensor.demo_salt_per_regeneration',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
