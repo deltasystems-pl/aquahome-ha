@@ -38,7 +38,8 @@ if the entity is removed first.
 
 The three recharge-mode buttons (vacation mode, recharge off, enable recharge)
 are advertised by the ``recharge_ui`` tile, but their ``/command`` payload mapping
-is undocumented and unverified (gap-analysis ledger P1). They are implemented but
+is undocumented and unverified (no capture of the official app sending them
+exists yet). They are implemented but
 gated behind :data:`~.const.RECHARGE_ACTION_COMMANDS_VERIFIED`: while it is
 ``False`` they are excluded from the table the platform iterates and so are never
 created. The supervised live test at the end of the phase proves the payloads and
@@ -298,8 +299,8 @@ _ACTIVE_BUTTONS: tuple[AquaHomeButtonDescription, ...] = (
     ),
 )
 
-#: Recharge-mode buttons whose ``/command`` action payloads are UNVERIFIED
-#: (gap-analysis ledger P1): the ``recharge_ui`` tile advertises the actions but
+#: Recharge-mode buttons whose ``/command`` action payloads are UNVERIFIED —
+#: the ``recharge_ui`` tile advertises the actions but
 #: the mapping onto the ``regenerate`` function is a best guess the active
 #: community fork does not exercise. They are excluded from :data:`BUTTONS` while
 #: :data:`~.const.RECHARGE_ACTION_COMMANDS_VERIFIED` is ``False`` and so are never

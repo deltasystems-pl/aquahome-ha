@@ -369,7 +369,7 @@ class AquaHomeClient:
             raise RateLimitError(msg, rate_limit=self.rate_limit)
         self._last_live_ticket_at = now
         # /live is a SEPARATE server throttle domain with its own small budget
-        # (~6 requests / 10 min — see automation-gap-analysis.md §7 D3): a /live
+        # (~6 requests / 10 min, measured live): a /live
         # 429 must not freeze the primary device poll, and a REST backoff must
         # not gate /live, so the shared backoff is bypassed in both directions.
         body = await self._request(

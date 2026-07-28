@@ -111,7 +111,8 @@ def _valve_exists(device: Device) -> bool:
 
     True when the device advertises the :data:`~.const.FEATURE_WSOV` feature or
     (for hosts that omit the feature list) when the ``water_shutoff_valve`` block
-    is present in the enriched payload — the gap analysis requires either.
+    is present in the enriched payload — either alone must suffice, because the
+    two are populated independently by the cloud.
     """
     return _has_feature(device, FEATURE_WSOV) or _valve(device) is not None
 

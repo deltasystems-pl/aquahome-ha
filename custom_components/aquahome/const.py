@@ -23,13 +23,13 @@ PLATFORMS: Final[list[Platform]] = [
 
 # Fixed poll cadence with no user-facing knob: community evidence shows accounts
 # banned (and softeners knocked off their own cloud) at aggressive cadences, so
-# the interval option is deliberately absent (implementation plan, decision
-# 2026-07-21).
+# the interval option is deliberately absent (decision 2026-07-21).
 UPDATE_INTERVAL: Final = timedelta(minutes=10)
 
 # How long the coordinator keeps serving last-good data across 429/transient-5xx
 # polls before going honestly unavailable. Sized for the observed ~5-min throttle
-# windows and short cloud blips — never hours (gap analysis §7 D12).
+# windows and short cloud blips — never hours (the folkloric daily vendor
+# outage was investigated and refuted; long stale-serving only hides problems).
 MAX_STALE_SECONDS: Final = 1800.0
 
 # Cadence of the per-device activity coordinator (alert feed + regeneration
@@ -190,7 +190,7 @@ DISPLAY_PREFERENCE_SETTINGS: Final = frozenset(
 
 # The recharge_ui tile advertises vacation_mode / recharge_off / enable_recharge
 # actions, but their /command payload mapping is undocumented and unverified
-# (gap-analysis ledger P1; the active community fork sends none of them). The
+# (the active community fork sends none of them either). The
 # buttons exist in code but are not created until a supervised live test proves
 # the payloads and flips this gate.
 RECHARGE_ACTION_COMMANDS_VERIFIED: Final = False
@@ -284,7 +284,7 @@ POINT_ANOMALY_MIN_HOURS: Final = 2
 MIN_BUCKET_SAMPLES: Final = 4
 LEARNED_DAILY_MIN_DAYS: Final = 14
 
-# Freshness guard on the device's own per-weekday averages (gap-analysis U4:
+# Freshness guard on the device's own per-weekday averages (observed live:
 # slots go weeks stale — the fixture's Friday slot was 43 days old and 4x off).
 # updated_at is a change-stamp, so a stable-valued fresh slot can look stale;
 # the guard is deliberately conservative and falls back to learned statistics.
@@ -332,7 +332,7 @@ EVENT_TYPE_VACATION_ENDED: Final = "vacation_ended"
 # (default-off switches / explicit confirmations), driven by daily-level
 # signals from the analytics tier, and built ONLY on the live-verified
 # regenerate/schedule/cancel command surface (the vacation-mode /command
-# payloads remain unverified — gap-analysis ledger P1).
+# payloads remain unverified).
 
 # Schedule a regeneration when the remaining treated-water capacity drops below
 # tomorrow's forecast times this factor (a 50 % reserve).

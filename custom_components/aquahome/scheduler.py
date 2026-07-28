@@ -10,7 +10,7 @@ persists a flag and exactly one that talks to the cloud.
 
 Everything here is built on the *live-verified* ``regenerate`` command surface
 (``schedule`` / ``cancel``). The iQua app's vacation tile has its own
-``/command`` payloads which remain unverified (gap-analysis ledger P1), so
+``/command`` payloads which remain unverified, so
 "vacation" in this module means *deferral*: while it is active a regeneration
 the device schedules for itself is cancelled again, and a resin-hygiene cap
 (:data:`~.const.REGEN_DEFERRAL_MAX_DAYS`) eventually lets one through rather

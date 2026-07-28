@@ -87,7 +87,7 @@ class AquaHomeRuntimeData:
 
 
 def resolve_device_online(device: Device) -> bool:
-    """Return the host-neutral device-online signal (gap-analysis §7 D6).
+    """Return the host-neutral device-online signal.
 
     Primary source is the device-root ``is_online`` flag, which both API hosts
     populate. When it is absent (a legacy host that omits it) the raw
@@ -96,7 +96,8 @@ def resolve_device_online(device: Device) -> bool:
     spuriously kills every entity.
 
     This deliberately differs from :attr:`~.api.Device.online`, which prefers the
-    property first; the plan mandates device-root precedence.
+    property first; device-root precedence is deliberate — it is the signal
+    both hosts are known to populate.
     """
     if device.is_online is not None:
         return device.is_online

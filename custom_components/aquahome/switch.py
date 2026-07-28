@@ -126,7 +126,8 @@ def _leak_scan_exists(device: Device) -> bool:
     """Report whether the leak-detector scan control applies to this device.
 
     True when the device advertises the ``leak_detector`` feature or already
-    carries a ``leak_detectors`` block (gap-analysis "require either"). None-safe:
+    carries a ``leak_detectors`` block — either alone must suffice, because the
+    two are populated independently by the cloud. None-safe:
     an absent enriched block means no scan control.
     """
     enriched = device.enriched_data

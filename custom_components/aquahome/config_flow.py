@@ -4,7 +4,7 @@ The iQua cloud is split across two byte-identical hosts: legacy accounts live on
 ``api.myiquaapp.com`` and post-migration ("iQua2") accounts on ``api.iqua2.com``.
 A login simply fails on the wrong one, so the flow cannot ask the user which host
 they belong to — it probes both. :func:`_async_probe_account` encodes the exact
-tie-break the plan mandates: a wrong-host login is only reported as
+tie-break this demands: a wrong-host login is only reported as
 ``invalid_auth`` when *both* hosts reject the credentials, only ``cannot_connect``
 when *both* are unreachable, and a host that authenticates but returns no devices
 never masks a host that has them. The working host and its token pair are then
@@ -122,7 +122,7 @@ async def _async_probe_account(
     """Find the iQua host that owns ``email``/``password`` and list its devices.
 
     Each host is tried in order with a throwaway :class:`AuthManager`. The result
-    resolves ambiguity the way the plan requires:
+    resolves ambiguity conservatively:
 
     - a non-empty device list on any host wins immediately;
     - an unverified-account challenge or a rate-limit response propagates at once
