@@ -674,3 +674,55 @@ async def test_live_apply_keeps_the_poll_floor(
 
     calls = next(iter(mock_api.requests.values()))
     assert len(calls) == 2
+
+
+async def test_live_apply_floor_holds_while_the_poll_is_failing(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+) -> None:
+    """A failing poll must not turn every push into a REST request.
+
+    ``async_set_updated_data`` cancels the request-refresh debouncer, so each
+    push executes the refresh it requests immediately. The floor is therefore
+    keyed to poll *attempts*: while the cloud fails the device poll (stale data
+    keeps serving, ``_last_good`` frozen), a stream pushing every second must
+    still produce exactly one REST request per update interval — never one per
+    frame against an already-unhealthy cloud.
+    """
+    mock_config_entry.add_to_hass(hass)
+    clock = _FakeMonotonic()
+    device = Device.from_dict(load_fixture("device-detail.json"))
+    coordinator = AquaHomeCoordinator(
+        hass, mock_config_entry, _standalone_client(hass), device, monotonic=clock
+    )
+    coordinator.async_add_listener(lambda: None)
+
+    mock_api.get(device_url(), payload=load_fixture("device-detail.json"))
+    await coordinator.async_refresh()
+    assert coordinator.last_update_success is True
+
+    # The cloud starts failing the poll; every attempt from here serves stale.
+    mock_api.get(device_url(), status=500, repeat=True)
+    clock.advance(UPDATE_INTERVAL.total_seconds() + 1.0)
+
+    # First push past the interval: exactly one refresh attempt rides along.
+    coordinator.async_apply_live_update(device)
+    await hass.async_block_till_done()
+    calls = next(iter(mock_api.requests.values()))
+    assert len(calls) == 2
+
+    # A burst of pushes inside the same interval adds no further requests,
+    # even though the failed attempt never advanced the last-good stamp.
+    for _ in range(5):
+        clock.advance(1.0)
+        coordinator.async_apply_live_update(device)
+        await hass.async_block_till_done()
+    assert len(calls) == 2
+
+    # Once a full interval has passed since the failed attempt, the next push
+    # is allowed to try again — the floor, not a lockout.
+    clock.advance(UPDATE_INTERVAL.total_seconds() + 1.0)
+    coordinator.async_apply_live_update(device)
+    await hass.async_block_till_done()
+    assert len(calls) == 3

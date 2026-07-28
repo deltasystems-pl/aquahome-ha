@@ -127,6 +127,7 @@ class AquaHomeCoordinator(DataUpdateCoordinator[Device]):
         self.client = client
         self._monotonic = monotonic
         self._last_good: float | None = None
+        self._last_attempt: float | None = None
         self._serving_stale = False
         self._updating_from_push = False
         super().__init__(
@@ -181,20 +182,27 @@ class AquaHomeCoordinator(DataUpdateCoordinator[Device]):
         at least once per interval — one gallon every ten minutes is enough —
         would postpone polling indefinitely, freezing the enriched block that
         only genuine polls refresh (regeneration state, salt level, feature
-        gating, ``is_online``). Whenever the last *genuine* poll is older than
+        gating, ``is_online``). Whenever the last poll *attempt* is older than
         the update interval, a refresh is requested alongside the publish, so
         streaming can only ever make data fresher, never staler.
+
+        The floor is keyed to attempts, not successes, and the slot is claimed
+        synchronously before the refresh task is created. Both matter:
+        ``async_set_updated_data`` cancels the request-refresh debouncer, so
+        each push would otherwise execute its refresh immediately — and while
+        the poll is *failing* (``_last_good`` frozen), a busy stream would turn
+        every coalesced frame into a REST request against an already-unhealthy
+        cloud instead of one request per interval.
         """
         self._updating_from_push = True
         try:
             self.async_set_updated_data(device)
         finally:
             self._updating_from_push = False
-        last = self._last_good
-        if (
-            last is not None
-            and self._monotonic() - last >= UPDATE_INTERVAL.total_seconds()
-        ):
+        now = self._monotonic()
+        attempt = self._last_attempt
+        if attempt is not None and now - attempt >= UPDATE_INTERVAL.total_seconds():
+            self._last_attempt = now
             self.hass.async_create_task(self.async_request_refresh())
 
     async def _async_update_data(self) -> Device:
@@ -205,6 +213,7 @@ class AquaHomeCoordinator(DataUpdateCoordinator[Device]):
         transient 5xx errors take the serve-stale path; a 4xx is a real,
         non-transient contract failure raised as :class:`UpdateFailed`.
         """
+        self._last_attempt = self._monotonic()
         try:
             device = await self.client.async_get_device(self.device_id)
         except AuthError as err:
