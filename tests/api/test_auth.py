@@ -8,6 +8,8 @@ No Home Assistant core is involved.
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 import time
 from collections.abc import AsyncIterator
 from typing import Any
@@ -55,6 +57,20 @@ async def session() -> AsyncIterator[aiohttp.ClientSession]:
     """Provide a real client session with all sockets mocked by aioresponses."""
     async with aiohttp.ClientSession() as client:
         yield client
+
+
+def _jwt_with_exp(exp: Any) -> str:
+    """Build a decodable JWT whose ``exp`` claim is an arbitrary JSON value.
+
+    ``make_jwt`` only produces well-formed numeric claims; the freshness check
+    also has to survive a token that decodes cleanly but carries something else
+    entirely in ``exp``.
+    """
+    header = base64.urlsafe_b64encode(b'{"alg":"HS256","typ":"JWT"}').rstrip(b"=")
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"sub": "dev", "exp": exp}, separators=(",", ":")).encode()
+    ).rstrip(b"=")
+    return f"{header.decode()}.{payload.decode()}.fakesignature"
 
 
 def _login_body(access_token: str, refresh_token: str) -> dict[str, object]:
@@ -406,6 +422,100 @@ async def test_refresh_without_token_raises_auth_error(
         assert _refresh_calls(mocked) == []
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"access_token": make_jwt(FAKE_NOW)},
+        {"refresh_token": "refresh-new"},
+        {"access_token": 12345, "refresh_token": "refresh-new"},
+        {"access_token": make_jwt(FAKE_NOW), "refresh_token": None},
+    ],
+    ids=["no-refresh-token", "no-access-token", "numeric-access-token", "null-refresh"],
+)
+async def test_refresh_without_a_valid_token_pair_raises_auth_error(
+    session: aiohttp.ClientSession, fake_clock: FakeClock, body: dict[str, Any]
+) -> None:
+    """A 200 refresh whose token pair is unusable raises AuthError and stores nothing.
+
+    A partial or wrongly-typed pair would otherwise be stored verbatim and sent
+    as ``Authorization: Bearer 12345`` on every later request, and — worse —
+    persisted into the config entry by the update callback, poisoning the entry
+    until the user re-authenticates by hand. Failing loudly instead routes it to
+    the reauth flow.
+    """
+    updates: list[tuple[str, str]] = []
+    with aioresponses() as mocked:
+        mocked.post(REFRESH_URL, status=200, payload=body)
+        auth = AuthManager(
+            session,
+            time_func=fake_clock,
+            on_token_update=lambda a, r: updates.append((a, r)),
+        )
+        auth.set_tokens(STALE_TOKEN, "refresh-old")
+
+        with pytest.raises(AuthError):
+            await auth.async_refresh()
+
+    assert updates == []
+
+
+@pytest.mark.parametrize(
+    "exp",
+    [None, "tomorrow", {"at": 1_784_635_200}, [1_784_635_200]],
+    ids=["null", "text", "object", "array"],
+)
+async def test_non_numeric_exp_claim_is_treated_as_expired(
+    session: aiohttp.ClientSession, fake_clock: FakeClock, exp: Any
+) -> None:
+    """A token whose ``exp`` is not a number is refreshed, not arithmetic'd.
+
+    The claim is attacker-adjacent free-form JSON: it decodes fine but is not a
+    number. Without the type check the freshness math would run on it and
+    ``float("tomorrow")`` would escape ``async_get_access_token`` as a raw
+    ``ValueError`` — from a call site whose whole contract is "hand me a usable
+    token or raise an auth error".
+    """
+    new_access = make_jwt(FAKE_NOW)
+    with aioresponses() as mocked:
+        mocked.post(
+            REFRESH_URL,
+            status=200,
+            payload={"access_token": new_access, "refresh_token": "refresh-new"},
+        )
+        auth = AuthManager(session, time_func=fake_clock)
+        auth.set_tokens(_jwt_with_exp(exp), "refresh-old")
+
+        assert await auth.async_get_access_token() == new_access
+        assert len(_refresh_calls(mocked)) == 1
+
+
+async def test_non_json_error_body_still_raises_a_typed_api_error(
+    session: aiohttp.ClientSession, fake_clock: FakeClock
+) -> None:
+    """An HTML gateway error becomes a typed ApiError carrying the status.
+
+    A CDN or reverse proxy in front of the API answers 5xx with an HTML page,
+    not the documented JSON error body. Parsing it must not raise out of the
+    client: the tolerant read turns it into an empty body so the status still
+    drives the taxonomy and the config flow can report a normal failure.
+    """
+    with aioresponses() as mocked:
+        mocked.post(
+            LOGIN_URL,
+            status=502,
+            body="<html><body>Bad Gateway</body></html>",
+            content_type="text/html",
+        )
+        auth = AuthManager(session, time_func=fake_clock)
+        with pytest.raises(ApiError) as excinfo:
+            await auth.async_login("dev@example.com", "hunter2")
+
+    assert not isinstance(excinfo.value, AuthError)
+    assert excinfo.value.status == 502
+    assert excinfo.value.code is None
+    assert str(excinfo.value) == "iQua API error 502"
+
+
 async def test_garbage_access_token_forces_refresh(
     session: aiohttp.ClientSession, fake_clock: FakeClock
 ) -> None:
@@ -701,6 +811,24 @@ async def test_probe_host_both_unreachable_raises_connection_error(
         mocked.post(IQUA2_LOGIN_URL, exception=aiohttp.ClientConnectionError("down"))
         with pytest.raises(AquaHomeConnectionError):
             await async_probe_host(session, "dev@example.com", "hunter2")
+
+
+async def test_probe_host_with_no_hosts_raises_connection_error(
+    session: aiohttp.ClientSession,
+) -> None:
+    """Probing an empty host list fails as cannot_connect, not silently.
+
+    The host sequence is a parameter, so a caller can hand over an empty one (a
+    filtered list, a misconfigured override). Falling off the end of the loop
+    would return ``None`` into a config flow that immediately unpacks a
+    ``(host, result)`` tuple; the explicit raise turns it into the same
+    ``cannot_connect`` the user sees for an unreachable cloud.
+    """
+    with aioresponses() as mocked:
+        with pytest.raises(AquaHomeConnectionError):
+            await async_probe_host(session, "dev@example.com", "hunter2", hosts=())
+
+        assert mocked.requests == {}
 
 
 async def test_probe_host_user_not_verified_aborts_before_second_host(

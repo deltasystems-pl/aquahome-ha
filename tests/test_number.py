@@ -21,20 +21,26 @@ from unittest.mock import patch
 
 import pytest
 from homeassistant.components.number import NumberEntity
-from homeassistant.const import Platform
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_component import DATA_INSTANCES
 
 from custom_components.aquahome.const import DOMAIN
 from tests.conftest import (
+    TEST_DEVICE_ID,
+    add_activity_routes,
     add_device_routes,
+    add_settings_routes,
+    device_url,
+    devices_url,
     load_fixture,
     make_number_setting,
     make_switch_setting,
     patch_settings_route,
     setup_integration,
     with_extra_setting,
+    without_setting,
 )
 
 if TYPE_CHECKING:
@@ -284,6 +290,102 @@ async def test_number_absent_bounds_fall_back_to_defaults(
     assert entity.native_min_value == 0.0
     assert entity.native_max_value == 100.0
     assert entity.native_step == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Unusable current values — unknown, never a wrong number
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "current_value",
+    [True, "12,5", "n/a", None],
+    ids=["boolean", "comma-decimal", "text", "null"],
+)
+async def test_number_unusable_current_value_reports_unknown(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+    current_value: Any,
+) -> None:
+    """A value that is not a usable number reports ``unknown``, not a wrong number.
+
+    ``current_value`` is a free-form JSON scalar: a rules block claims the
+    setting for this platform regardless of what the value turns out to be. A
+    boolean must not become ``1``/``0`` (``float(True)`` is ``1.0``, which at
+    precision 1 would display a confident ``0.1``), and a localized or
+    placeholder string must not escape as a ``ValueError`` out of a state
+    update.
+    """
+    add_device_routes(
+        mock_api,
+        settings=_doc_with(make_number_setting(current_value=current_value)),
+    )
+    with _only_number():
+        await setup_integration(hass, mock_config_entry)
+
+    entity = _number(hass, NUMBER_NAME)
+    assert entity.native_value is None
+
+    entity_id = _number_entity_id(hass, NUMBER_NAME)
+    assert entity_id is not None
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.state == STATE_UNKNOWN
+
+
+# ---------------------------------------------------------------------------
+# A setting that vanishes from a later document
+# ---------------------------------------------------------------------------
+
+
+async def test_number_setting_vanishing_reports_unknown_and_default_bounds(
+    hass: HomeAssistant,
+    mock_api: aioresponses,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A setting dropped by a later document leaves an unavailable, empty number.
+
+    Dynamic entities are never removed, so the number outlives its setting and
+    every accessor keeps being called. Each must survive the missing setting:
+    the value goes ``unknown`` and the bounds fall back to the native defaults
+    instead of raising ``AttributeError`` on a ``None`` setting — which, coming
+    from ``native_min_value``, would break the entity's state write rather than
+    just its value.
+    """
+    full = _doc_with(make_number_setting())
+    stripped = without_setting(full, NUMBER_NAME)
+
+    mock_api.get(devices_url(), payload=load_fixture("devices-list.json"), repeat=True)
+    mock_api.get(device_url(), payload=load_fixture("device-detail.json"), repeat=True)
+    add_activity_routes(mock_api)
+    # The setup fetch carries the setting; every later fetch has dropped it.
+    add_settings_routes(mock_api, settings=full, repeat=False)
+    add_settings_routes(mock_api, settings=stripped)
+
+    with _only_number():
+        await setup_integration(hass, mock_config_entry)
+
+    entity = _number(hass, NUMBER_NAME)
+    assert entity.native_value == 12.5
+
+    coordinator = mock_config_entry.runtime_data.settings_coordinators[TEST_DEVICE_ID]
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Re-read the live entity: the same object, fetched through a function
+    # boundary so mypy does not carry the pre-refresh narrowing into the asserts.
+    after_refresh = _number(hass, NUMBER_NAME)
+    assert after_refresh.native_value is None
+    assert after_refresh.native_min_value == 0.0
+    assert after_refresh.native_max_value == 100.0
+    assert after_refresh.native_step == 1.0
+
+    entity_id = _number_entity_id(hass, NUMBER_NAME)
+    assert entity_id is not None
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.state == STATE_UNAVAILABLE
 
 
 # ---------------------------------------------------------------------------

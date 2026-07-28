@@ -117,6 +117,17 @@ def _detail() -> dict[str, Any]:
     return copy.deepcopy(load_fixture("device-detail.json"))
 
 
+def _detail_without_recharge_tile() -> dict[str, Any]:
+    """Return a device detail whose enriched ``recharge_ui`` block is absent.
+
+    Models an ``iqua2`` host: the offline-capable recharge tile is missing, so
+    every recharge decision has to come from the ``regeneration`` block instead.
+    """
+    detail = _detail()
+    detail["enriched_data"]["water_treatment"].pop("recharge_ui")
+    return detail
+
+
 def _button_entity_id(entity_registry: er.EntityRegistry, key: str) -> str | None:
     """Resolve a button's entity id from its unique-id suffix, or ``None``."""
     return entity_registry.async_get_entity_id(BUTTON_DOMAIN, DOMAIN, f"{SLUG}_{key}")
@@ -376,6 +387,68 @@ async def test_regenerate_unavailable_when_cannot_recharge(
     assert _state_of(hass, cancel_id) == STATE_UNKNOWN
 
 
+async def test_silence_alarm_created_when_the_alarm_feature_is_advertised(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """A device advertising ``audible_alarm`` gets the silence-alarm button.
+
+    The dev fixture has neither the feature nor an ``alarm_is_beeping`` flag, so
+    only the feature leg of the gate proves a softener with an audible alarm can
+    actually silence it; a gate collapsed onto the flag alone would leave those
+    devices without the button.
+    """
+    detail = _detail()
+    detail["enriched_data"]["water_treatment"]["features"].append("audible_alarm")
+    add_device_routes(mock_api, device_detail=detail)
+
+    assert await setup_integration(hass, mock_config_entry)
+
+    entity_id = _button_entity_id(entity_registry, "silence_alarm")
+    assert entity_id is not None
+    assert _state_of(hass, entity_id) == STATE_UNKNOWN
+
+
+@pytest.mark.parametrize(
+    ("flag", "blocked_key", "free_key"),
+    [
+        ("can_recharge", "regenerate_now", "schedule_regeneration"),
+        ("can_schedule", "schedule_regeneration", "regenerate_now"),
+    ],
+)
+async def test_recharge_guidance_falls_back_to_the_regeneration_block(  # noqa: PLR0913
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    entity_registry: er.EntityRegistry,
+    flag: str,
+    blocked_key: str,
+    free_key: str,
+) -> None:
+    """Without a recharge tile the guidance comes from the ``regeneration`` block.
+
+    On a host that omits ``recharge_ui`` the ``can_recharge`` / ``can_schedule``
+    hints live in the ``regeneration`` block; losing that fallback would make
+    both controls permanently pressable there and let the integration fire
+    commands the device has already said it will refuse.
+    """
+    detail = _detail_without_recharge_tile()
+    detail["enriched_data"]["water_treatment"]["regeneration"][flag] = False
+    add_device_routes(mock_api, device_detail=detail)
+
+    assert await setup_integration(hass, mock_config_entry)
+
+    blocked_id = _button_entity_id(entity_registry, blocked_key)
+    free_id = _button_entity_id(entity_registry, free_key)
+    assert blocked_id is not None
+    assert free_id is not None
+    assert _state_of(hass, blocked_id) == STATE_UNAVAILABLE
+    # The other control's hint is still True in the same block: only one is gated.
+    assert _state_of(hass, free_id) == STATE_UNKNOWN
+
+
 async def test_all_buttons_unavailable_when_device_offline(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -467,3 +540,112 @@ async def test_recharge_buttons_appear_only_when_advertised_once_enabled(
     assert _button_entity_id(entity_registry, "vacation_mode") is not None
     assert _button_entity_id(entity_registry, "recharge_off") is not None
     assert _button_entity_id(entity_registry, "enable_recharge") is None
+
+
+async def test_recharge_buttons_absent_when_no_tile_advertises_them(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """With the table flipped in, a device with no recharge tile gets none of them.
+
+    An ``iqua2`` host carries no ``recharge_ui`` block at all, so there is
+    nothing advertising the recharge-mode actions. The exists check must read
+    that as "not offered" — without its ``None`` leg it would raise on the
+    missing tile while the platform is being built, taking every other button
+    down with it.
+    """
+    add_device_routes(mock_api, device_detail=_detail_without_recharge_tile())
+
+    enabled_table = (*button._ACTIVE_BUTTONS, *button._RECHARGE_ACTION_BUTTONS)
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(button, "BUTTONS", enabled_table)
+        assert await setup_integration(hass, mock_config_entry)
+
+    for key in ("vacation_mode", "recharge_off", "enable_recharge"):
+        assert _button_entity_id(entity_registry, key) is None
+    # The rest of the platform still came up.
+    assert _button_entity_id(entity_registry, "regenerate_now") is not None
+
+
+# ---------------------------------------------------------------------------
+# The refresh-data follow-up timer
+# ---------------------------------------------------------------------------
+
+
+async def test_second_refresh_press_restarts_the_pending_poll(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    entity_registry: er.EntityRegistry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Pressing refresh-data again cancels the pending poll and re-arms it.
+
+    Both presses ask the device to push fresh state, so only the last one's
+    delay matters: the first timer must be cancelled, not left running. Without
+    the cancel the entity would poll twice — once on the stale timer, a second
+    time on the new one — spending two cloud reads per pair of presses.
+    """
+    add_device_routes(mock_api)
+    mock_api.put(command_url(), payload={"result": "ok"}, repeat=True)
+
+    assert await setup_integration(hass, mock_config_entry)
+
+    entity_id = _button_entity_id(entity_registry, "refresh_data")
+    assert entity_id is not None
+    baseline = _device_detail_get_count(mock_api)
+
+    await _press(hass, entity_id)
+    freezer.tick(REFRESH_BUTTON_POLL_DELAY_SECONDS - 1)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    # Second press one second before the first timer would have fired.
+    await _press(hass, entity_id)
+    freezer.tick(2)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    # The first timer was cancelled by the second press: nothing polled yet.
+    assert _device_detail_get_count(mock_api) == baseline
+
+    # The second press's own delay elapses: exactly one poll, not two.
+    freezer.tick(REFRESH_BUTTON_POLL_DELAY_SECONDS)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert _device_detail_get_count(mock_api) == baseline + 1
+
+
+async def test_pending_refresh_poll_is_cancelled_when_the_entry_unloads(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    entity_registry: er.EntityRegistry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Unloading the entry before the delay elapses drops the follow-up poll.
+
+    The timer outlives the entity unless removal cancels it; a surviving
+    callback would poll the cloud through a coordinator whose entry is already
+    unloaded — the classic "lingering timer" teardown leak Home Assistant fails
+    tests for.
+    """
+    add_device_routes(mock_api)
+    mock_api.put(command_url(), payload={"result": "ok"})
+
+    assert await setup_integration(hass, mock_config_entry)
+
+    entity_id = _button_entity_id(entity_registry, "refresh_data")
+    assert entity_id is not None
+
+    await _press(hass, entity_id)
+    assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    baseline = _device_detail_get_count(mock_api)
+
+    freezer.tick(REFRESH_BUTTON_POLL_DELAY_SECONDS + 1)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert _device_detail_get_count(mock_api) == baseline
