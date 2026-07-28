@@ -1,0 +1,273 @@
+# serializer version: 1
+# name: test_live_controls_snapshot[number.dom_live_session_minimum_gap-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'max': 900.0,
+      'min': 60.0,
+      'mode': <NumberMode.BOX: 'box'>,
+      'step': 10,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'number',
+    'entity_category': <EntityCategory.CONFIG: 'config'>,
+    'entity_id': 'number.dom_live_session_minimum_gap',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Live session minimum gap',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': 'mdi:timer-outline',
+    'original_name': 'Live session minimum gap',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'live_min_gap',
+    'unique_id': '7384243_20203_1120_live_min_gap',
+    'unit_of_measurement': <UnitOfTime.SECONDS: 's'>,
+  })
+# ---
+# name: test_live_controls_snapshot[number.dom_live_session_minimum_gap-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'friendly_name': 'Dom Live session minimum gap',
+      'icon': 'mdi:timer-outline',
+      'max': 900.0,
+      'min': 60.0,
+      'mode': <NumberMode.BOX: 'box'>,
+      'step': 10,
+      'unit_of_measurement': <UnitOfTime.SECONDS: 's'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'number.dom_live_session_minimum_gap',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '120.0',
+  })
+# ---
+# name: test_live_controls_snapshot[number.dom_live_sessions_per_day-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'max': 200,
+      'min': 4,
+      'mode': <NumberMode.BOX: 'box'>,
+      'step': 1,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'number',
+    'entity_category': <EntityCategory.CONFIG: 'config'>,
+    'entity_id': 'number.dom_live_sessions_per_day',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Live sessions per day',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': 'mdi:counter',
+    'original_name': 'Live sessions per day',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'live_sessions_per_day',
+    'unique_id': '7384243_20203_1120_live_sessions_per_day',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_live_controls_snapshot[number.dom_live_sessions_per_day-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'friendly_name': 'Dom Live sessions per day',
+      'icon': 'mdi:counter',
+      'max': 200,
+      'min': 4,
+      'mode': <NumberMode.BOX: 'box'>,
+      'step': 1,
+    }),
+    'context': <ANY>,
+    'entity_id': 'number.dom_live_sessions_per_day',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '48.0',
+  })
+# ---
+# name: test_live_controls_snapshot[switch.dom_continuous_live_flow-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'switch',
+    'entity_category': <EntityCategory.CONFIG: 'config'>,
+    'entity_id': 'switch.dom_continuous_live_flow',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Continuous live flow',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': 'mdi:waves-arrow-right',
+    'original_name': 'Continuous live flow',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'continuous_live_flow',
+    'unique_id': '7384243_20203_1120_continuous_live_flow',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_live_controls_snapshot[switch.dom_continuous_live_flow-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'friendly_name': 'Dom Continuous live flow',
+      'icon': 'mdi:waves-arrow-right',
+    }),
+    'context': <ANY>,
+    'entity_id': 'switch.dom_continuous_live_flow',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'off',
+  })
+# ---
+# name: test_live_controls_snapshot[switch.dom_live_view-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'switch',
+    'entity_category': None,
+    'entity_id': 'switch.dom_live_view',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Live view',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': 'mdi:eye',
+    'original_name': 'Live view',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'live_view',
+    'unique_id': '7384243_20203_1120_live_view',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_live_controls_snapshot[switch.dom_live_view-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'friendly_name': 'Dom Live view',
+      'icon': 'mdi:eye',
+      'session_started': None,
+      'source': None,
+      'windows_in_session': 0,
+    }),
+    'context': <ANY>,
+    'entity_id': 'switch.dom_live_view',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'off',
+  })
+# ---
+# name: test_live_controls_snapshot[switch.dom_smart_live_windows-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'switch',
+    'entity_category': <EntityCategory.CONFIG: 'config'>,
+    'entity_id': 'switch.dom_smart_live_windows',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Smart live windows',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': 'mdi:eye-refresh',
+    'original_name': 'Smart live windows',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'smart_live_windows',
+    'unique_id': '7384243_20203_1120_smart_live_windows',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_live_controls_snapshot[switch.dom_smart_live_windows-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'friendly_name': 'Dom Smart live windows',
+      'icon': 'mdi:eye-refresh',
+    }),
+    'context': <ANY>,
+    'entity_id': 'switch.dom_smart_live_windows',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'off',
+  })
+# ---
