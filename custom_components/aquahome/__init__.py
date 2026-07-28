@@ -64,6 +64,7 @@ from .issues import (
     async_setup_leak_issues,
     async_setup_salt_issues,
 )
+from .live import AquaHomeLiveManager, async_remove_live_issues
 from .scheduler import AquaHomeRegenScheduler
 from .services import async_setup_services
 from .statistics import (
@@ -135,6 +136,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
     statistics_coordinators: dict[str, AquaHomeStatisticsCoordinator] = {}
     analytics_engines: dict[str, AquaHomeAnalyticsEngine] = {}
     schedulers: dict[str, AquaHomeRegenScheduler] = {}
+    live_managers: dict[str, AquaHomeLiveManager] = {}
     for device in devices:
         coordinator = AquaHomeCoordinator(hass, entry, client, device)
         await coordinator.async_config_entry_first_refresh()
@@ -201,6 +203,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         await scheduler.async_start()
         schedulers[device.id] = scheduler
 
+        # The live manager streams into the fast coordinator and reads the
+        # engine's activity grid; it sends no commands, so it starts last.
+        live_manager = AquaHomeLiveManager(
+            hass,
+            entry,
+            device_id=device.id,
+            device_slug=coordinator.device_slug,
+            client=client,
+            fast=coordinator,
+            engine=engine,
+        )
+        await live_manager.async_start()
+        live_managers[device.id] = live_manager
+
         _async_wire_activity_triggers(hass, entry, coordinator, activity)
         async_setup_salt_issues(hass, entry, coordinator)
         async_setup_leak_issues(hass, entry, coordinator, engine, scheduler)
@@ -217,6 +233,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) -> 
         statistics_coordinators=statistics_coordinators,
         analytics_engines=analytics_engines,
         schedulers=schedulers,
+        live_managers=live_managers,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -432,6 +449,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) ->
             await engine.async_shutdown()
         for scheduler in entry.runtime_data.schedulers.values():
             await scheduler.async_shutdown()
+        for live_manager in entry.runtime_data.live_managers.values():
+            await live_manager.async_shutdown()
     return unloaded
 
 
@@ -446,6 +465,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: AquaHomeConfigEntry) ->
     async_remove_salt_issues(hass, entry)
     async_remove_leak_issues(hass, entry)
     async_remove_automation_issues(hass, entry)
+    async_remove_live_issues(hass, entry)
     await async_clear_device_statistics(hass, entry)
 
 
