@@ -11,7 +11,8 @@ the event loop schedules socket I/O on, so a frozen test that talks to the
 server never completes. Home Assistant timers are therefore driven with
 ``async_fire_time_changed`` (which fires due timers without moving the clock),
 and everything the manager keys to wall-clock time — the device-local day, the
-night window — is steered through the device's own reported ``tz_id`` instead.
+night window, the learned peak hours — is steered through the device's own
+reported ``tz_id`` instead.
 The one rule that genuinely needs wall-clock movement is the minimum gap
 between grants; it is asserted on its own, and the handful of tests that need
 several grants in a row lower its floor explicitly through
@@ -30,11 +31,12 @@ What the groups below pin: every ordered deny reason of the grant gate is
 reachable and is the *first* unmet condition reported; the daily budget counts
 grants while window renewals inside a held session cost only tickets; the
 poll-, analytics- and event-driven triggers fire on exactly the transitions they
-are specified for; holds renew across reporting windows and stand down on the
-conditions that mean live mode must stop; failures back off from one minute to
-the half-hour cap and raise (then withdraw) a repair issue; and streamed frames
-reach the polled device view coalesced, deduplicated, and without the two
-housekeeping properties.
+are specified for; holds renew across reporting windows — the smart tier for
+the whole learned peak hour it armed on — and stand down on the conditions that
+mean live mode must stop; failures back off from one minute to the half-hour
+cap and raise (then withdraw) a repair issue; and streamed frames reach the
+polled device view coalesced, deduplicated, allow-listed and without the two
+housekeeping properties, while never being mistaken for a poll.
 """
 
 from __future__ import annotations
@@ -42,14 +44,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass
-from datetime import timedelta
+from dataclasses import dataclass, replace
+from datetime import UTC, timedelta
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
-from unittest.mock import patch
+from typing import TYPE_CHECKING, Any, cast
+from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
@@ -70,6 +74,8 @@ from custom_components.aquahome.analytics.model import (
 from custom_components.aquahome.api import Device
 from custom_components.aquahome.api.auth import AuthManager
 from custom_components.aquahome.api.client import AquaHomeClient
+from custom_components.aquahome.api.models import LiveTicket
+from custom_components.aquahome.api.websocket import LiveFrame
 from custom_components.aquahome.const import (
     DOMAIN,
     LIVE_ACTIVE_USE_DELTA_GALLONS,
@@ -78,6 +84,7 @@ from custom_components.aquahome.const import (
     LIVE_COALESCE_SECONDS,
     LIVE_FAILURES_FOR_ISSUE,
     LIVE_MIN_GAP_SECONDS_MIN,
+    LIVE_PUSHED_PROPERTIES,
     LIVE_SESSIONS_PER_DAY_MAX,
     LIVE_SESSIONS_PER_DAY_MIN,
     LIVE_SMART_NO_FLOW_SUSPEND,
@@ -91,12 +98,15 @@ from custom_components.aquahome.const import (
     LIVE_STATUS_IDLE,
     LIVE_STATUS_LIVE,
     LIVE_VIEW_HOLD_MAX_SECONDS,
+    LIVE_WINDOW_FALLBACK_SECONDS,
+    LIVE_WINDOW_GRACE_SECONDS,
     RECHARGE_STATE_READY,
 )
 from custom_components.aquahome.coordinator import (
     AquaHomeActivityCoordinator,
     AquaHomeCoordinator,
 )
+from custom_components.aquahome.live import _WINDOW_TIMER as WINDOW_ENDED_ON_TIMER
 from custom_components.aquahome.live import (
     DENIED_ACTIVE,
     DENIED_BACKOFF,
@@ -109,6 +119,7 @@ from custom_components.aquahome.live import (
     DENIED_SUSPENDED,
     LIVE_FAILING_ISSUE_PREFIX,
     AquaHomeLiveManager,
+    async_remove_live_issues,
 )
 from custom_components.aquahome.live_state import LiveConfig, config_from_options
 from custom_components.aquahome.statistics import AquaHomeStatisticsCoordinator
@@ -120,6 +131,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
 
     from homeassistant.core import HomeAssistant
+
+    from custom_components.aquahome.api.websocket import AquaHomeLiveSession
 
 #: Slug derived from the fixture serial ``4213377-30105-2242`` (see entity.py).
 SLUG = "4213377_30105_2242"
@@ -150,13 +163,20 @@ FIXTURE_GALLONS_TODAY = 3
 FIXTURE_WATER_COUNTER = 47_479
 FIXTURE_CLOCK_SECS = 30_234
 FIXTURE_RF_DBM = -37
+FIXTURE_FLOW_GPM = 0
+FIXTURE_HARDNESS = 26
 #: Rise comfortably above the active-use threshold.
 ACTIVE_USE_RISE = int(LIVE_ACTIVE_USE_DELTA_GALLONS) + 3
+
+#: A raw property the stream may name but no entity value path binds. It is not
+#: even subscribed, which is exactly why a frame carrying it must be dropped.
+UNBOUND_PROPERTY = "hardness_grains"
 
 #: ``recharge_ui`` state meaning a recharge is running right now.
 REGENERATING = "regenerating"
 
 _HOURS_PER_DAY = 24
+_WEEKDAYS = 7
 #: Device-local hour used when a test needs "now" to be night ([01, 07)) or day;
 #: both sit in the middle of their range, so an hour boundary crossing mid-test
 #: cannot flip them.
@@ -166,18 +186,48 @@ DAY_HOUR = 12
 TZ_FAR_EAST = "Etc/GMT-14"
 TZ_FAR_WEST = "Etc/GMT+12"
 
-#: Learned activity grids: nothing worth streaming, every hour worth streaming,
-#: and only the night hours the smart tier refuses to open in.
-GRID_HOURS = 7 * _HOURS_PER_DAY
+#: Learned binary activity grids. The live tier no longer reads them (peaks
+#: replaced them in v1.1), which is itself asserted below.
+GRID_HOURS = _WEEKDAYS * _HOURS_PER_DAY
 NO_ACTIVE_HOURS = (False,) * GRID_HOURS
 ALL_ACTIVE_HOURS = (True,) * GRID_HOURS
-NIGHT_ONLY_HOURS = tuple(
-    1 <= (index % _HOURS_PER_DAY) < 7 for index in range(GRID_HOURS)
-)
+
+
+def _peaks_only(weekday: int, *hours: int) -> tuple[tuple[int, ...], ...]:
+    """Return a peak grid whose only peak hours are ``hours`` on ``weekday``."""
+    return tuple(hours if day == weekday else () for day in range(_WEEKDAYS))
+
+
+def _peaks_except(*hours: int) -> tuple[tuple[int, ...], ...]:
+    """Return a peak grid marking every hour of every weekday but ``hours``."""
+    kept = tuple(hour for hour in range(_HOURS_PER_DAY) if hour not in hours)
+    return (kept,) * _WEEKDAYS
+
+
+#: Learned peak hours, per python weekday (Mon=0). A real grid ranks at most
+#: PEAK_HOURS_PER_WEEKDAY hours per weekday, but the manager reads the tuple as
+#: an allow-list rather than a length contract, so these craft what each case
+#: needs: no peak at all, every hour a peak, and peaks that fall entirely
+#: inside the night window the smart tier refuses to open in.
+NO_PEAK_HOURS = ((),) * _WEEKDAYS
+ALL_PEAK_HOURS = (tuple(range(_HOURS_PER_DAY)),) * _WEEKDAYS
+NIGHT_ONLY_PEAKS = (tuple(range(1, 7)),) * _WEEKDAYS
+#: Peaks everywhere except the device-local hour a test runs in and its two
+#: neighbours (so an hour boundary crossing mid-test cannot flip the answer).
+#: The next window still arms, while the session it opens is NOT inside a peak
+#: hour and therefore ends at its first window instead of holding the block.
+PEAKS_AWAY_FROM_NOW = _peaks_except(DAY_HOUR - 1, DAY_HOUR, DAY_HOUR + 1)
+#: How far ahead the armed smart window is fired. The next peak hour of the
+#: crafted grids above is at most three hours out, so this releases exactly the
+#: one armed timer.
+SMART_ARM_HORIZON_SECONDS = timedelta(hours=4).total_seconds()
 
 #: Reporting-window length (minutes) that keeps the client-side window timer
 #: beyond the manual hold's auto-off cap, so the cap can be fired on its own.
 LONG_WINDOW_MINUTES = 60
+#: Reporting-window length (minutes) a test streams, distinct from the polled
+#: five minutes the fixture carries.
+STREAMED_WINDOW_MINUTES = 9
 
 
 # ---------------------------------------------------------------------------
@@ -241,12 +291,14 @@ def _result(
     *,
     anomaly_active: bool | None = None,
     active_hours: tuple[bool, ...] = NO_ACTIVE_HOURS,
+    peak_hours: tuple[tuple[int, ...], ...] = NO_PEAK_HOURS,
 ) -> AnalyticsResult:
     """Assemble one crafted analytics pass from neutral defaults.
 
-    Only the two blocks the manager consumes — the anomaly verdict and the
-    learned activity grid — are parameterised, so no assertion here depends on
-    detector numerics.
+    Only the blocks the manager consumes are parameterised — the anomaly
+    verdict, the learned peak hours the smart tier arms and holds on, and the
+    binary activity grid it deliberately stopped reading — so no assertion here
+    depends on detector numerics.
     """
     return AnalyticsResult(
         computed_at=dt_util.utcnow(),
@@ -264,7 +316,12 @@ def _result(
         ),
         vacation=_NEUTRAL_VACATION,
         forecast=_NEUTRAL_FORECAST,
-        grid=GridSummary(active_hours=active_hours, mature_buckets=0, hourly_samples=0),
+        grid=GridSummary(
+            active_hours=active_hours,
+            mature_buckets=0,
+            hourly_samples=0,
+            peak_hours=peak_hours,
+        ),
     )
 
 
@@ -279,6 +336,28 @@ class _AdvancingMonotonic:
         """Return the next reading, well past the client's live-ticket floor."""
         self._now += CLOCK_STEP_SECONDS
         return self._now
+
+
+class _FixedMonotonic:
+    """Monotonic clock frozen at one reading — production's own worst case.
+
+    Two ticket calls milliseconds apart read the same instant on a real clock
+    too; freezing it makes that certain, which is what the client's ticket
+    floor has to be measured against.
+    """
+
+    def __call__(self) -> float:
+        """Return the one and only reading."""
+        return 10_000.0
+
+
+class _UnclosableSession:
+    """Stand-in live session whose close always fails."""
+
+    async def close(self) -> None:
+        """Fail the way a socket already dead at the TCP level does."""
+        msg = "the socket is already gone"
+        raise OSError(msg)
 
 
 def _zone_for_local_hour(hour: int) -> str:
@@ -371,8 +450,14 @@ async def build_live(
         detail: dict[str, Any] | None = None,
         result: AnalyticsResult | None = None,
         iqua2: bool = False,
+        monotonic: Callable[[], float] | None = None,
     ) -> LiveHarness:
-        """Build and start one live manager over a seeded device and verdict."""
+        """Build and start one live manager over a seeded device and verdict.
+
+        The client clock defaults to the self-advancing one described above;
+        a test that has to face the ticket floor as production does injects
+        :class:`_FixedMonotonic` instead.
+        """
         mock_config_entry.add_to_hass(hass)
         session = async_get_clientsession(hass)
         auth = AuthManager(
@@ -383,7 +468,7 @@ async def build_live(
             session,
             auth,
             base_url=live_server.base_url,
-            monotonic=_AdvancingMonotonic(),
+            monotonic=monotonic if monotonic is not None else _AdvancingMonotonic(),
         )
         device = Device.from_dict(detail if detail is not None else _detail())
         fast = AquaHomeCoordinator(hass, mock_config_entry, client, device)
@@ -777,6 +862,64 @@ async def test_the_active_use_cooldown_denies_only_that_trigger(
     assert len(harness.server.all_connections) == 2
 
 
+async def test_the_grant_gate_reports_the_first_unmet_condition(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """Stacked denials report the earliest condition in the documented order.
+
+    The deny reasons are live mode's whole observability surface, so their
+    order is part of the contract rather than an accident of the code: a gate
+    that answered "the device is offline" while the account was also being
+    throttled would send the owner after the wrong problem, and one that
+    answered "budget spent" during a failure backoff would have them raise the
+    daily limit for nothing. Every condition below stays true while the ones
+    above it are peeled away, so each assertion proves a *shadowing* and not
+    merely that the reason is reachable.
+    """
+    night_zone = _zone_for_local_hour(NIGHT_HOUR)
+    harness = await build_live(detail=_detail(tz_id=night_zone, online=False))
+    manager = harness.manager
+    now = dt_util.utcnow()
+    seeded = manager.state
+    manager._publish(
+        replace(
+            seeded,
+            backoff_until=now + timedelta(minutes=5),
+            sessions_today=seeded.config.sessions_per_day,
+            last_session_end=now,
+            smart_suspended_today=True,
+        )
+    )
+
+    with patch.object(AquaHomeClient, "rest_backoff_active", True):
+        with patch.object(AquaHomeLiveManager, "_session_running", True):
+            assert manager._can_grant(LIVE_SOURCE_SMART, now) == DENIED_ACTIVE
+        assert manager._can_grant(LIVE_SOURCE_SMART, now) == DENIED_BACKOFF
+        manager._publish(replace(manager.state, backoff_until=None))
+        assert manager._can_grant(LIVE_SOURCE_SMART, now) == DENIED_REST_BACKOFF
+    assert manager._can_grant(LIVE_SOURCE_SMART, now) == DENIED_OFFLINE
+
+    await _push_device(harness, _detail(tz_id=night_zone))
+    assert manager._can_grant(LIVE_SOURCE_SMART, now) == DENIED_BUDGET
+    manager._publish(replace(manager.state, sessions_today=0))
+    assert manager._can_grant(LIVE_SOURCE_SMART, now) == DENIED_GAP
+
+    # The gap shadows the active-use cooldown for as long as it lasts; past it
+    # the cooldown governs that one trigger on its own.
+    manager._last_active_use = now
+    assert manager._can_grant(LIVE_SOURCE_ACTIVE_USE, now) == DENIED_GAP
+    manager._publish(replace(manager.state, last_session_end=None))
+    assert manager._can_grant(LIVE_SOURCE_ACTIVE_USE, now) == DENIED_COOLDOWN
+
+    assert manager._can_grant(LIVE_SOURCE_SMART, now) == DENIED_SUSPENDED
+    manager._publish(replace(manager.state, smart_suspended_today=False))
+    assert manager._can_grant(LIVE_SOURCE_SMART, now) == DENIED_NIGHT
+
+    # Every shared condition is clear, and the per-source rules do not touch a
+    # burst: the night the smart tier is refused is when a burst matters most.
+    assert manager._can_grant(LIVE_SOURCE_REGEN, now) is None
+
+
 # ---------------------------------------------------------------------------
 # Budget accounting and holds
 # ---------------------------------------------------------------------------
@@ -1053,10 +1196,10 @@ async def test_an_anomaly_verdict_turning_active_opens_a_burst(
 async def test_smart_windows_are_armed_only_outside_the_night_hours(
     build_live: Callable[..., Awaitable[LiveHarness]],
 ) -> None:
-    """A grid whose only active hours are night hours arms nothing."""
+    """A grid whose only peak hours are night hours arms nothing."""
     zone = _zone_for_local_hour(DAY_HOUR)
     harness = await build_live(
-        detail=_detail(tz_id=zone), result=_result(active_hours=NIGHT_ONLY_HOURS)
+        detail=_detail(tz_id=zone), result=_result(peak_hours=NIGHT_ONLY_PEAKS)
     )
 
     await harness.manager.async_set_smart_windows(True)
@@ -1064,9 +1207,9 @@ async def test_smart_windows_are_armed_only_outside_the_night_hours(
     await _quiesce(harness.hass)
     assert harness.server.all_connections == []
 
-    # The same grid with daytime hours active does arm the next one.
-    await _push_result(harness, _result(active_hours=ALL_ACTIVE_HOURS))
-    await _fire_in(harness.hass, timedelta(hours=2).total_seconds())
+    # The same grid with daytime peaks does arm the next one.
+    await _push_result(harness, _result(peak_hours=PEAKS_AWAY_FROM_NOW))
+    await _fire_in(harness.hass, SMART_ARM_HORIZON_SECONDS)
     await _wait_live(harness)
 
     assert harness.manager.state.source == LIVE_SOURCE_SMART
@@ -1079,7 +1222,7 @@ async def test_a_smart_window_due_at_night_is_denied(
     """The smart tier never streams a sleeping household."""
     zone = _zone_for_local_hour(NIGHT_HOUR)
     harness = await build_live(
-        detail=_detail(tz_id=zone), result=_result(active_hours=ALL_ACTIVE_HOURS)
+        detail=_detail(tz_id=zone), result=_result(peak_hours=ALL_PEAK_HOURS)
     )
 
     await harness.manager.async_set_smart_windows(True)
@@ -1098,14 +1241,17 @@ async def test_no_flow_smart_sessions_suspend_the_tier_for_the_day(
 ) -> None:
     """Streaming a quiet house three times running stops until the day turns."""
     zone = _zone_for_local_hour(DAY_HOUR)
+    # Peaks everywhere but the hour now falls in: each armed window still
+    # fires, and each session ends at its first window instead of holding the
+    # block, so the no-flow accounting is counted one session at a time.
     harness = await build_live(
-        detail=_detail(tz_id=zone), result=_result(active_hours=ALL_ACTIVE_HOURS)
+        detail=_detail(tz_id=zone), result=_result(peak_hours=PEAKS_AWAY_FROM_NOW)
     )
     await _allow_back_to_back_grants(monkeypatch, harness)
     await harness.manager.async_set_smart_windows(True)
 
     for _ in range(LIVE_SMART_NO_FLOW_SUSPEND):
-        await _fire_in(harness.hass, timedelta(hours=2).total_seconds())
+        await _fire_in(harness.hass, SMART_ARM_HORIZON_SECONDS)
         await _wait_live(harness)
         # No counter frame is ever streamed: no water moved in this window.
         await _end_session(harness)
@@ -1114,7 +1260,7 @@ async def test_no_flow_smart_sessions_suspend_the_tier_for_the_day(
     assert len(harness.server.all_connections) == LIVE_SMART_NO_FLOW_SUSPEND
 
     caplog.clear()
-    await _fire_in(harness.hass, timedelta(hours=2).total_seconds())
+    await _fire_in(harness.hass, SMART_ARM_HORIZON_SECONDS)
     await _quiesce(harness.hass)
     assert _denials(caplog) == [(LIVE_SOURCE_SMART, DENIED_SUSPENDED)]
     assert len(harness.server.all_connections) == LIVE_SMART_NO_FLOW_SUSPEND
@@ -1129,6 +1275,296 @@ async def test_no_flow_smart_sessions_suspend_the_tier_for_the_day(
     state = harness.manager.state
     assert state.smart_suspended_today is False
     assert state.sessions_today == 0
+
+
+# ---------------------------------------------------------------------------
+# Peak hours: what arms a smart window, and what holds it open
+# ---------------------------------------------------------------------------
+
+
+async def test_in_peak_hour_reads_the_learned_grid_in_the_devices_own_zone(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """Only the device's own local hour, on its own weekday, is a peak hour.
+
+    The predicate the full-block hold renews on, so the three answers that must
+    be ``False`` whatever the clock says matter most: a grid that does not
+    carry all seven weekdays (the ``()`` "not computed" default), an engine
+    that has published no verdict at all, and an hour some *other* weekday
+    peaks in. Without any one of them an unknown grid would hold the socket
+    open for as long as the tier is switched on — and arm windows off a grid
+    that never ranked anything.
+    """
+    zone = _zone_for_local_hour(DAY_HOUR)
+    harness = await build_live(detail=_detail(tz_id=zone))
+    manager = harness.manager
+    now = dt_util.utcnow()
+    local = now.astimezone(ZoneInfo(zone))
+
+    # A computed grid that ranked no peaks anywhere.
+    assert manager._in_peak_hour(now) is False
+
+    await _push_result(
+        harness, _result(peak_hours=_peaks_only(local.weekday(), local.hour))
+    )
+    assert manager._in_peak_hour(now) is True
+
+    # The same hour of day, one weekday over.
+    await _push_result(
+        harness,
+        _result(peak_hours=_peaks_only((local.weekday() + 1) % _WEEKDAYS, local.hour)),
+    )
+    assert manager._in_peak_hour(now) is False
+
+    # The right weekday, the neighbouring hour.
+    await _push_result(
+        harness,
+        _result(
+            peak_hours=_peaks_only(local.weekday(), (local.hour + 1) % _HOURS_PER_DAY)
+        ),
+    )
+    assert manager._in_peak_hour(now) is False
+
+    # A short grid is not a grid: the shape guard refuses it, and with it any
+    # attempt to arm a window off it.
+    await _push_result(harness, _result(peak_hours=((local.hour,),) * (_WEEKDAYS - 1)))
+    assert manager._in_peak_hour(now) is False
+    await manager.async_set_smart_windows(True)
+    assert manager._unsub_smart is None
+
+    # An engine that has published nothing answers the same way.
+    await _push_result(
+        harness, _result(peak_hours=_peaks_only(local.weekday(), local.hour))
+    )
+    assert manager._in_peak_hour(now) is True
+    with patch.object(harness.engine, "data", None):
+        assert manager._in_peak_hour(now) is False
+        manager._arm_smart_window(now)
+        assert manager._unsub_smart is None
+
+
+async def test_the_binary_activity_grid_alone_no_longer_arms_a_window(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """Arming keys on the learned peaks, not on "the household is awake".
+
+    Pins the v1.1 switch away from ``active_hours``: on a real household that
+    grid resolves to every hour from 07:00, so a tier armed on it fired all day
+    for no information. A grid whose every hour is active but which ranks no
+    peak must arm nothing at all; the peaks are what put a session where the
+    water actually moves.
+    """
+    zone = _zone_for_local_hour(DAY_HOUR)
+    harness = await build_live(
+        detail=_detail(tz_id=zone),
+        result=_result(active_hours=ALL_ACTIVE_HOURS, peak_hours=NO_PEAK_HOURS),
+    )
+
+    await harness.manager.async_set_smart_windows(True)
+    assert harness.manager._unsub_smart is None
+    await _fire_in(harness.hass, timedelta(days=2).total_seconds())
+    await _quiesce(harness.hass)
+    assert harness.server.all_connections == []
+
+    # The very same activity grid, now with peaks ranked, does arm one.
+    await _push_result(
+        harness, _result(active_hours=ALL_ACTIVE_HOURS, peak_hours=PEAKS_AWAY_FROM_NOW)
+    )
+    await _fire_in(harness.hass, SMART_ARM_HORIZON_SECONDS)
+    await _wait_live(harness)
+
+    assert harness.manager.state.source == LIVE_SOURCE_SMART
+
+
+async def test_a_peak_hour_session_holds_across_its_whole_block(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """A smart session renews window after window while the peak hour lasts.
+
+    The full-block hold. Before it, a smart window bought exactly one
+    five-minute reporting window per grant, which is a twelfth of the block the
+    tier arms on; the per-gallon, timestamped capture the whole feature exists
+    for needs the socket held across the block. One grant, many windows, and
+    the whole block counted as ONE quiet session — a renewal that spent a grant
+    (or a no-flow count) per window would exhaust the day's budget inside an
+    hour. The hard-off that ends even a wanted renewal is pinned here too: a
+    hold that ignored it would reconnect against an unreachable device.
+    """
+    zone = _zone_for_local_hour(DAY_HOUR)
+    harness = await build_live(
+        detail=_detail(tz_id=zone), result=_result(peak_hours=ALL_PEAK_HOURS)
+    )
+    manager = harness.manager
+    await manager.async_set_smart_windows(True)
+    await _fire_in(harness.hass, SMART_ARM_HORIZON_SECONDS)
+    await _wait_live(harness)
+    assert manager.state.source == LIVE_SOURCE_SMART
+
+    await harness.server.close_connections()
+    await _settle_until(
+        harness.hass,
+        lambda: manager.state.windows_in_session >= 1,
+        "the peak-hour hold to open its second window",
+    )
+    await harness.server.close_connections()
+    await _settle_until(
+        harness.hass,
+        lambda: manager.state.windows_in_session >= 2,
+        "the peak-hour hold to open its third window",
+    )
+
+    state = manager.state
+    assert state.status == LIVE_STATUS_LIVE
+    assert state.windows_in_session >= 2
+    assert state.sessions_today == 1
+    assert len(harness.server.live_requests) == 3
+
+    # The device drops out: the hold ends cleanly at the next window end.
+    await _push_device(harness, _detail(tz_id=zone, online=False))
+    await _end_session(harness)
+
+    ended = manager.state
+    assert ended.sessions_today == 1
+    assert ended.last_session_end is not None
+    assert manager._no_flow_sessions == 1
+
+
+async def test_the_full_block_hold_requires_every_one_of_its_conditions(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """A peak-hour renewal needs the tier on, unsuspended, in-hour, off-night.
+
+    Unit-level, because each condition is re-read once per reporting window and
+    a regression in any single one — renewing while the tier is suspended for
+    the day, holding a socket into the night hours the tier exists to respect,
+    or extending the hold to a source that never asked for one — surfaces only
+    as a socket that will not let go. The hard-offs that end even a wanted
+    renewal are pinned alongside, since they are the only thing between a held
+    block and a reconnect loop against a sick cloud.
+    """
+    zone = _zone_for_local_hour(DAY_HOUR)
+    harness = await build_live(
+        detail=_detail(tz_id=zone), result=_result(peak_hours=ALL_PEAK_HOURS)
+    )
+    manager = harness.manager
+    await manager.async_set_smart_windows(True)
+    manager._publish(
+        replace(manager.state, status=LIVE_STATUS_LIVE, source=LIVE_SOURCE_SMART)
+    )
+    assert manager._wants_renewal(WINDOW_ENDED_ON_TIMER) is True
+
+    # Suspended for the day by the no-flow accounting.
+    manager._publish(replace(manager.state, smart_suspended_today=True))
+    assert manager._wants_renewal(WINDOW_ENDED_ON_TIMER) is False
+    manager._publish(replace(manager.state, smart_suspended_today=False))
+
+    # Another source streaming at the very same instant is not a block hold.
+    manager._publish(replace(manager.state, source=LIVE_SOURCE_ANOMALY))
+    assert manager._wants_renewal(WINDOW_ENDED_ON_TIMER) is False
+    manager._publish(replace(manager.state, source=LIVE_SOURCE_SMART))
+
+    # The night rule outranks the grid: the same all-peak grid, read by a
+    # device whose own clock says 03:00.
+    await _push_device(harness, _detail(tz_id=_zone_for_local_hour(NIGHT_HOUR)))
+    assert manager._wants_renewal(WINDOW_ENDED_ON_TIMER) is False
+    await _push_device(harness, _detail(tz_id=zone))
+    assert manager._wants_renewal(WINDOW_ENDED_ON_TIMER) is True
+
+    # The flag itself, not just the session, ends the hold.
+    await manager.async_set_smart_windows(False)
+    assert manager._wants_renewal(WINDOW_ENDED_ON_TIMER) is False
+    await manager.async_set_smart_windows(True)
+
+    # And the hard-offs, in their own order.
+    assert manager._renewal_blocked() is None
+    manager._publish(
+        replace(manager.state, backoff_until=dt_util.utcnow() + timedelta(minutes=5))
+    )
+    assert manager._renewal_blocked() == DENIED_BACKOFF
+    manager._publish(replace(manager.state, backoff_until=None))
+    with patch.object(AquaHomeClient, "rest_backoff_active", True):
+        assert manager._renewal_blocked() == DENIED_REST_BACKOFF
+    await _push_device(harness, _detail(tz_id=zone, online=False))
+    assert manager._renewal_blocked() == DENIED_OFFLINE
+
+
+async def test_adjacent_peak_hours_renew_straight_through_the_boundary(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """A contiguous peak block is one hold, not one hold per hour.
+
+    The renewal predicate is asked again every reporting window, so it has to
+    answer ``True`` on both sides of a boundary the grid peaks either side of.
+    A predicate keyed to the hour the window was armed in — or one that reset
+    at :00 — would drop the socket at the boundary and lose the second hour to
+    the grant gate's minimum-gap check, which is exactly why the hold is
+    granted per block rather than per hour.
+    """
+    zone = _zone_for_local_hour(DAY_HOUR)
+    harness = await build_live(detail=_detail(tz_id=zone))
+    manager = harness.manager
+    now = dt_util.utcnow()
+    local = now.astimezone(ZoneInfo(zone))
+    next_hour = (local.hour + 1) % _HOURS_PER_DAY
+
+    await _push_result(
+        harness, _result(peak_hours=_peaks_only(local.weekday(), local.hour, next_hour))
+    )
+    assert manager._in_peak_hour(now) is True
+    assert manager._in_peak_hour(now + timedelta(hours=1)) is True
+
+    # With only this hour ranked, the same crossing ends the hold.
+    await _push_result(
+        harness, _result(peak_hours=_peaks_only(local.weekday(), local.hour))
+    )
+    assert manager._in_peak_hour(now) is True
+    assert manager._in_peak_hour(now + timedelta(hours=1)) is False
+
+
+async def test_switching_the_tier_off_ends_a_running_peak_hour_hold(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The smart switch releases the socket its own tier is holding, mid-block.
+
+    Both halves of the release. Without it a hold nothing else wants kept
+    streaming — a ticket per reporting window — for the rest of the peak hour
+    after the user switched the feature off, since the flag was only ever read
+    when arming. With a manual or continuous hold on the same session, that
+    hold outranks the flag and the socket stays: the switch releases the smart
+    tier's claim, not everyone else's.
+    """
+    zone = _zone_for_local_hour(DAY_HOUR)
+    harness = await build_live(
+        detail=_detail(tz_id=zone), result=_result(peak_hours=ALL_PEAK_HOURS)
+    )
+    manager = harness.manager
+    await _allow_back_to_back_grants(monkeypatch, harness)
+
+    await manager.async_set_smart_windows(True)
+    await _fire_in(harness.hass, SMART_ARM_HORIZON_SECONDS)
+    await _wait_live(harness)
+    assert manager.state.source == LIVE_SOURCE_SMART
+
+    await manager.async_set_smart_windows(False)
+    await _wait_idle(harness)
+    assert harness.server.connections == []
+    assert manager.state.sessions_today == 1
+    assert manager.state.last_session_end is not None
+
+    # A second block, this time with continuous mode holding the same socket.
+    await manager.async_set_smart_windows(True)
+    await _fire_in(harness.hass, SMART_ARM_HORIZON_SECONDS)
+    await _wait_live(harness)
+    assert manager.state.source == LIVE_SOURCE_SMART
+    await manager.async_set_continuous(True)
+
+    await manager.async_set_smart_windows(False)
+    await _quiesce(harness.hass)
+
+    assert manager.state.status == LIVE_STATUS_LIVE
+    assert len(harness.server.connections) == 1
+    assert manager.state.sessions_today == 2
 
 
 # ---------------------------------------------------------------------------
@@ -1153,6 +1589,63 @@ async def test_an_expired_ticket_is_retried_once_with_a_fresh_one(
     assert len(harness.server.all_connections) == 1
     # The connection that succeeded presented the second, fresh ticket.
     assert harness.server.all_connections[0].ticket == "ticket-2"
+
+
+async def test_the_expired_ticket_retry_ignores_the_client_ticket_floor(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """The retry gets its fresh ticket even a millisecond after the first.
+
+    The dead path the v1.0.2 verification audit recorded: the rejected ticket
+    is by definition seconds old, so the client's own 60 s live-ticket floor
+    refused every retry and the session died with a misleading throttle error
+    instead of reconnecting. Run against a monotonic clock that does not move
+    between the two calls — production's own case — the retry must still
+    succeed. On the pre-fix code this test fails with the attempt recorded as a
+    failure and no session ever reaching the streaming state.
+    """
+    harness = await build_live(monotonic=_FixedMonotonic())
+    harness.server.reject_next_handshakes = 1
+
+    await _push_device(harness, _detail(tile_state=REGENERATING))
+    await _wait_live(harness)
+
+    state = harness.manager.state
+    assert state.consecutive_failures == 0
+    assert state.last_error is None
+    assert len(harness.server.live_requests) == 2
+    assert harness.server.all_connections[0].ticket == "ticket-2"
+
+
+async def test_a_ticket_without_a_websocket_uri_is_a_failed_attempt(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """A ticket the cloud issued with no URI fails the attempt, not the task.
+
+    There is nothing to connect to, so the manager has to record it like any
+    other failed attempt and back off, rather than raise out of the session
+    task or build a websocket URL out of an empty string and hammer the host
+    with it.
+    """
+    harness = await build_live()
+
+    with patch.object(
+        AquaHomeClient,
+        "async_get_live_ticket",
+        AsyncMock(return_value=LiveTicket(websocket_uri=None)),
+    ):
+        await _push_device(harness, _detail(tile_state=REGENERATING))
+        await _settle_until(
+            harness.hass,
+            lambda: harness.manager.state.status == LIVE_STATUS_BACKOFF,
+            "the URI-less ticket to be recorded as a failed attempt",
+        )
+
+    state = harness.manager.state
+    assert state.consecutive_failures == 1
+    assert state.last_error is not None
+    assert "websocket URI" in state.last_error
+    assert harness.server.all_connections == []
 
 
 async def test_repeated_failures_back_off_from_a_minute_to_the_cap(
@@ -1288,6 +1781,122 @@ async def test_unchanged_and_housekeeping_frames_are_never_applied(
     assert device.properties["app_active"].value is False
 
 
+async def test_a_streamed_property_outside_the_allow_list_never_reaches_the_poll(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """Only the properties entity value paths bind are merged into the view.
+
+    The stream is unvalidated input and the subscription list is wider than the
+    bound set, so a frame naming anything else — here the device's water
+    hardness, a property no entity reads from a push and no poll would refresh
+    at stream cadence — must be dropped rather than written into the
+    coordinator's device view, where it would rewrite entity state and stay
+    wrong until the next genuine poll.
+    """
+    harness = await build_live()
+    assert UNBOUND_PROPERTY not in LIVE_PUSHED_PROPERTIES
+    harness.server.script = [
+        frame("app_active", True),
+        frame(UNBOUND_PROPERTY, FIXTURE_HARDNESS + 10),
+        # The same bound value twice: the second finds the first already queued.
+        frame("current_water_flow_gpm", 24),
+        frame("current_water_flow_gpm", 24),
+    ]
+
+    await _push_device(harness, _detail(tile_state=REGENERATING))
+    await _wait_live(harness)
+    await _fire_in(harness.hass, LIVE_COALESCE_SECONDS + 0.5)
+    await _quiesce(harness.hass)
+
+    device = harness.fast.data
+    assert device is not None
+    assert device.properties["current_water_flow_gpm"].value == 24
+    assert device.properties[UNBOUND_PROPERTY].value == FIXTURE_HARDNESS
+
+    # A frame arriving before the first poll has no device view to merge into.
+    with patch.object(harness.fast, "data", None):
+        harness.manager._buffer_frame(
+            LiveFrame(name="current_water_flow_gpm", value=99, timestamp=None)
+        )
+    assert harness.manager._pending == {}
+
+
+async def test_a_live_push_never_advances_the_active_use_baseline(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """A push is no observation: the poll behind it still sees the whole rise.
+
+    The audit gap this closes. The poll listener ran on live pushes too, so a
+    streamed ``gallons_used_today`` frame moved the active-use trigger's
+    baseline; the genuine poll that followed carried exactly that value and
+    read as no usage at all, blinding the trigger for the rest of the day's
+    draw. The push must leave the baseline — and every other poll-driven
+    trigger — untouched.
+    """
+    harness = await build_live()
+    used = FIXTURE_GALLONS_TODAY + ACTIVE_USE_RISE
+    device = harness.fast.data
+    assert device is not None
+
+    properties = dict(device.properties)
+    properties["gallons_used_today"] = replace(
+        properties["gallons_used_today"], value=used
+    )
+    harness.fast.async_apply_live_update(replace(device, properties=properties))
+    await _quiesce(harness.hass)
+
+    # The push alone opens nothing: the counter moved on the stream, which is
+    # not an observation the poll-driven triggers may act on.
+    assert harness.server.all_connections == []
+
+    # The genuine poll at that very same value is still the whole rise.
+    await _push_device(harness, _detail(gallons=used))
+    await _wait_live(harness)
+
+    assert harness.manager.state.source == LIVE_SOURCE_ACTIVE_USE
+
+
+async def test_the_streamed_window_length_sizes_the_next_window(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """The device's streamed reporting-window length outranks the polled one.
+
+    The client-side timer is the only thing that ends a window the device
+    stopped reporting in, so a stream that re-advertises the length has to
+    re-size it. Nonsense must leave the previous value standing: a string or a
+    zero taken at face value would collapse the window to nothing and cycle
+    connect-and-close at the ticket floor.
+    """
+    harness = await build_live()
+    manager = harness.manager
+    harness.server.script = [
+        frame("app_active", True),
+        frame("app_active_timeout", "soon"),
+        frame("app_active_timeout", 0),
+        frame("app_active_timeout", STREAMED_WINDOW_MINUTES),
+    ]
+
+    await _push_device(harness, _detail(tile_state=REGENERATING))
+    await _wait_live(harness)
+    await _settle_until(
+        harness.hass,
+        lambda: manager._timeout_minutes == float(STREAMED_WINDOW_MINUTES),
+        "the streamed reporting-window length to be recorded",
+    )
+    assert manager._window_delay() == (
+        STREAMED_WINDOW_MINUTES * 60.0 + LIVE_WINDOW_GRACE_SECONDS
+    )
+
+    # A device that advertises no window length at all falls back instead.
+    manager._timeout_minutes = None
+    detail = _detail()
+    del detail["properties"]["app_active_timeout"]
+    await _push_device(harness, detail)
+    assert manager._window_delay() == (
+        LIVE_WINDOW_FALLBACK_SECONDS + LIVE_WINDOW_GRACE_SECONDS
+    )
+
+
 # ---------------------------------------------------------------------------
 # Persistence and shutdown
 # ---------------------------------------------------------------------------
@@ -1338,6 +1947,71 @@ async def test_shutdown_closes_a_running_session(
     assert len(harness.server.all_connections) == 1
 
 
+async def test_frames_still_waiting_when_the_manager_stops_are_dropped(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """An unload drops the coalescing buffer instead of applying it.
+
+    The buffer holds up to a coalescing window of streamed values. Applying
+    them from a manager that is already down would republish the polled device
+    view — re-rendering every bound entity — in the middle of an unload, and
+    would do it from a socket nobody owns any more. The grant gate behind it
+    stays shut for good, whichever path reaches it.
+    """
+    harness = await build_live()
+    manager = harness.manager
+    harness.server.script = [
+        frame("app_active", True),
+        frame("current_water_flow_gpm", FIXTURE_FLOW_GPM + 31),
+    ]
+
+    await _push_device(harness, _detail(tile_state=REGENERATING))
+    await _wait_live(harness)
+    await _settle_until(
+        harness.hass,
+        lambda: bool(manager._pending),
+        "the streamed frame to be buffered for the coalesced apply",
+    )
+
+    await manager.async_shutdown()
+    await _fire_in(harness.hass, LIVE_COALESCE_SECONDS + 0.5)
+    await _quiesce(harness.hass)
+
+    assert manager._pending == {}
+    device = harness.fast.data
+    assert device is not None
+    assert device.properties["current_water_flow_gpm"].value == FIXTURE_FLOW_GPM
+
+    # Every trigger funnels through the grant gate, which refuses outright.
+    manager._request(LIVE_SOURCE_MANUAL)
+    await _quiesce(harness.hass)
+    assert len(harness.server.all_connections) == 1
+
+
+async def test_removing_the_entry_deletes_every_devices_live_issue(
+    hass: HomeAssistant,
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """Uninstalling clears the live-mode repair issues the entry filed.
+
+    The Repairs registry outlives config entries, so a "live mode keeps
+    failing" card left behind would nag about an integration that is gone. The
+    hook runs on an entry that may never have been loaded, which is why the ids
+    are rebuilt from the device registry rather than from a live manager.
+    """
+    harness = await build_live()
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=harness.entry.entry_id,
+        identifiers={(DOMAIN, SLUG)},
+    )
+    harness.manager._file_issue("the cloud keeps refusing tickets")
+    assert _issue(hass) is not None
+
+    async_remove_live_issues(hass, harness.entry)
+
+    assert _issue(hass) is None
+
+
 async def test_updates_landing_after_shutdown_cannot_open_a_session(
     build_live: Callable[..., Awaitable[LiveHarness]],
 ) -> None:
@@ -1353,10 +2027,10 @@ async def test_updates_landing_after_shutdown_cannot_open_a_session(
 
     await harness.manager.async_shutdown()
 
-    # A regeneration-start transition and an every-hour-active grid: both
-    # would open a session on a running manager.
+    # A regeneration-start transition and an every-hour-peak grid: both would
+    # open a session on a running manager.
     await _push_device(harness, _detail(tile_state=REGENERATING))
-    await _push_result(harness, _result(active_hours=ALL_ACTIVE_HOURS))
+    await _push_result(harness, _result(peak_hours=ALL_PEAK_HOURS))
     await _quiesce(harness.hass)
 
     assert harness.server.all_connections == []
@@ -1467,13 +2141,13 @@ async def test_a_flow_window_resets_the_no_flow_suspend_counter(
     """
     zone = _zone_for_local_hour(DAY_HOUR)
     harness = await build_live(
-        detail=_detail(tz_id=zone), result=_result(active_hours=ALL_ACTIVE_HOURS)
+        detail=_detail(tz_id=zone), result=_result(peak_hours=PEAKS_AWAY_FROM_NOW)
     )
     await _allow_back_to_back_grants(monkeypatch, harness)
     await harness.manager.async_set_smart_windows(True)
 
     for _ in range(LIVE_SMART_NO_FLOW_SUSPEND - 1):
-        await _fire_in(harness.hass, timedelta(hours=2).total_seconds())
+        await _fire_in(harness.hass, SMART_ARM_HORIZON_SECONDS)
         await _wait_live(harness)
         await _end_session(harness)
 
@@ -1481,13 +2155,113 @@ async def test_a_flow_window_resets_the_no_flow_suspend_counter(
         frame("app_active", True),
         frame("water_counter_gals", FIXTURE_WATER_COUNTER + 9),
     ]
-    await _fire_in(harness.hass, timedelta(hours=2).total_seconds())
+    await _fire_in(harness.hass, SMART_ARM_HORIZON_SECONDS)
     await _wait_live(harness)
     await _end_session(harness)
 
     harness.server.script = [frame("app_active", True)]
-    await _fire_in(harness.hass, timedelta(hours=2).total_seconds())
+    await _fire_in(harness.hass, SMART_ARM_HORIZON_SECONDS)
     await _wait_live(harness)
     await _end_session(harness)
 
     assert harness.manager.state.smart_suspended_today is False
+
+
+# ---------------------------------------------------------------------------
+# Degenerate inputs: a payload that is missing, unusable, or repeated
+# ---------------------------------------------------------------------------
+
+
+async def test_a_manager_without_a_usable_device_view_reads_nothing_from_it(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """Missing and unusable payloads pace live mode instead of breaking it.
+
+    Every input the manager reads — the recharge state, the today-counter, the
+    advertised window length, the device's own zone — comes straight off a
+    payload that may not exist yet (the first poll has not landed) or may carry
+    a timezone this host cannot resolve. Each of those is one attribute access
+    away from taking the evaluator down with it, and a manager with nothing to
+    read must simply do nothing rather than fabricate a trigger or a window.
+    """
+    harness = await build_live()
+    manager = harness.manager
+
+    with patch.object(harness.fast, "data", None):
+        manager._evaluate_regen(None)
+        manager._evaluate_active_use(None)
+        assert manager._timezone() is UTC
+        assert manager._window_delay() == (
+            LIVE_WINDOW_FALLBACK_SECONDS + LIVE_WINDOW_GRACE_SECONDS
+        )
+    await _quiesce(harness.hass)
+    assert harness.server.all_connections == []
+
+    # A zone no host can resolve, and one the device left blank: both pace the
+    # daily counters and the night rule against UTC rather than raising.
+    await _push_device(harness, _detail(tz_id="Mars/Olympus_Mons"))
+    assert manager._timezone() is UTC
+    await _push_device(harness, _detail(tz_id=""))
+    assert manager._timezone() is UTC
+
+
+async def test_the_live_setters_ignore_a_repeat_of_the_state_they_hold(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """Setting a switch to the value it already holds changes nothing.
+
+    Home Assistant calls a switch's turn-on service whether or not the entity
+    is already on, so a setter that acted on the repeat would spend a second
+    grant (Live view), churn the entry options on every call (the two config
+    flags), and — worst — restart the auto-off timer that caps the manual hold,
+    which is what makes a forgotten Live view stop by itself. The cap firing
+    after the hold is already gone must likewise do nothing.
+    """
+    harness = await build_live()
+    manager = harness.manager
+
+    await manager.async_set_live_view(True)
+    await _wait_live(harness)
+    cap_timer = manager._unsub_view_cap
+    assert cap_timer is not None
+
+    await manager.async_set_live_view(True)
+    await manager.async_set_smart_windows(False)
+    await manager.async_set_continuous(False)
+    await _quiesce(harness.hass)
+
+    assert manager._unsub_view_cap is cap_timer
+    assert manager.state.sessions_today == 1
+    assert len(harness.server.all_connections) == 1
+
+    await manager.async_set_live_view(False)
+    await _wait_idle(harness)
+    manager._handle_view_cap(dt_util.utcnow())
+    await _quiesce(harness.hass)
+
+    assert manager.state.sessions_today == 1
+    assert harness.server.connections == []
+
+
+async def test_a_socket_that_will_not_close_is_abandoned_quietly(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """A close that raises drops the socket instead of failing the session.
+
+    Closing happens on the way out of every session and every renewal,
+    including the teardown path that has already published the clean end. A
+    close that raises — a socket the peer killed at the TCP level — must not
+    turn that clean end into a recorded failure, nor leave the manager holding
+    a session object it believes is still open.
+    """
+    harness = await build_live()
+    manager = harness.manager
+    manager._session = cast("AquaHomeLiveSession", _UnclosableSession())
+
+    await manager._async_close_socket()
+
+    assert manager.state.consecutive_failures == 0
+    assert manager.state.last_error is None
+    # Dropped, not retained: a session object left behind would make the grant
+    # gate believe a socket is still open.
+    assert manager._session is None

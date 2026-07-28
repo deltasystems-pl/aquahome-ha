@@ -692,6 +692,55 @@ async def test_live_ticket_throttles_then_recovers(
     }
 
 
+async def test_live_ticket_ignore_throttle_bypasses_the_floor_and_restamps(
+    session: aiohttp.ClientSession,
+) -> None:
+    """The retry bypass skips the floor and moves it forward behind itself.
+
+    The one intended caller is the live manager's retry after the server
+    rejected a websocket handshake: that ticket is seconds old, so the floor
+    refused every such retry and turned a routine race with the clock into a
+    failed session. The bypass must still stamp the issue instant — a bypass
+    that left the previous stamp standing would let the very next ordinary
+    caller spend a ticket early, which is the loop the floor exists to stop.
+    """
+    clock = FakeMonotonic()
+    with aioresponses() as mocked:
+        mocked.get(
+            _pattern(f"/devices/{DEVICE_ID}/live"),
+            payload={"websocket_uri": "/ws/?p=ticket-a"},
+            repeat=True,
+        )
+        client = _make_client(session, monotonic=clock)
+        await client.async_get_live_ticket(DEVICE_ID, ["current_water_flow_gpm"])
+
+        # Well inside the floor: the ordinary call is refused, the retry is not.
+        clock.advance(30)
+        with pytest.raises(RateLimitError):
+            await client.async_get_live_ticket(DEVICE_ID, ["current_water_flow_gpm"])
+        retried = await client.async_get_live_ticket(
+            DEVICE_ID, ["current_water_flow_gpm"], ignore_throttle=True
+        )
+        assert isinstance(retried, LiveTicket)
+
+        # 61 s after the first ticket is only 31 s after the retry that
+        # restamped the floor, so an ordinary call is still refused there.
+        clock.advance(31)
+        with pytest.raises(RateLimitError):
+            await client.async_get_live_ticket(DEVICE_ID, ["current_water_flow_gpm"])
+
+        clock.advance(30)
+        recovered = await client.async_get_live_ticket(
+            DEVICE_ID, ["current_water_flow_gpm"]
+        )
+        assert isinstance(recovered, LiveTicket)
+
+        live_calls = _calls_for(mocked, "GET", f"/devices/{DEVICE_ID}/live")
+
+    # Three requests reached the network; neither refused call did.
+    assert len(live_calls) == 3
+
+
 # ---------------------------------------------------------------------------
 # Alternate host (iQua2)
 # ---------------------------------------------------------------------------

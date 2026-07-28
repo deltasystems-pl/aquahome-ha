@@ -10,7 +10,7 @@ useful while staying comfortably inside that budget.
 
 One :class:`AquaHomeLiveManager` per device therefore owns the *single*
 websocket lifecycle and every path into it. The manual Live-view hold, the
-continuous mode, the analytics-driven smart windows, the event bursts (a
+continuous mode, the analytics-driven peak-hour windows, the event bursts (a
 starting regeneration, a confirmed usage anomaly) and poll-detected active water
 use all funnel through one ordered grant gate, so no combination of triggers can
 open two sockets, exceed the per-day grant budget, or ignore the minimum gap
@@ -24,7 +24,11 @@ five minutes in it publishes ``app_active=false``, which signals the reporting
 window closing, not a disconnect. A hold therefore *renews* — close, fresh
 ticket, reconnect — window after window, which re-arms fast reporting
 immediately at a cost of one ticket per five minutes, well inside the refill
-rate. Without a hold the session simply ends.
+rate. A smart window holds the same way for as long as its learned peak hour
+lasts — roughly twelve tickets an hour against a bucket that refills about
+thirty-six — because per-gallon, timestamped usage events are the one thing
+this API yields nowhere else (its history is hourly forever), and a household's
+water moves in those peaks. Without a hold the session simply ends.
 
 Live data upgrades the *existing* entities: streamed frames are merged into the
 polling coordinator's device view, so live mode adds no telemetry entities of
@@ -396,7 +400,18 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
 
         @callback
         def _handle_fast_update() -> None:
-            """Re-run the poll-driven triggers against a fresh device view."""
+            """Re-run the poll-driven triggers against a fresh device view.
+
+            A live push is not a fresh view: it carries the polled payload
+            verbatim apart from the handful of raw properties this manager
+            streamed into it, so reacting to one would advance the active-use
+            baseline from the stream — hiding the very rise the next genuine
+            poll must trigger on — and re-run the hold resume at streaming
+            cadence. The push flag is read synchronously here, exactly as the
+            scheduler and the capability debounce read it.
+            """
+            if self.fast.updating_from_push:
+                return
             self.hass.async_create_task(
                 self._async_evaluate_fast(),
                 name=f"{DOMAIN} {self.device_slug} live poll pass",
@@ -463,17 +478,24 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         self._request(LIVE_SOURCE_MANUAL)
 
     async def async_set_smart_windows(self, on: bool) -> None:
-        """Enable or disable the analytics-driven live windows.
+        """Enable or disable the analytics-driven peak-hour windows.
 
         Persists the flag and re-arms (or drops) the pending window
         immediately, so the switch takes effect without waiting for the next
-        analytics pass.
+        analytics pass. Switching it off also ends a peak-hour session that is
+        streaming right now — the flag is the tier's off switch, and a
+        full-block hold would otherwise keep the socket (and its per-window
+        ticket spend) until the peak hour ran out. A manual or continuous hold
+        that wants the same socket keeps it. Switching it on only arms the next
+        window: a session is never opened mid-hour.
         """
         config = self.state.config
         if config.smart_windows == on:
             return
         self._apply_config(replace(config, smart_windows=on))
         self._arm_smart_window(dt_util.utcnow())
+        if not on:
+            await self._async_release_smart_hold()
 
     async def async_set_continuous(self, on: bool) -> None:
         """Enable or disable the continuous live hold.
@@ -608,14 +630,24 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         )
 
     def _next_smart_hour(self, grid: GridSummary, now: datetime) -> datetime | None:
-        """Return the next device-local hour worth streaming, or ``None``.
+        """Return the next device-local peak hour worth streaming, or ``None``.
 
-        The first upcoming hour the learned grid marks active for that weekday,
-        skipping the night hours the smart tier never opens in. A grid that is
-        not the full hour-of-week shape, or one with no active hour at all, arms
-        nothing rather than guessing an hour.
+        The first upcoming hour the learned grid ranks among that weekday's
+        peak hours, skipping the night hours the smart tier never opens in.
+        Peaks rather than the binary activity grid because on a real household
+        that grid resolves to "awake from 07:00", which is no information at
+        all: the peaks are where the water actually moves. A grid that does not
+        carry all seven weekdays (the "not computed" default), or one with no
+        peak hour at all, arms nothing rather than guessing an hour.
+
+        The arithmetic is device-local wall-clock hour arithmetic, which is
+        fold-tolerant but not DST-exact: on the two transition days a window
+        armed across the change can land an hour off. Accepted — the cost is
+        one mistimed window twice a year, against the complexity of resolving
+        ambiguous local hours.
         """
-        if len(grid.active_hours) != _GRID_HOURS:
+        peak_hours = grid.peak_hours
+        if len(peak_hours) != _WEEKDAYS:
             return None
         local = now.astimezone(self._timezone()).replace(
             minute=0, second=0, microsecond=0
@@ -625,9 +657,27 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
             hour = candidate.hour
             if _NIGHT_START_HOUR <= hour < _NIGHT_END_HOUR:
                 continue
-            if grid.active_hours[candidate.weekday() * _HOURS_PER_DAY + hour]:
+            if hour in peak_hours[candidate.weekday()]:
                 return candidate
         return None
+
+    def _in_peak_hour(self, now: datetime) -> bool:
+        """Return whether ``now`` falls on a learned peak hour of the device.
+
+        The predicate behind the full-block hold: the hour is read in the
+        device's own zone, against the weekday that zone dates ``now`` to.
+        ``False`` whenever the answer is not known — the engine has published
+        no verdict yet, or the grid does not carry all seven weekdays — so an
+        unknown grid can never hold a socket open.
+        """
+        result: AnalyticsResult | None = self.engine.data
+        if result is None:
+            return False
+        peak_hours = result.grid.peak_hours
+        if len(peak_hours) != _WEEKDAYS:
+            return False
+        local = now.astimezone(self._timezone())
+        return local.hour in peak_hours[local.weekday()]
 
     @callback
     def _handle_smart_window(self, _now: datetime) -> None:
@@ -766,6 +816,20 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         if self._hold_wanted() is None and self._session_task is not None:
             await self._async_stop_session()
 
+    async def _async_release_smart_hold(self) -> None:
+        """End a peak-hour session whose tier has just been switched off.
+
+        The mirror of :meth:`_async_release_hold` for the source that holds its
+        socket without a switch of its own: a manual or continuous hold on the
+        same session outranks the flag and keeps it open.
+        """
+        if (
+            self.state.source == LIVE_SOURCE_SMART
+            and self._hold_wanted() is None
+            and self._session_task is not None
+        ):
+            await self._async_stop_session()
+
     # -- session lifecycle -------------------------------------------------
 
     async def _async_run_session(self, source: str) -> None:
@@ -826,6 +890,11 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         one by rejecting the handshake, so exactly one fresh ticket is fetched
         and retried before the attempt counts as a failure — a second rejection
         is a real problem, not a race with the clock.
+
+        The retry ticket bypasses the client's own request floor. It has to:
+        the rejected ticket was issued seconds ago, so the floor would refuse
+        every retry and the path would report a throttle error instead of
+        reconnecting.
         """
         session = await self._async_ticketed_session()
         try:
@@ -835,14 +904,20 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
                 "Live ticket for %s expired before the handshake; retrying once",
                 self.device_slug,
             )
-            session = await self._async_ticketed_session()
+            session = await self._async_ticketed_session(ignore_throttle=True)
             await session.connect()
         return session
 
-    async def _async_ticketed_session(self) -> AquaHomeLiveSession:
-        """Return an unconnected session bound to a freshly issued ticket."""
+    async def _async_ticketed_session(
+        self, *, ignore_throttle: bool = False
+    ) -> AquaHomeLiveSession:
+        """Return an unconnected session bound to a freshly issued ticket.
+
+        ``ignore_throttle`` is set by the handshake retry alone; see
+        :meth:`_async_open`.
+        """
         ticket = await self.client.async_get_live_ticket(
-            self.device_id, LIVE_SUBSCRIBED_PROPERTIES
+            self.device_id, LIVE_SUBSCRIBED_PROPERTIES, ignore_throttle=ignore_throttle
         )
         uri = ticket.websocket_uri
         if not uri:
@@ -884,13 +959,34 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
     def _wants_renewal(self, reason: str) -> bool:
         """Return whether the session should open another reporting window.
 
-        A hold renews for as long as it is held. Without one only the newer API
-        host renews: there ``app_active=false`` mid-session is the server asking
-        for a reconnect, while on the legacy host it is simply the window
-        closing and an on-demand session is done.
+        A hold renews for as long as it is held. A smart session renews for as
+        long as its peak hour lasts — the full-block hold, which is the whole
+        point of arming on peaks: the sub-hour, per-gallon capture this API can
+        yield nowhere else needs the socket held across the probable-usage
+        block, not for the five minutes one reporting window covers. All four
+        conditions are re-read per window, so the hold ends within one window
+        of the tier being switched off, suspended for the day, or the block
+        running out; consecutive peak hours therefore renew straight through as
+        one contiguous block (deliberate — asking the grant gate for the second
+        hour would lose it to the minimum-gap check).
+
+        Without either hold only the newer API host renews: there
+        ``app_active=false`` mid-session is the server asking for a reconnect,
+        while on the legacy host it is simply the window closing and an
+        on-demand session is done.
         """
         if self._hold_wanted() is not None:
             return True
+        state = self.state
+        if state.source == LIVE_SOURCE_SMART:
+            now = dt_util.utcnow()
+            if (
+                state.config.smart_windows
+                and not state.smart_suspended_today
+                and self._in_peak_hour(now)
+                and not self._is_night(now)
+            ):
+                return True
         return self._iqua2 and reason == _WINDOW_APP_INACTIVE
 
     def _renewal_blocked(self) -> str | None:

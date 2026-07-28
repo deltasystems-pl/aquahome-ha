@@ -355,16 +355,31 @@ class AquaHomeClient:
         properties: Iterable[str],
         *,
         type_: str = "property",
+        ignore_throttle: bool = False,
     ) -> LiveTicket:
         """Return a websocket ticket for live streaming, throttled client-side.
 
         Raises :class:`RateLimitError` when called within
         :data:`~.const.LIVE_TICKET_MIN_INTERVAL_SECONDS` of the previous ticket,
         since the endpoint is server-throttled and must not be polled.
+
+        ``ignore_throttle`` skips that floor, and has exactly one intended
+        caller: the live manager's single retry after the server rejected a
+        websocket handshake as expired. That ticket is by definition seconds
+        old, so the floor would refuse the retry every time and turn a routine
+        race with the clock into a failed session. One bypassed ticket is
+        budget-safe — the endpoint refills roughly 6 per 600 s, and the floor
+        exists to stop a caller *looping* on the endpoint, not to forbid a
+        single retry. The issue instant is stamped either way, so the bypass
+        moves the floor forward instead of leaving a hole behind it.
         """
         now = self._monotonic()
         last = self._last_live_ticket_at
-        if last is not None and now - last < LIVE_TICKET_MIN_INTERVAL_SECONDS:
+        if (
+            not ignore_throttle
+            and last is not None
+            and now - last < LIVE_TICKET_MIN_INTERVAL_SECONDS
+        ):
             msg = "Live-ticket requests are throttled; try again shortly"
             raise RateLimitError(msg, rate_limit=self.rate_limit)
         self._last_live_ticket_at = now
