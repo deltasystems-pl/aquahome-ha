@@ -298,6 +298,11 @@ def meter_routes(mock: aioresponses) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _stored(gallons: float) -> float:
+    """Return a captured gallon reading in the unit the series stores."""
+    return VolumeConverter.convert(gallons, UnitOfVolume.GALLONS, UnitOfVolume.LITERS)
+
+
 def meter_metadata() -> StatisticMetaData:
     """Return the external-series metadata the statistics coordinator uses."""
     return StatisticMetaData(
@@ -307,7 +312,7 @@ def meter_metadata() -> StatisticMetaData:
         source=DOMAIN,
         statistic_id=STATISTIC_ID,
         unit_class=VolumeConverter.UNIT_CLASS,
-        unit_of_measurement=UnitOfVolume.GALLONS,
+        unit_of_measurement=UnitOfVolume.LITERS,
     )
 
 
@@ -317,9 +322,14 @@ async def seed_meter_series(hass: HomeAssistant) -> None:
     ``sum`` carries the meter reading itself — the column the engine rebuilds
     its series from — and ``state`` the same value, which is what makes the
     coordinator's own overlap recompute reproduce these rows exactly.
+
+    The captured readings are gallons, while a series is stored in the unit the
+    installation reads (metric on a test instance), so the rows are seeded
+    converted: the engine asks the recorder for gallons on the way out and gets
+    the captured figures back.
     """
     rows = [
-        StatisticData(start=start, state=reading, sum=reading)
+        StatisticData(start=start, state=_stored(reading), sum=_stored(reading))
         for start, reading in real_readings()
     ]
     async_add_external_statistics(hass, meter_metadata(), rows)
@@ -638,7 +648,8 @@ async def test_the_seeded_rows_are_read_back_as_a_meter_series(
     stored = await stored_sums(hass)
     for start, reading in real_readings():
         assert start in stored
-        assert stored[start] == pytest.approx(reading, abs=GALLON_TOLERANCE)
+        # Stored rows are in the installation's unit; the captures are gallons.
+        assert stored[start] == pytest.approx(_stored(reading), abs=GALLON_TOLERANCE)
 
     result = result_of(engine_of(mock_config_entry))
     in_window = [

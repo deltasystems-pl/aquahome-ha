@@ -37,11 +37,13 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Final, Literal
 
 from homeassistant.components.recorder.statistics import statistics_during_period
+from homeassistant.const import UnitOfVolume
 from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.recorder import get_instance
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import VolumeConverter
 
 from custom_components.aquahome.api import scaled_value
 from custom_components.aquahome.const import (
@@ -256,14 +258,21 @@ class AquaHomeAnalyticsEngine(DataUpdateCoordinator[AnalyticsResult]):
         return tuple(readings)
 
     def _read_statistics(self, start: datetime) -> dict[str, list[StatisticsRow]]:
-        """Fetch the hourly statistics rows (runs on the recorder executor)."""
+        """Fetch the hourly statistics rows (runs on the recorder executor).
+
+        Rows are requested in gallons explicitly. The series itself is stored
+        in whichever volume unit the installation reads, but every threshold
+        and conversion downstream of here is denominated in the device's native
+        gallons, so the recorder converts on the way out and the analysis is
+        immune to the stored unit.
+        """
         return statistics_during_period(
             self.hass,
             start,
             None,
             {self._statistics.statistic_id},
             "hour",
-            None,
+            {VolumeConverter.UNIT_CLASS: UnitOfVolume.GALLONS},
             _SUM_TYPES,
         )
 

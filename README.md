@@ -437,6 +437,11 @@ back as the cloud still retains readings — hour by hour where hourly readings
 survive, day by day beyond that. Runs are idempotent and repeat every 12 hours,
 picking up readings the device uploaded late without rewriting settled history.
 
+The series is stored in the unit your installation reads — liters on a metric
+system, gallons on a US-customary one — because an external statistic has no
+entity behind it to convert it for display. Changing the Home Assistant unit
+system rebuilds the series in the new unit on the next import.
+
 That gives you two water sources:
 
 - **`sensor.<device>_total_water`** — the live lifetime counter, growing from

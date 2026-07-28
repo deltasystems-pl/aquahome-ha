@@ -40,6 +40,7 @@ from unittest.mock import patch
 import pytest
 from homeassistant.components.recorder.models import StatisticMeanType
 from homeassistant.components.recorder.statistics import (
+    async_update_statistics_metadata,
     list_statistic_ids,
     statistics_during_period,
 )
@@ -48,6 +49,7 @@ from homeassistant.const import CONF_ACCESS_TOKEN, Platform, UnitOfVolume
 from homeassistant.helpers.recorder import get_instance
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import VolumeConverter
+from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
@@ -104,7 +106,10 @@ HOURLY_WINDOW_END = datetime(2026, 7, 27, 10, tzinfo=UTC)
 
 # Ground truth for the full fixtures (computed independently from the captures:
 # daily readings from 2025-09-14, hourly readings across July 2026, liters
-# converted at 3.785411784 L/gal, first reading a zero-delta baseline).
+# converted at 3.785411784 L/gal, first reading a zero-delta baseline). The
+# figures below are the native gallons the cloud reports; a series is stored in
+# the unit the installation reads, so the assertions convert through
+# :func:`stored` (the test instance is metric, hence liters).
 EXPECTED_ROW_COUNT = 405
 FIRST_START = datetime(2025, 9, 13, 22, tzinfo=UTC)
 FIRST_STATE = 42122.7621
@@ -112,6 +117,12 @@ FIRST_SUM = 0.0
 LAST_START = datetime(2026, 7, 27, 7, tzinfo=UTC)
 LAST_STATE = 47690.7164
 LAST_SUM = 5567.9543
+
+
+def stored(gallons: float, unit: str = UnitOfVolume.LITERS) -> float:
+    """Return a gallon ground-truth figure in the unit the series stores."""
+    return VolumeConverter.convert(gallons, UnitOfVolume.GALLONS, unit)
+
 
 #: Bucket starts of the two July-27 readings a late upload would be missing.
 LATE_STARTS = (
@@ -126,8 +137,8 @@ FALLBACK_START = datetime(2026, 7, 26, 22, tzinfo=UTC)
 FALLBACK_DAILY_STATE = 47689.9239
 FALLBACK_HOURLY_STATE = 47685.9613
 
-#: Absolute tolerance for gallon comparisons — well below a millilitre.
-GALLON_TOLERANCE = 1e-3
+#: Absolute tolerance for stored-volume comparisons — below a millilitre.
+LITER_TOLERANCE = 1e-3
 
 
 @pytest.fixture
@@ -374,11 +385,11 @@ async def test_first_run_imports_the_full_meter_history(
     rows = await stored_rows(hass)
     assert len(rows) == EXPECTED_ROW_COUNT
     assert starts(rows)[0] == FIRST_START
-    assert rows[0]["state"] == pytest.approx(FIRST_STATE, abs=GALLON_TOLERANCE)
-    assert rows[0]["sum"] == pytest.approx(FIRST_SUM, abs=GALLON_TOLERANCE)
+    assert rows[0]["state"] == pytest.approx(stored(FIRST_STATE), abs=LITER_TOLERANCE)
+    assert rows[0]["sum"] == pytest.approx(stored(FIRST_SUM), abs=LITER_TOLERANCE)
     assert starts(rows)[-1] == LAST_START
-    assert rows[-1]["state"] == pytest.approx(LAST_STATE, abs=GALLON_TOLERANCE)
-    assert rows[-1]["sum"] == pytest.approx(LAST_SUM, abs=GALLON_TOLERANCE)
+    assert rows[-1]["state"] == pytest.approx(stored(LAST_STATE), abs=LITER_TOLERANCE)
+    assert rows[-1]["sum"] == pytest.approx(stored(LAST_SUM), abs=LITER_TOLERANCE)
 
     # A lifetime counter only ever climbs, and so does its accumulated total.
     states = [number(row["state"]) for row in rows]
@@ -392,13 +403,13 @@ async def test_first_run_imports_the_full_meter_history(
     assert metadata[0]["has_sum"] is True
     assert metadata[0]["mean_type"] is StatisticMeanType.NONE
     assert metadata[0]["unit_class"] == VolumeConverter.UNIT_CLASS
-    assert metadata[0]["statistics_unit_of_measurement"] == UnitOfVolume.GALLONS
+    assert metadata[0]["statistics_unit_of_measurement"] == UnitOfVolume.LITERS
     assert metadata[0]["statistic_id"] == STATISTIC_ID
     assert metadata[0]["name"] == "Dom water usage history"
-    # Nothing rescales the series behind the user's back: it is stored and
-    # displayed in its native gallons until a display preference says otherwise,
-    # and the volume unit class is what makes that preference possible.
-    assert metadata[0]["display_unit_of_measurement"] == UnitOfVolume.GALLONS
+    # An external statistic has no entity to convert it for display, so the
+    # series is stored in the unit this installation reads — metric here — and
+    # the volume unit class lets the user convert it later if they disagree.
+    assert metadata[0]["display_unit_of_measurement"] == UnitOfVolume.LITERS
 
     # Two probe sweeps, the daily range split at both DST transitions, then the
     # hourly walk: the July window (two chunks) plus one older window that comes
@@ -502,7 +513,7 @@ async def test_late_reading_inside_the_overlap_is_picked_up(
     assert all(start not in truncated_starts for start in LATE_STARTS)
     fallback = truncated[truncated_starts.index(FALLBACK_START)]
     assert fallback["state"] == pytest.approx(
-        FALLBACK_DAILY_STATE, abs=GALLON_TOLERANCE
+        stored(FALLBACK_DAILY_STATE), abs=LITER_TOLERANCE
     )
 
     # The readings land, and the next run picks them up.
@@ -519,11 +530,11 @@ async def test_late_reading_inside_the_overlap_is_picked_up(
     # by the hourly reading for the same bucket.
     corrected = rows[starts(rows).index(FALLBACK_START)]
     assert corrected["state"] == pytest.approx(
-        FALLBACK_HOURLY_STATE, abs=GALLON_TOLERANCE
+        stored(FALLBACK_HOURLY_STATE), abs=LITER_TOLERANCE
     )
     assert starts(rows)[-1] == LAST_START
-    assert rows[-1]["state"] == pytest.approx(LAST_STATE, abs=GALLON_TOLERANCE)
-    assert rows[-1]["sum"] == pytest.approx(LAST_SUM, abs=GALLON_TOLERANCE)
+    assert rows[-1]["state"] == pytest.approx(stored(LAST_STATE), abs=LITER_TOLERANCE)
+    assert rows[-1]["sum"] == pytest.approx(stored(LAST_SUM), abs=LITER_TOLERANCE)
 
     # History behind the overlap window is never rewritten: every row the first
     # run wrote before the resume anchor survives with an identical sum.
@@ -748,3 +759,76 @@ async def test_timezone_comes_from_the_props_detail_not_the_device_list(
     assert len(rows) == EXPECTED_ROW_COUNT
     # Warsaw local midnight, not a US/Pacific one — the detail payload's tz won.
     assert starts(rows)[0] == FIRST_START
+
+
+# ---------------------------------------------------------------------------
+# The stored unit: an external statistic has no entity to convert it
+# ---------------------------------------------------------------------------
+
+
+async def test_a_us_customary_installation_stores_gallons(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A new series takes its unit from the installation's unit system.
+
+    Nothing converts an external statistic on its way to a dashboard, so the
+    series is stored in the unit the household reads — the device's native
+    gallons here, unlike the metric default the other tests exercise.
+    """
+    hass.config.units = US_CUSTOMARY_SYSTEM
+    add_device_routes(mock_api)
+    meter_routes(mock_api)
+
+    await boot(hass, mock_config_entry, freezer)
+
+    metadata = await stored_metadata(hass)
+    assert metadata[0]["statistics_unit_of_measurement"] == UnitOfVolume.GALLONS
+    rows = await stored_rows(hass)
+    assert rows[0]["state"] == pytest.approx(FIRST_STATE, abs=LITER_TOLERANCE)
+    assert rows[-1]["sum"] == pytest.approx(LAST_SUM, abs=LITER_TOLERANCE)
+
+
+async def test_a_series_stored_in_another_unit_is_rebuilt(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A unit mismatch rebuilds the series instead of mixing units.
+
+    Home Assistant converts stored statistics only for series the recorder
+    itself owns, so an external series can never be converted in place: a
+    metadata-only relabel would leave rows in one unit accumulating a running
+    total in another. Simulated here by relabelling a metric series as gallons
+    and running again — the whole series must come back in the metric unit
+    this installation reads, with its totals internally consistent.
+    """
+    add_device_routes(mock_api)
+    meter_routes(mock_api)
+    await boot(hass, mock_config_entry, freezer)
+    coordinator = coordinator_of(mock_config_entry)
+
+    async_update_statistics_metadata(
+        hass,
+        STATISTIC_ID,
+        new_unit_of_measurement=UnitOfVolume.GALLONS,
+        new_unit_class=VolumeConverter.UNIT_CLASS,
+    )
+    await async_wait_recording_done(hass)
+
+    await coordinator.async_refresh()
+    await async_wait_recording_done(hass)
+
+    assert coordinator.last_update_success is True
+    metadata = await stored_metadata(hass)
+    assert metadata[0]["statistics_unit_of_measurement"] == UnitOfVolume.LITERS
+    rows = await stored_rows(hass)
+    assert len(rows) == EXPECTED_ROW_COUNT
+    assert rows[0]["state"] == pytest.approx(stored(FIRST_STATE), abs=LITER_TOLERANCE)
+    assert rows[-1]["state"] == pytest.approx(stored(LAST_STATE), abs=LITER_TOLERANCE)
+    assert rows[-1]["sum"] == pytest.approx(stored(LAST_SUM), abs=LITER_TOLERANCE)

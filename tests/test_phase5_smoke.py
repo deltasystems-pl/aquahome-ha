@@ -102,9 +102,12 @@ FROZEN_NOW = "2026-07-27T10:30:00+00:00"
 # the yearly fixture reports for 2025 + 2026 combined.
 # ---------------------------------------------------------------------------
 EXPECTED_ROWS: Final = 405
-EXPECTED_FIRST_STATE: Final = 42122.762
-EXPECTED_LAST_STATE: Final = 47690.716
-EXPECTED_TOTAL_GALLONS: Final = 5567.954
+#: Native gallons from the cloud; the series is stored in the unit the
+#: installation reads, which is metric on a default test instance.
+EXPECTED_FIRST_STATE: Final = 42122.7621
+EXPECTED_LAST_STATE: Final = 47690.7164
+EXPECTED_TOTAL_GALLONS: Final = 5567.9543
+GAL_TO_L: Final = 3.785411784
 
 #: ``PARALLEL_UPDATES`` every platform module must declare. Zero on the
 #: read-only platforms (they only render coordinator data, so there is nothing
@@ -273,10 +276,10 @@ async def test_full_boot_backfills_statistics_and_unloads_cleanly(  # noqa: PLR0
     assert len(rows) == EXPECTED_ROWS
     # The baseline row attributes no water: what it counts was consumed before
     # the series existed.
-    assert rows[0]["state"] == pytest.approx(EXPECTED_FIRST_STATE, abs=1e-3)
+    assert rows[0]["state"] == pytest.approx(EXPECTED_FIRST_STATE * GAL_TO_L, abs=1e-3)
     assert rows[0]["sum"] == pytest.approx(0.0, abs=1e-9)
-    assert rows[-1]["state"] == pytest.approx(EXPECTED_LAST_STATE, abs=1e-3)
-    assert rows[-1]["sum"] == pytest.approx(EXPECTED_TOTAL_GALLONS, abs=1e-3)
+    assert rows[-1]["state"] == pytest.approx(EXPECTED_LAST_STATE * GAL_TO_L, abs=1e-3)
+    assert rows[-1]["sum"] == pytest.approx(EXPECTED_TOTAL_GALLONS * GAL_TO_L, abs=1e-3)
     # Meter readings are a lifetime counter: the imported states never go back.
     states = [row["state"] for row in rows]
     assert states == sorted(states)

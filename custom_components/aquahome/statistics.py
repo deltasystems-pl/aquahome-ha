@@ -47,6 +47,7 @@ import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
+from functools import partial
 from typing import TYPE_CHECKING, Final
 
 from homeassistant.components.recorder.models import (
@@ -57,6 +58,7 @@ from homeassistant.components.recorder.models import (
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
     get_last_statistics,
+    get_metadata,
     statistics_during_period,
 )
 from homeassistant.components.recorder.tasks import SynchronizeTask
@@ -71,6 +73,7 @@ from homeassistant.helpers.recorder import get_instance
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import VolumeConverter
+from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 
 from .api import (
     ApiError,
@@ -394,7 +397,26 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
         now_local = now.astimezone(tz)
         run = _RunState()
 
-        anchor = await self._async_load_anchor(now)
+        unit = self._target_unit
+        stored_unit = await self._async_stored_unit()
+        if stored_unit is not None and stored_unit != unit:
+            # The installation reads a different unit than the series was
+            # stored in (a changed unit system, or an import predating this
+            # behaviour). Home Assistant cannot convert an external statistic
+            # in place — it only converts series the recorder itself owns — so
+            # a mismatch is healed by rebuilding the whole series in the new
+            # unit. Anything less would leave rows in one unit accumulating a
+            # running total in another.
+            _LOGGER.info(
+                "Rebuilding %s in %s (was stored in %s)",
+                self.statistic_id,
+                unit,
+                stored_unit,
+            )
+            get_instance(self.hass).async_clear_statistics([self.statistic_id])
+            anchor = None
+        else:
+            anchor = await self._async_load_anchor(now)
         if anchor is None:
             start_local = await self._async_probe_history_start(run, tz, now_local)
             if start_local is None:
@@ -416,6 +438,11 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
             _LOGGER.debug("No datapoint window to fetch for %s", self.statistic_id)
             return
 
+        # Volume conversion is a pure ratio, so it folds into the parse factor
+        # and the readings are built directly in the stored unit — which keeps
+        # them consistent with the anchor's running total, read from the same
+        # series.
+        factor *= VolumeConverter.convert(1.0, UnitOfVolume.GALLONS, unit)
         cutoff = anchor.start if anchor is not None else None
         readings = [
             (start, value * factor)
@@ -430,7 +457,7 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
         if not rows:
             _LOGGER.debug("No new water statistics rows for %s", self.statistic_id)
             return
-        async_add_external_statistics(self.hass, self._metadata(), rows)
+        async_add_external_statistics(self.hass, self._metadata(unit), rows)
         # The call above only QUEUES the import on the recorder's task thread,
         # while readers (the analytics engine, this coordinator's own anchor
         # lookup) go through the recorder's executor pool, which is not
@@ -453,14 +480,38 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
             rows[-1]["start"],
         )
 
-    def _metadata(self) -> StatisticMetaData:
+    @property
+    def _target_unit(self) -> str:
+        """Return the volume unit this series should be stored in.
+
+        An external statistic has no entity behind it, so nothing applies a
+        display conversion on the way to a dashboard: whatever unit the rows
+        are stored in is the unit the Energy dashboard shows. The series
+        therefore stores what the household actually reads, taken from this
+        installation's unit system. The cloud's own account-level preference is
+        deliberately ignored — it is a display setting on the vendor's side and
+        flips without warning.
+        """
+        if self.hass.config.units is US_CUSTOMARY_SYSTEM:
+            return UnitOfVolume.GALLONS
+        return UnitOfVolume.LITERS
+
+    async def _async_stored_unit(self) -> str | None:
+        """Return the unit the series is stored in today, or ``None`` if new."""
+        metadata = await get_instance(self.hass).async_add_executor_job(
+            partial(get_metadata, self.hass, statistic_ids={self.statistic_id})
+        )
+        entry = metadata.get(self.statistic_id)
+        return entry[1].get("unit_of_measurement") if entry is not None else None
+
+    def _metadata(self, unit: str) -> StatisticMetaData:
         """Describe the series to the recorder.
 
         The name is English on purpose: an external statistic has no entity and
-        therefore no translation machinery behind it. Gallons is the fixed
-        native unit — the account's own preference is a display setting and must
-        never reach stored statistics — and the volume unit class lets Home
-        Assistant convert the series for display.
+        therefore no translation machinery behind it. The unit is the one
+        :meth:`_async_resolve_unit` settled on for this run, and the volume
+        unit class is what lets Home Assistant convert the stored rows if the
+        user later picks a different one.
         """
         return StatisticMetaData(
             mean_type=StatisticMeanType.NONE,
@@ -469,7 +520,7 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
             source=DOMAIN,
             statistic_id=self.statistic_id,
             unit_class=VolumeConverter.UNIT_CLASS,
-            unit_of_measurement=UnitOfVolume.GALLONS,
+            unit_of_measurement=unit,
         )
 
     async def async_resolve_timezone(self) -> tzinfo:
