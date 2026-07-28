@@ -921,6 +921,77 @@
     'state': 'Device went offline',
   })
 # ---
+# name: test_all_sensor_entities[sensor.dom_live_mode-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'options': list([
+        'idle',
+        'live',
+        'backoff',
+      ]),
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': <EntityCategory.DIAGNOSTIC: 'diagnostic'>,
+    'entity_id': 'sensor.dom_live_mode',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Live mode',
+    'options': dict({
+    }),
+    'original_device_class': <SensorDeviceClass.ENUM: 'enum'>,
+    'original_icon': 'mdi:access-point',
+    'original_name': 'Live mode',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'live_mode_status',
+    'unique_id': '7384243_20203_1120_live_mode_status',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_live_mode-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'backoff_until': None,
+      'consecutive_failures': 0,
+      'device_class': 'enum',
+      'friendly_name': 'Dom Live mode',
+      'icon': 'mdi:access-point',
+      'last_error': None,
+      'last_session_end': None,
+      'options': list([
+        'idle',
+        'live',
+        'backoff',
+      ]),
+      'sessions_per_day': 48,
+      'sessions_today': 0,
+      'smart_suspended_today': False,
+      'source': None,
+      'windows_in_session': 0,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.dom_live_mode',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'idle',
+  })
+# ---
 # name: test_all_sensor_entities[sensor.dom_model-entry]
   EntityRegistryEntrySnapshot({
     'aliases': set({
@@ -1303,7 +1374,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '-37',
+    'state': '-37.0',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_salt_days_remaining_estimate-entry]
@@ -1992,6 +2063,66 @@
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '174.128942064',
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_water_flow-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.dom_water_flow',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Water flow',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 1,
+      }),
+      'sensor.private': dict({
+        'suggested_unit_of_measurement': <UnitOfVolumeFlowRate.LITERS_PER_MINUTE: 'L/min'>,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.VOLUME_FLOW_RATE: 'volume_flow_rate'>,
+    'original_icon': None,
+    'original_name': 'Water flow',
+    'platform': 'aquahome',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'current_water_flow',
+    'unique_id': '7384243_20203_1120_current_water_flow',
+    'unit_of_measurement': <UnitOfVolumeFlowRate.LITERS_PER_MINUTE: 'L/min'>,
+  })
+# ---
+# name: test_all_sensor_entities[sensor.dom_water_flow-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'volume_flow_rate',
+      'friendly_name': 'Dom Water flow',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': <UnitOfVolumeFlowRate.LITERS_PER_MINUTE: 'L/min'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.dom_water_flow',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '0.0',
   })
 # ---
 # name: test_all_sensor_entities[sensor.dom_water_used_today-entry]

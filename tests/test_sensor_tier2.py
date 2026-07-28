@@ -201,12 +201,17 @@ async def test_regeneration_time_remaining_while_active(
     mock_config_entry: MockConfigEntry,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """While regenerating the actual remaining seconds are reported verbatim."""
+    """While regenerating the actual remaining seconds are reported verbatim.
+
+    The device's own ``regen_time_rem_secs`` countdown is the primary source, so
+    the scenario sets it alongside the enriched tile copy.
+    """
     freezer.move_to(FROZEN_INSTANT)
     detail = _load_detail()
     treatment = _treatment(detail)
     treatment["recharge_ui"]["state"] = "regenerating"
     treatment["recharge_ui"]["time_remaining_seconds"] = 300
+    detail["properties"]["regen_time_rem_secs"]["value"] = 300
     add_device_routes(mock_api, device_detail=detail)
     with _ONLY_SENSOR:
         await setup_integration(hass, mock_config_entry)

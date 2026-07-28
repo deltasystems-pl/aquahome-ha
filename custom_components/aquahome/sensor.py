@@ -32,6 +32,16 @@ publishes the freshest classified night's minimum hourly flow in litres per hour
 — native metric because the research thresholds behind the classification are
 metric, with the display unit left to the user. Both render ``None`` until the
 engine's first pass completes.
+
+The live-mode status sensor is a fourth family, on that device's
+:class:`~.live.AquaHomeLiveManager`. It reports whether a websocket session is
+currently open and carries the session bookkeeping — budget spent, renewals,
+failure trail — as attributes, so the cost of live mode is inspectable without
+turning on debug logging. Like the manager's switches it is always available:
+its state is local, and a reconnect backoff is precisely what the user wants to
+see while the cloud is unreachable. Streamed values themselves never create
+entities; they are merged into the polled device view, so the sensors above
+simply go live while a session runs.
 """
 
 from __future__ import annotations
@@ -61,6 +71,7 @@ from homeassistant.const import (
     UnitOfVolumeFlowRate,
 )
 from homeassistant.core import callback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import salt
@@ -78,6 +89,9 @@ from .api import (
 )
 from .const import (
     CAPABILITY_DEBOUNCE_POLLS,
+    LIVE_STATUS_BACKOFF,
+    LIVE_STATUS_IDLE,
+    LIVE_STATUS_LIVE,
     MAX_STATE_LENGTH,
     REGENERATION_STATUS_OPTIONS,
     TOTAL_WATER_CLAMP_TOLERANCE,
@@ -89,6 +103,7 @@ from .entity import (
     AquaHomeAnalyticsEntity,
     AquaHomeEntity,
     AquaHomeLeakDetectorEntity,
+    build_device_info,
 )
 
 if TYPE_CHECKING:
@@ -109,6 +124,7 @@ if TYPE_CHECKING:
         AquaHomeSettingsCoordinator,
         DeviceActivity,
     )
+    from .live import AquaHomeLiveManager
 
 #: Enriched ``recharge_ui.state`` / ``regeneration_status`` value meaning a live
 #: recharge cycle is in progress.
@@ -301,7 +317,17 @@ def _total_recharges(device: Device) -> StateType:
 
 
 def _rf_signal_strength(device: Device) -> StateType:
-    """Return the RF link strength to the valve head in dBm."""
+    """Return the RF link strength to the valve head in dBm, raw property first.
+
+    The raw ``rf_signal_strength_dbm`` property is the value the device itself
+    last reported — and the one a live session streams, so it moves within
+    seconds — while the curated ``enriched_data`` copy is recomputed server-side
+    on its own schedule and can lag it by hours. The enriched field remains as a
+    fallback for payloads served without the property map.
+    """
+    raw = _prop_number(device, "rf_signal_strength_dbm")
+    if raw is not None:
+        return raw
     enriched = _enriched(device)
     return enriched.rf_signal_strength_dbm if enriched is not None else None
 
@@ -335,6 +361,23 @@ def _out_of_salt_estimate(device: Device) -> datetime | None:
 def _average_daily_water_use(device: Device) -> StateType:
     """Return the rolling average daily water use in native gallons."""
     return _prop_number(device, "avg_daily_use_gals")
+
+
+def _current_water_flow(device: Device) -> StateType:
+    """Return the instantaneous flow through the valve in gallons per minute.
+
+    The raw ``current_water_flow_gpm`` property is reported in tenths of a
+    gallon per minute and descaled by :func:`~.api.models.scaled_value`.
+
+    The device publishes this property **on change only** — a single frame when
+    flow starts, another when it stops — so it is genuinely instantaneous only
+    while a live session is open. Between sessions a poll returns whatever the
+    device last published, which after a burst of use is a stale non-zero rate
+    until the closing zero arrives. That is a device characteristic, not a
+    fault: this sensor is a live-view instrument, and the volume counters remain
+    the trustworthy source for how much water actually flowed.
+    """
+    return _prop_number(device, "current_water_flow_gpm")
 
 
 def _model(device: Device) -> StateType:
@@ -380,18 +423,26 @@ def _regeneration_status(device: Device) -> StateType:
 def _regeneration_time_remaining(device: Device) -> StateType:
     """Return seconds remaining in the running regeneration, else zero.
 
-    The countdown is trusted only while a regeneration is actually active; any
-    other time it is forced to zero rather than surfacing a stale value the
-    cloud left behind (a fork lesson — the tile keeps its last countdown after
-    the cycle ends). ``None`` is reported only when the ``recharge_ui`` block is
-    absent entirely.
+    The device's own ``regen_time_rem_secs`` countdown is read first — it ticks
+    with the valve head and is streamed live during a session — with the
+    enriched ``recharge_ui`` copy as the fallback for payloads served without
+    the property map.
+
+    Whichever source supplies it, the countdown is trusted only while a
+    regeneration is actually active; any other time it is forced to zero rather
+    than surfacing a stale value the cloud left behind (the tile keeps its last
+    countdown after the cycle ends). ``None`` is reported only when neither
+    source is present.
     """
-    recharge_ui = _recharge_ui(device)
-    if recharge_ui is None:
-        return None
+    remaining = _prop_number(device, "regen_time_rem_secs")
+    if remaining is None:
+        recharge_ui = _recharge_ui(device)
+        if recharge_ui is None:
+            return None
+        remaining = recharge_ui.time_remaining_seconds
     if not _regen_active(device):
         return 0
-    return recharge_ui.time_remaining_seconds or 0
+    return remaining or 0
 
 
 def _next_regeneration(device: Device) -> datetime | None:
@@ -1014,6 +1065,20 @@ SENSOR_DESCRIPTIONS: tuple[AquaHomeSensorDescription, ...] = (
         exists_fn=_exists_average_daily_water_use,
     ),
     AquaHomeSensorDescription(
+        key="current_water_flow",
+        translation_key="current_water_flow",
+        device_class=SensorDeviceClass.VOLUME_FLOW_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfVolumeFlowRate.GALLONS_PER_MINUTE,
+        # The device meters in gallons per minute; metric users get litres per
+        # minute without the sensor ever misrepresenting its native unit.
+        suggested_unit_of_measurement=UnitOfVolumeFlowRate.LITERS_PER_MINUTE,
+        # A tenth of a gallon per minute is the property's own resolution.
+        suggested_display_precision=1,
+        value_fn=_current_water_flow,
+        exists_fn=_exists_property("current_water_flow_gpm"),
+    ),
+    AquaHomeSensorDescription(
         key="model",
         translation_key="model",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1387,6 +1452,43 @@ ANALYTICS_SENSOR_DESCRIPTIONS: tuple[AquaHomeAnalyticsSensorDescription, ...] = 
 )
 
 
+# ---------------------------------------------------------------------------
+# Live-manager-backed status sensor
+#
+# One per device, on that device's live manager. It publishes the manager's own
+# state — no cloud payload is involved — and deliberately does not churn: the
+# status changes when a session is granted, ends, or fails, never on the window
+# renewals inside a held session.
+# ---------------------------------------------------------------------------
+
+
+#: The three states a live manager can be in, and the sensor's ENUM options.
+#: Anything else would violate the ENUM contract, so the value function maps an
+#: unrecognised status to ``None`` (rendered as unknown) rather than publishing it.
+LIVE_STATUS_OPTIONS: Final[tuple[str, ...]] = (
+    LIVE_STATUS_IDLE,
+    LIVE_STATUS_LIVE,
+    LIVE_STATUS_BACKOFF,
+)
+
+
+#: The live-mode status sensor. Diagnostic: it describes how the integration is
+#: gathering data, not the water treatment itself.
+LIVE_STATUS_DESCRIPTION: Final = SensorEntityDescription(
+    key="live_mode_status",
+    translation_key="live_mode_status",
+    device_class=SensorDeviceClass.ENUM,
+    options=list(LIVE_STATUS_OPTIONS),
+    entity_category=EntityCategory.DIAGNOSTIC,
+    icon="mdi:access-point",
+)
+
+
+def _isoformat(value: datetime | None) -> str | None:
+    """Return a timestamp attribute in ISO-8601, or ``None`` when it is unset."""
+    return value.isoformat() if value is not None else None
+
+
 @callback
 def _async_add_dynamic_sensors(
     entry: AquaHomeConfigEntry,
@@ -1481,6 +1583,10 @@ async def async_setup_entry(
     and ungated: the engine runs for every device regardless of what the cloud
     advertises, so each engine gets both sensors, paired with its fast
     coordinator's device view for the shared ``DeviceInfo``.
+
+    The live-mode status sensor is static and ungated for the same reason: a
+    live manager exists for every device, so each one gets exactly one status
+    sensor, again paired with the fast coordinator's device view.
     """
     runtime = entry.runtime_data
     for coordinator in runtime.coordinators.values():
@@ -1512,6 +1618,15 @@ async def async_setup_entry(
             for description in ANALYTICS_SENSOR_DESCRIPTIONS
         )
     async_add_entities(analytics_entities)
+    live_entities: list[SensorEntity] = []
+    for live_device_id, manager in runtime.live_managers.items():
+        live_fast = runtime.coordinators.get(live_device_id)
+        if live_fast is None:
+            continue
+        live_entities.append(
+            AquaHomeLiveStatusSensor(manager, LIVE_STATUS_DESCRIPTION, live_fast.data)
+        )
+    async_add_entities(live_entities)
 
 
 class AquaHomeSensor(AquaHomeEntity, SensorEntity):
@@ -1682,6 +1797,73 @@ class AquaHomeAnalyticsSensor(AquaHomeAnalyticsEntity, SensorEntity):
         if result is None:
             return None
         return attributes_fn(result)
+
+
+class AquaHomeLiveStatusSensor(CoordinatorEntity["AquaHomeLiveManager"], SensorEntity):
+    """The live-mode status of one device's websocket manager.
+
+    Reports whether a live session is currently open (``live``), whether the
+    manager is waiting out a reconnect backoff (``backoff``), or neither
+    (``idle``), with the session bookkeeping as attributes: which trigger opened
+    the current session, how much of the daily grant budget it has spent, how
+    many reporting windows the current hold has renewed, and the failure trail.
+    Together they make the cost of live mode inspectable without debug logging.
+    """
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: AquaHomeLiveManager,
+        description: SensorEntityDescription,
+        device: Device,
+    ) -> None:
+        """Bind the sensor to one device's live manager and description.
+
+        ``device`` is the paired fast coordinator's device view, used only to
+        build the shared :class:`~homeassistant.helpers.device_registry.DeviceInfo`
+        so the sensor attaches to the same device as the telemetry entities.
+        """
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{coordinator.device_slug}_{description.key}"
+        self._attr_device_info = build_device_info(device)
+
+    @property
+    def available(self) -> bool:
+        """Return ``True`` always: the manager's state is local, never fetched.
+
+        A backoff or an idle status is exactly what the user needs to see while
+        the cloud is unreachable or the softener is offline, so this sensor
+        deliberately has no availability gate.
+        """
+        return True
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the manager's status, constrained to the listed enum options.
+
+        A status outside the options would break Home Assistant's ENUM contract,
+        so anything unrecognised renders as unknown instead.
+        """
+        status = self.coordinator.state.status
+        return status if status in LIVE_STATUS_OPTIONS else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the current session's bookkeeping and the failure trail."""
+        state = self.coordinator.state
+        return {
+            "source": state.source,
+            "sessions_today": state.sessions_today,
+            "sessions_per_day": state.config.sessions_per_day,
+            "windows_in_session": state.windows_in_session,
+            "last_session_end": _isoformat(state.last_session_end),
+            "consecutive_failures": state.consecutive_failures,
+            "backoff_until": _isoformat(state.backoff_until),
+            "last_error": state.last_error,
+            "smart_suspended_today": state.smart_suspended_today,
+        }
 
 
 class AquaHomeTotalWaterSensor(AquaHomeEntity, RestoreSensor):
