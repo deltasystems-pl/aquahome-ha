@@ -1,6 +1,6 @@
-"""Switch platform for AquaHome — settings, leak scan, and automation opt-ins.
+"""Switch platform for AquaHome — settings, leak scan, automation, live mode.
 
-Three unrelated switch families live here, each on its own coordinator:
+Four unrelated switch families live here, each on its own coordinator:
 
 1. **Setting switches** — a device setting whose ``current_value`` is a JSON
    boolean (and which is neither a select nor a number). Built at runtime on the
@@ -27,6 +27,13 @@ Three unrelated switch families live here, each on its own coordinator:
    flags are the user's own preference, persisted in the config entry, not cloud
    state — and every write goes through the scheduler's public API so exactly
    one code path persists a flag and performs its device-side side effect.
+
+4. **The live-mode switches** — the manual live hold plus the two live-mode
+   opt-ins (analytics-driven windows, continuous flow) on that device's
+   :class:`~.live.AquaHomeLiveManager`. Like the automation switches they exist
+   for every device, start OFF, are always available, and write only through the
+   manager's public API — the single owner of the websocket lifecycle and of the
+   configuration persisted in the config entry.
 """
 
 from __future__ import annotations
@@ -68,6 +75,8 @@ if TYPE_CHECKING:
         AquaHomeCoordinator,
         AquaHomeSettingsCoordinator,
     )
+    from .live import AquaHomeLiveManager
+    from .live_state import LiveState
     from .scheduler import AquaHomeRegenScheduler
 
 # Writes serialize against the throttled cloud.
@@ -286,20 +295,142 @@ AUTOMATION_SWITCHES: tuple[AquaHomeAutomationSwitchDescription, ...] = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Live-mode switches
+#
+# One description per control: how it reads out of the manager's published
+# LiveState, and how a change is applied through the manager. The manual hold is
+# runtime-only (a restart must never leave a forgotten socket held open); the
+# other two are persisted configuration.
+# ---------------------------------------------------------------------------
+
+#: Description keys of the three live-mode switches (also their unique-id and
+#: translation keys).
+_LIVE_VIEW_KEY = "live_view"
+_SMART_LIVE_WINDOWS_KEY = "smart_live_windows"
+_CONTINUOUS_LIVE_FLOW_KEY = "continuous_live_flow"
+
+
+def _live_view_on(state: LiveState) -> bool:
+    """Return whether the manual live hold is currently requested."""
+    return state.live_view
+
+
+def _smart_live_windows_on(state: LiveState) -> bool:
+    """Return whether analytics-driven live windows are enabled."""
+    return state.config.smart_windows
+
+
+def _continuous_live_flow_on(state: LiveState) -> bool:
+    """Return whether the continuous live hold is enabled."""
+    return state.config.continuous
+
+
+async def _async_set_live_view(manager: AquaHomeLiveManager, enabled: bool) -> None:
+    """Request or release the manual live hold."""
+    await manager.async_set_live_view(enabled)
+
+
+async def _async_set_smart_windows(manager: AquaHomeLiveManager, enabled: bool) -> None:
+    """Enable or disable the analytics-driven live windows."""
+    await manager.async_set_smart_windows(enabled)
+
+
+async def _async_set_continuous(manager: AquaHomeLiveManager, enabled: bool) -> None:
+    """Enable or disable the continuous live hold."""
+    await manager.async_set_continuous(enabled)
+
+
+def _live_session_attributes(state: LiveState) -> dict[str, Any]:
+    """Return what the live session currently covering this device is doing.
+
+    All three keys are always present — ``None`` / ``0`` while nothing is
+    streaming — so a template written against a running session keeps evaluating
+    once it ends. ``source`` names the trigger that opened the session, which is
+    not necessarily this switch: a hold requested while another trigger already
+    streams is absorbed by that session rather than opening a second socket.
+    ``windows_in_session`` counts the reporting-window renewals spent since the
+    session was granted; the device fast-reports for roughly three minutes per
+    window, so a hold kept open for a while renews repeatedly.
+    """
+    started = state.session_started
+    return {
+        "source": state.source,
+        "session_started": started.isoformat() if started is not None else None,
+        "windows_in_session": state.windows_in_session,
+    }
+
+
+@dataclass(frozen=True, kw_only=True)
+class AquaHomeLiveSwitchDescription(SwitchEntityDescription):
+    """Describe one live-mode switch: how it reads and how it writes.
+
+    ``value_fn`` picks the flag out of the manager's published
+    :class:`~.live_state.LiveState`; ``set_fn`` applies a change through the
+    manager's public API, which is the only place a websocket hold is requested
+    or released and the only place a live-mode flag is persisted; and
+    ``attributes_fn`` — when set — exposes the session bookkeeping behind the
+    flag.
+    """
+
+    value_fn: Callable[[LiveState], bool]
+    set_fn: Callable[[AquaHomeLiveManager, bool], Coroutine[Any, Any, None]]
+    attributes_fn: Callable[[LiveState], dict[str, Any]] | None = None
+
+
+#: The three per-device live-mode controls, all default-off. Live view is the
+#: primary control — it is what a user reaches for to watch water use as it
+#: happens — while the other two configure when live mode runs on its own and
+#: are categorised as configuration. Continuous flow is the advanced one: it
+#: holds a session open indefinitely, which costs one ticket per reporting
+#: window (about one every five minutes) and keeps a websocket open against the
+#: vendor's cloud for as long as it is on.
+LIVE_SWITCHES: tuple[AquaHomeLiveSwitchDescription, ...] = (
+    AquaHomeLiveSwitchDescription(
+        key=_LIVE_VIEW_KEY,
+        translation_key=_LIVE_VIEW_KEY,
+        icon="mdi:eye",
+        entity_registry_enabled_default=True,
+        value_fn=_live_view_on,
+        set_fn=_async_set_live_view,
+        attributes_fn=_live_session_attributes,
+    ),
+    AquaHomeLiveSwitchDescription(
+        key=_SMART_LIVE_WINDOWS_KEY,
+        translation_key=_SMART_LIVE_WINDOWS_KEY,
+        icon="mdi:eye-refresh",
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=True,
+        value_fn=_smart_live_windows_on,
+        set_fn=_async_set_smart_windows,
+    ),
+    AquaHomeLiveSwitchDescription(
+        key=_CONTINUOUS_LIVE_FLOW_KEY,
+        translation_key=_CONTINUOUS_LIVE_FLOW_KEY,
+        icon="mdi:waves-arrow-right",
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=True,
+        value_fn=_continuous_live_flow_on,
+        set_fn=_async_set_continuous,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: AquaHomeConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up all three switch families for every device.
+    """Set up all four switch families for every device.
 
     Setting switches are wired per device on the settings coordinator (paired
     with the fast device view for the shared ``DeviceInfo``); the leak-scan
     switch is wired per device on the fast coordinator. Per-device helpers build
     the closures so each captures its own coordinator rather than the last loop
-    iteration's. The automation switches need no discovery at all — every device
-    has a scheduler — so they are added straight away, again paired with the
-    fast device view for their ``DeviceInfo``.
+    iteration's. The automation and live-mode switches need no discovery at
+    all — every device has a scheduler and a live manager — so they are added
+    straight away, again paired with the fast device view for their
+    ``DeviceInfo``.
     """
     runtime = entry.runtime_data
     for device_id, settings_coordinator in runtime.settings_coordinators.items():
@@ -318,6 +449,13 @@ async def async_setup_entry(
             continue
         automation_switches.extend(_automation_switches(scheduler, fast.data))
     async_add_entities(automation_switches)
+    live_switches: list[AquaHomeLiveSwitch] = []
+    for device_id, manager in runtime.live_managers.items():
+        fast = runtime.coordinators.get(device_id)
+        if fast is None:
+            continue
+        live_switches.extend(_live_switches(manager, fast.data))
+    async_add_entities(live_switches)
 
 
 @callback
@@ -423,6 +561,16 @@ def _automation_switches(
         )
         entities.append(entity_class(scheduler, description, device))
     return entities
+
+
+def _live_switches(
+    manager: AquaHomeLiveManager, device: Device
+) -> list[AquaHomeLiveSwitch]:
+    """Build one device's three live-mode switches."""
+    return [
+        AquaHomeLiveSwitch(manager, description, device)
+        for description in LIVE_SWITCHES
+    ]
 
 
 class AquaHomeSettingSwitch(AquaHomeSettingsEntity, SwitchEntity):
@@ -620,3 +768,75 @@ class AquaHomeVacationDeferralSwitch(AquaHomeAutomationSwitch):
     async def async_set_vacation_mode(self, vacation: bool) -> None:
         """Start or end the vacation deferral on the user's behalf."""
         await _async_set_vacation_deferral(self.coordinator, vacation)
+
+
+class AquaHomeLiveSwitch(CoordinatorEntity["AquaHomeLiveManager"], SwitchEntity):
+    """One live-mode control on a device's live manager.
+
+    A view onto the manager's :class:`~.live_state.LiveState`, in the same shape
+    as :class:`AquaHomeAutomationSwitch` is a view onto the scheduler's state:
+    turning the switch on or off calls the manager's public setter, which
+    requests or releases the websocket hold, persists the two configuration
+    flags into the config entry's options, and republishes the state the entity
+    re-renders from.
+
+    Turning a hold on is a *request*, not a guarantee. The manager grants it
+    only when a session may run — the device is online, the day's session budget
+    is not spent, the minimum gap since the previous session has elapsed — and a
+    refused request leaves the flag on so the hold starts as soon as the gate
+    opens. This switch therefore reports what was asked for; the live-mode
+    status sensor reports what is actually running.
+    """
+
+    _attr_has_entity_name = True
+    entity_description: AquaHomeLiveSwitchDescription
+
+    def __init__(
+        self,
+        coordinator: AquaHomeLiveManager,
+        description: AquaHomeLiveSwitchDescription,
+        device: Device,
+    ) -> None:
+        """Bind the switch to its live manager, description, and device view.
+
+        ``device`` is the paired fast coordinator's device view, used only to
+        build the shared :class:`~homeassistant.helpers.device_registry.DeviceInfo`
+        so the switch attaches to the same device as the telemetry entities.
+        """
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{coordinator.device_slug}_{description.key}"
+        self._attr_device_info = build_device_info(device)
+
+    @property
+    def available(self) -> bool:
+        """Return ``True`` unconditionally — the flag is local, not cloud state.
+
+        Like the automation opt-ins, these switches render what the *user asked
+        for*, held in the manager (and, for the two configuration flags, in the
+        config entry's options), not what the device reports. They must stay
+        operable while the cloud is unreachable or the softener is offline, so
+        an outage can never strand a live hold the owner wants to switch off.
+        """
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        """Return the flag's current value from the published live state."""
+        return self.entity_description.value_fn(self.coordinator.state)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the session bookkeeping, or ``None`` when the flag has none."""
+        attributes_fn = self.entity_description.attributes_fn
+        if attributes_fn is None:
+            return None
+        return attributes_fn(self.coordinator.state)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable the live-mode behaviour this switch controls."""
+        await self.entity_description.set_fn(self.coordinator, True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable the live-mode behaviour this switch controls."""
+        await self.entity_description.set_fn(self.coordinator, False)
