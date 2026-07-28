@@ -31,25 +31,28 @@ testing anything the pacing constant does not already state.
 
 from __future__ import annotations
 
+import asyncio
 import copy
+import itertools
 import re
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import patch
 
 import pytest
+from aioresponses import CallbackResult
 from homeassistant.components.recorder.models import StatisticMeanType
 from homeassistant.components.recorder.statistics import (
-    async_update_statistics_metadata,
     list_statistic_ids,
     statistics_during_period,
 )
 from homeassistant.config_entries import SOURCE_REAUTH
 from homeassistant.const import CONF_ACCESS_TOKEN, Platform, UnitOfVolume
 from homeassistant.helpers.recorder import get_instance
+from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import VolumeConverter
-from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
+from homeassistant.util.unit_system import METRIC_SYSTEM, US_CUSTOMARY_SYSTEM
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
@@ -68,6 +71,7 @@ from tests.conftest import (
     TEST_DEVICE_ID,
     add_datapoint_graph_routes,
     add_device_routes,
+    graph_url,
     load_fixture,
     make_access_token,
 )
@@ -81,6 +85,7 @@ if TYPE_CHECKING:
     from homeassistant.components.recorder.statistics import StatisticsRow
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from yarl import URL
 
     from custom_components.aquahome.statistics import AquaHomeStatisticsCoordinator
 
@@ -139,6 +144,14 @@ FALLBACK_HOURLY_STATE = 47685.9613
 
 #: Absolute tolerance for stored-volume comparisons — below a millilitre.
 LITER_TOLERANCE = 1e-3
+
+#: Knobs for the recorder-barrier test. The freezer stops the event loop's own
+#: clock, so an asyncio deadline only expires once the frozen clock is stepped
+#: past it — a handful of steps here, bounded so a lost deadline fails rather
+#: than hangs.
+DRAIN_TIMEOUT_SECONDS = 0.2
+DRAIN_SPIN_STEP = timedelta(milliseconds=50)
+DRAIN_SPIN_PASSES = 100
 
 
 @pytest.fixture
@@ -207,24 +220,84 @@ def meter_routes(
     *,
     hourly: HourlyWindowRoute | None = None,
     day: dict[str, Any] | None = None,
+    year: list[dict[str, Any]] | None = None,
     seen: list[tuple[dict[str, str], dict[str, str]]] | None = None,
 ) -> None:
     """Register the probe-shaped datapoint routes of one full backfill.
 
     The yearly and monthly sweeps answer the depth probe, the daily route covers
     every chunk of the import range (identical readings per chunk, deduplicated
-    downstream), and the hourly route dispatches on the requested window.
+    downstream), and the hourly route dispatches on the requested window. A list
+    of yearly payloads is consumed one per request (the last one repeating),
+    which is how a probe can answer one backfill run differently than the next.
     """
     add_datapoint_graph_routes(
         mock,
         by_period={
-            "year": load_fixture("graph-meter-yearly.json"),
+            "year": year
+            if year is not None
+            else load_fixture("graph-meter-yearly.json"),
             "month": load_fixture("graph-meter-monthly.json"),
             "day": day if day is not None else load_fixture("graph-meter-daily.json"),
             "hour": hourly if hourly is not None else HourlyWindowRoute(),
         },
         seen_requests=seen,
     )
+
+
+class ArmableMeterRoutes:
+    """Serve every backfill fixture until armed, then throttle every request.
+
+    ``aioresponses`` matches routes in registration order and a matched route
+    cannot decline, so one backfill run cannot succeed and the next fail through
+    two separately registered routes. A single callback whose behaviour is
+    flipped between runs can, which is what tests of the rebuild path need.
+    """
+
+    def __init__(self) -> None:
+        """Start out serving the captured payloads of every period type."""
+        self.throttled = False
+        self.hourly = HourlyWindowRoute()
+        self.by_period = {
+            "year": load_fixture("graph-meter-yearly.json"),
+            "month": load_fixture("graph-meter-monthly.json"),
+            "day": load_fixture("graph-meter-daily.json"),
+        }
+
+    def __call__(self, url: URL, **kwargs: Any) -> CallbackResult:
+        """Answer one datapoint-graph request."""
+        if self.throttled:
+            return CallbackResult(
+                status=429,
+                payload={"code": "ThrottleLimitExceeded", "detail": "slow down"},
+            )
+        query = dict(url.query.items())
+        period = query["period_type"]
+        if period == "hour":
+            return CallbackResult(payload=self.hourly(query))
+        return CallbackResult(payload=self.by_period[period])
+
+
+class NeverConfirmingTask:
+    """A synchronize marker the recorder dequeues and never resolves.
+
+    Stands in for a recorder that stopped, or whose thread died, between the
+    import being queued and the marker behind it being reached.
+    """
+
+    commit_before = True
+
+    #: Every marker built while this stands in for the real one, so a test can
+    #: inspect the future the barrier gave up on.
+    built: ClassVar[list[NeverConfirmingTask]] = []
+
+    def __init__(self, future: asyncio.Future[None]) -> None:
+        """Keep the future the real marker would have resolved."""
+        self.future = future
+        NeverConfirmingTask.built.append(self)
+
+    def run(self, instance: Recorder) -> None:
+        """Drop the marker, leaving the future pending forever."""
 
 
 def graph_url_for_period(period: str) -> re.Pattern[str]:
@@ -348,6 +421,26 @@ def number(value: float | None) -> float:
     """Return a stored statistics value, asserting the recorder kept one."""
     assert value is not None
     return value
+
+
+def continuity_gaps(rows: list[StatisticsRow]) -> list[datetime]:
+    """Return the bucket starts where the running sum leaves the meter behind.
+
+    A meter series accumulates exactly what the counter advanced, so between any
+    two consecutive stored rows the ``sum`` must grow by the same amount as the
+    ``state`` (the fixtures contain no counter reset, which is the only case
+    where the two legitimately part ways). A series that ends up mixing two
+    volume units breaks that in one enormous step.
+    """
+    return [
+        dt_util.utc_from_timestamp(row["start"])
+        for previous, row in itertools.pairwise(rows)
+        if abs(
+            (number(row["sum"]) - number(previous["sum"]))
+            - (number(row["state"]) - number(previous["state"]))
+        )
+        > LITER_TOLERANCE
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -799,36 +892,192 @@ async def test_a_series_stored_in_another_unit_is_rebuilt(
     mock_api: aioresponses,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """A unit mismatch rebuilds the series instead of mixing units.
+    """Switching the installation's unit system rebuilds the whole series.
 
     Home Assistant converts stored statistics only for series the recorder
-    itself owns, so an external series can never be converted in place: a
-    metadata-only relabel would leave rows in one unit accumulating a running
-    total in another. Simulated here by relabelling a metric series as gallons
-    and running again — the whole series must come back in the metric unit
-    this installation reads, with its totals internally consistent.
+    itself owns, so an external series can never be converted in place: rows in
+    one unit would keep accumulating a running total in another.
+
+    Pins the rebuild branch. The series is really built in gallons — a US
+    customary installation — and the installation then really flips to metric,
+    so the rows the recorder holds are gallon-valued, not merely gallon-labelled
+    (which is all ``async_update_statistics_metadata`` does, and why simulating
+    the mismatch that way let the ordinary resume path pass this test). Without
+    the rebuild, the resume path keeps every row behind the overlap window in
+    gallons and steps the running total by ~130 000 when the first liter reading
+    is diffed against the gallon anchor: the exact row values and
+    :func:`continuity_gaps` both reject that.
     """
+    hass.config.units = US_CUSTOMARY_SYSTEM
     add_device_routes(mock_api)
     meter_routes(mock_api)
+
     await boot(hass, mock_config_entry, freezer)
+    native = await stored_rows(hass)
+    assert len(native) == EXPECTED_ROW_COUNT
+    assert native[0]["state"] == pytest.approx(FIRST_STATE, abs=LITER_TOLERANCE)
+    assert native[-1]["sum"] == pytest.approx(LAST_SUM, abs=LITER_TOLERANCE)
+    before = await stored_metadata(hass)
+    assert before[0]["statistics_unit_of_measurement"] == UnitOfVolume.GALLONS
+
+    hass.config.units = METRIC_SYSTEM
     coordinator = coordinator_of(mock_config_entry)
-
-    async_update_statistics_metadata(
-        hass,
-        STATISTIC_ID,
-        new_unit_of_measurement=UnitOfVolume.GALLONS,
-        new_unit_class=VolumeConverter.UNIT_CLASS,
-    )
-    await async_wait_recording_done(hass)
-
     await coordinator.async_refresh()
-    await async_wait_recording_done(hass)
+    await settle(hass)
 
     assert coordinator.last_update_success is True
     metadata = await stored_metadata(hass)
     assert metadata[0]["statistics_unit_of_measurement"] == UnitOfVolume.LITERS
+    assert metadata[0]["display_unit_of_measurement"] == UnitOfVolume.LITERS
+
+    # The full history is back — not just the overlap window a resume would
+    # have rewritten — and every row of it is liter-denominated.
     rows = await stored_rows(hass)
     assert len(rows) == EXPECTED_ROW_COUNT
+    assert starts(rows)[0] == FIRST_START
+    assert starts(rows)[-1] == LAST_START
     assert rows[0]["state"] == pytest.approx(stored(FIRST_STATE), abs=LITER_TOLERANCE)
+    assert rows[0]["sum"] == pytest.approx(stored(FIRST_SUM), abs=LITER_TOLERANCE)
     assert rows[-1]["state"] == pytest.approx(stored(LAST_STATE), abs=LITER_TOLERANCE)
     assert rows[-1]["sum"] == pytest.approx(stored(LAST_SUM), abs=LITER_TOLERANCE)
+    assert continuity_gaps(rows) == []
+
+
+async def test_a_throttled_rebuild_keeps_the_mismatched_series(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A rebuild whose re-fetch fails leaves the old series untouched.
+
+    Pins the fetch-before-clear ordering: the replacement rows must all exist
+    in memory before the old series is deleted. Clearing first — and every
+    fetch after it can throttle, drop the connection or return a contract
+    failure — hands the user an empty Energy dashboard for at least the next
+    twelve hours, and permanently once the cloud ages the readings out. A
+    series stored in the wrong unit is strictly better than no series.
+    """
+    hass.config.units = US_CUSTOMARY_SYSTEM
+    add_device_routes(mock_api)
+    routes = ArmableMeterRoutes()
+    mock_api.get(graph_url(), callback=routes, repeat=True)
+
+    await boot(hass, mock_config_entry, freezer)
+    intact = digest(await stored_rows(hass))
+    assert len(intact) == EXPECTED_ROW_COUNT
+
+    hass.config.units = METRIC_SYSTEM
+    routes.throttled = True
+    coordinator = coordinator_of(mock_config_entry)
+    await coordinator.async_refresh()
+    await settle(hass)
+
+    assert coordinator.last_update_success is False
+    assert digest(await stored_rows(hass)) == intact
+    metadata = await stored_metadata(hass)
+    assert metadata[0]["statistics_unit_of_measurement"] == UnitOfVolume.GALLONS
+
+
+async def test_a_rebuild_probing_empty_keeps_the_mismatched_series(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A rebuild whose depth probe finds nothing leaves the old series alone.
+
+    Pins the same ordering against the failure mode that raises nothing at all:
+    the cloud can legitimately answer the probe with an all-zero sweep — a
+    softener offline long enough for its datapoints to age out — and that ends
+    the pass successfully with no rows to import. Clearing before probing would
+    turn exactly that case into a silent, permanent data loss, since the
+    readings the rebuild needs are the ones the cloud no longer has.
+    """
+    hass.config.units = US_CUSTOMARY_SYSTEM
+    add_device_routes(mock_api)
+    yearly = load_fixture("graph-meter-yearly.json")
+    meter_routes(mock_api, year=[yearly, zeroed(yearly)])
+
+    await boot(hass, mock_config_entry, freezer)
+    intact = digest(await stored_rows(hass))
+    assert len(intact) == EXPECTED_ROW_COUNT
+
+    hass.config.units = METRIC_SYSTEM
+    coordinator = coordinator_of(mock_config_entry)
+    await coordinator.async_refresh()
+    await settle(hass)
+
+    # Nothing to import is a successful run; it just must not be a destructive
+    # one, and the mismatch stays for the next run to retry.
+    assert coordinator.last_update_success is True
+    assert digest(await stored_rows(hass)) == intact
+    metadata = await stored_metadata(hass)
+    assert metadata[0]["statistics_unit_of_measurement"] == UnitOfVolume.GALLONS
+
+
+# ---------------------------------------------------------------------------
+# The recorder barrier: bounded, so a stopped recorder cannot pin the run
+# ---------------------------------------------------------------------------
+
+
+async def test_a_recorder_that_never_confirms_fails_instead_of_hanging(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A synchronize marker nobody resolves ends the wait on a deadline.
+
+    Pins the bound on the post-import barrier. The marker queued behind an
+    import is resolved from the recorder's own thread, so a recorder stopped by
+    a shutdown landing mid-backfill — or one whose thread died — never resolves
+    it at all. An unbounded await on that future pins the coordinator task for
+    the lifetime of the process: shutdown waits on it, and no later import ever
+    runs. The marker is left pending rather than cancelled, so a recorder that
+    comes back and resolves it late cannot raise inside the event loop.
+
+    The barrier is driven on its own instead of through a whole pass because
+    the module-wide freezer stops the event loop's clock along with everything
+    else: no asyncio deadline expires until the frozen clock is moved past it,
+    which this test does pass by pass. The bounded number of passes is the
+    regression guard — a wait that lost its deadline fails the assertion below
+    instead of hanging the suite.
+    """
+    add_device_routes(mock_api)
+    meter_routes(mock_api)
+
+    await boot(hass, mock_config_entry, freezer)
+    coordinator = coordinator_of(mock_config_entry)
+    NeverConfirmingTask.built.clear()
+
+    with (
+        patch(
+            "custom_components.aquahome.statistics.SynchronizeTask",
+            NeverConfirmingTask,
+        ),
+        patch(
+            "custom_components.aquahome.statistics._RECORDER_DRAIN_TIMEOUT_SECONDS",
+            DRAIN_TIMEOUT_SECONDS,
+        ),
+    ):
+        barrier = coordinator._async_wait_for_recorder()
+        waiting = hass.async_create_task(barrier)
+        for _ in range(DRAIN_SPIN_PASSES):
+            if waiting.done():
+                break
+            freezer.tick(DRAIN_SPIN_STEP)
+            await asyncio.sleep(0)
+
+    assert waiting.done()
+    with pytest.raises(UpdateFailed, match="did not confirm"):
+        await waiting
+    # Giving up must not cancel the marker: a recorder that comes back later
+    # still resolves it, and resolving a cancelled future raises in the loop.
+    assert [marker.future.cancelled() for marker in NeverConfirmingTask.built] == [
+        False
+    ]
+    await settle(hass)

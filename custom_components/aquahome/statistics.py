@@ -38,6 +38,16 @@ The response ``units`` string is both account-preference-driven and
 server-localized, so every request pins ``accept-language`` to
 :data:`~.const.BACKFILL_LANGUAGE` and an unrecognized unit aborts the whole run:
 importing mis-scaled volumes into the recorder is far worse than importing none.
+
+Rows are stored in the volume unit this installation reads — liters on a metric
+installation, gallons on a US customary one — because an external statistic has
+no entity behind it and therefore nothing converts it on its way to the Energy
+dashboard. Home Assistant converts stored statistics only for series the
+recorder itself owns, so a series whose stored unit no longer matches is healed
+by re-importing the whole history in the new unit. That rebuild is assembled in
+full before anything is deleted: a series in the wrong unit still holds the
+user's history, and the cloud may no longer retain the readings needed to
+recreate it.
 """
 
 from __future__ import annotations
@@ -133,6 +143,13 @@ _LABEL_CUSHION: Final = timedelta(hours=12)
 #: re-stamped slightly earlier is still seen. Rows at or before the anchor are
 #: dropped afterwards, so the margin only ever costs one extra bucket.
 _RESUME_MARGIN_DAYS: Final = 2
+
+#: Upper bound on the wait for the recorder to drain a queued import. Draining
+#: is one queue round-trip — milliseconds to seconds even behind a long purge —
+#: so only a recorder that stopped or whose thread died ever reaches this, and
+#: that has to fail the run instead of pinning the coordinator (and, mid
+#: shutdown, Home Assistant itself) on a future nobody will ever resolve.
+_RECORDER_DRAIN_TIMEOUT_SECONDS: Final = 300.0
 
 
 def statistic_id_for(device_slug: str) -> str:
@@ -395,28 +412,96 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
         tz = await self.async_resolve_timezone()
         now = dt_util.utcnow()
         now_local = now.astimezone(tz)
-        run = _RunState()
 
         unit = self._target_unit
         stored_unit = await self._async_stored_unit()
         if stored_unit is not None and stored_unit != unit:
-            # The installation reads a different unit than the series was
-            # stored in (a changed unit system, or an import predating this
-            # behaviour). Home Assistant cannot convert an external statistic
-            # in place — it only converts series the recorder itself owns — so
-            # a mismatch is healed by rebuilding the whole series in the new
-            # unit. Anything less would leave rows in one unit accumulating a
-            # running total in another.
-            _LOGGER.info(
-                "Rebuilding %s in %s (was stored in %s)",
+            rows = await self._async_rebuilt_rows(tz, now_local, unit, stored_unit)
+            if not rows:
+                return
+            # The clear and the import are two tasks on the recorder's single
+            # task thread, which runs them in queueing order. Nothing may be
+            # awaited between them: an await here would let another refresh —
+            # or a shutdown — slip a task in, and the series would spend that
+            # gap deleted, or be deleted with no replacement queued behind it.
+            get_instance(self.hass).async_clear_statistics([self.statistic_id])
+        else:
+            anchor = await self._async_load_anchor(now)
+            rows = await self._async_collected_rows(tz, now_local, unit, anchor)
+            if not rows:
+                return
+        async_add_external_statistics(self.hass, self._metadata(unit), rows)
+        await self._async_wait_for_recorder()
+        _LOGGER.debug(
+            "Imported %s water statistics rows for %s (%s to %s)",
+            len(rows),
+            self.statistic_id,
+            rows[0]["start"],
+            rows[-1]["start"],
+        )
+
+    async def _async_rebuilt_rows(
+        self, tz: tzinfo, now_local: datetime, unit: str, stored_unit: str
+    ) -> list[StatisticData]:
+        """Return the whole history re-fetched in ``unit``, or nothing.
+
+        The installation reads a different unit than the series was stored in
+        (a changed unit system, or an import predating this behaviour). Home
+        Assistant cannot convert an external statistic in place — it only
+        converts series the recorder itself owns — so a mismatch is healed by
+        rebuilding the whole series. Anything less would leave rows in one unit
+        accumulating a running total in another.
+
+        The rebuild is therefore fetched in full before the caller deletes
+        anything. Every fetch can fail (throttling, connection trouble, a
+        contract failure) and the depth probe can legitimately come back empty,
+        and in both cases an empty result here must leave the mismatched series
+        exactly where it is: its rows are still the user's history, and the
+        cloud's retention may no longer reach far enough to recreate them. The
+        mismatch is re-detected — and the rebuild retried — on the next run.
+        """
+        _LOGGER.info(
+            "Rebuilding %s in %s (was stored in %s)",
+            self.statistic_id,
+            unit,
+            stored_unit,
+        )
+        try:
+            rows = await self._async_collected_rows(tz, now_local, unit, None)
+        except (AquaHomeConnectionError, ApiError, UpdateFailed):
+            _LOGGER.warning(
+                "Rebuilding %s in %s failed; its rows stay stored in %s until a "
+                "later run completes the rebuild",
                 self.statistic_id,
                 unit,
                 stored_unit,
             )
-            get_instance(self.hass).async_clear_statistics([self.statistic_id])
-            anchor = None
-        else:
-            anchor = await self._async_load_anchor(now)
+            raise
+        if not rows:
+            _LOGGER.warning(
+                "Rebuilding %s in %s found no readings to import; its rows stay "
+                "stored in %s rather than being dropped",
+                self.statistic_id,
+                unit,
+                stored_unit,
+            )
+        return rows
+
+    async def _async_collected_rows(
+        self, tz: tzinfo, now_local: datetime, unit: str, anchor: _Anchor | None
+    ) -> list[StatisticData]:
+        """Fetch one pass's readings and build its rows, importing nothing.
+
+        Without an ``anchor`` the depth probe locates the start of the retained
+        history and the rows begin at a zero-delta baseline; with one, only the
+        newest :data:`~.const.BACKFILL_OVERLAP_DAYS` are recomputed on top of
+        the stored running total.
+
+        The whole pass shares one request budget and one unit factor, and the
+        result reaches the recorder as a single import, so the caller can treat
+        an empty list or a raised error as "nothing happened".
+        """
+        run = _RunState()
         if anchor is None:
             start_local = await self._async_probe_history_start(run, tz, now_local)
             if start_local is None:
@@ -424,7 +509,7 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
                     "No water datapoints retained for %s; nothing to import",
                     self.device_slug,
                 )
-                return
+                return []
         else:
             resume_day = anchor.start.astimezone(tz) - timedelta(
                 days=_RESUME_MARGIN_DAYS
@@ -436,7 +521,7 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
         factor = run.factor
         if factor is None:
             _LOGGER.debug("No datapoint window to fetch for %s", self.statistic_id)
-            return
+            return []
 
         # Volume conversion is a pure ratio, so it folds into the parse factor
         # and the readings are built directly in the stored unit — which keeps
@@ -456,29 +541,40 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
         )
         if not rows:
             _LOGGER.debug("No new water statistics rows for %s", self.statistic_id)
-            return
-        async_add_external_statistics(self.hass, self._metadata(unit), rows)
-        # The call above only QUEUES the import on the recorder's task thread,
-        # while readers (the analytics engine, this coordinator's own anchor
-        # lookup) go through the recorder's executor pool, which is not
-        # ordered behind that queue. Queue a synchronize marker behind the
-        # import so every refresh completes with its rows actually readable.
-        # Neither ready-made drain works here: async_block_till_done()
-        # short-circuits whenever the queue reads empty — which is exactly the
-        # state while an already-dequeued import is still running (measured
-        # 20 % missed reads) — and the synchronous block_till_done() is
-        # documented "only called in tests" and hung a live instance's
-        # startup pipeline outright (observed 2026-07-27).
+        return rows
+
+    async def _async_wait_for_recorder(self) -> None:
+        """Block until the recorder has drained the tasks queued by this run.
+
+        An import is only QUEUED on the recorder's task thread, while readers
+        (the analytics engine, this coordinator's own anchor lookup) go through
+        the recorder's executor pool, which is not ordered behind that queue. A
+        synchronize marker queued behind the import therefore completes every
+        refresh with its rows actually readable. Neither ready-made drain works
+        here: ``async_block_till_done()`` short-circuits whenever the queue
+        reads empty — which is exactly the state while an already-dequeued
+        import is still running (measured 20 % missed reads) — and the
+        synchronous ``block_till_done()`` is documented "only called in tests"
+        and hung a live instance's startup pipeline outright (observed
+        2026-07-27).
+
+        The wait is bounded, because a recorder that stopped (a shutdown
+        landing mid-run) or whose thread died never resolves the marker at all.
+        It is bounded without cancelling the future: the recorder resolves it
+        from its own thread, so leaving it alive keeps this independent of
+        whether that resolution guards against a cancelled future.
+        """
         synchronized: asyncio.Future[None] = self.hass.loop.create_future()
         get_instance(self.hass).queue_task(SynchronizeTask(synchronized))
-        await synchronized
-        _LOGGER.debug(
-            "Imported %s water statistics rows for %s (%s to %s)",
-            len(rows),
-            self.statistic_id,
-            rows[0]["start"],
-            rows[-1]["start"],
+        done, _pending = await asyncio.wait(
+            (synchronized,), timeout=_RECORDER_DRAIN_TIMEOUT_SECONDS
         )
+        if not done:
+            msg = (
+                f"The recorder did not confirm the {self.statistic_id} import within "
+                f"{_RECORDER_DRAIN_TIMEOUT_SECONDS:.0f}s; it is stopped or stuck"
+            )
+            raise UpdateFailed(msg)
 
     @property
     def _target_unit(self) -> str:
@@ -509,9 +605,9 @@ class AquaHomeStatisticsCoordinator(DataUpdateCoordinator[None]):
 
         The name is English on purpose: an external statistic has no entity and
         therefore no translation machinery behind it. The unit is the one
-        :meth:`_async_resolve_unit` settled on for this run, and the volume
-        unit class is what lets Home Assistant convert the stored rows if the
-        user later picks a different one.
+        :attr:`_target_unit` settled on for this run, and the volume unit class
+        is what lets a dashboard render the stored rows against a different
+        volume unit.
         """
         return StatisticMetaData(
             mean_type=StatisticMeanType.NONE,
