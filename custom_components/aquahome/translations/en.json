@@ -401,12 +401,11 @@
     },
     "vacation_defer": {
       "title": "Vacation detected — defer regenerations on {device}?",
-      "description": "No meaningful water use has been seen on {device} for {consecutive_days} days, which looks like an absence. Regenerating a softener that is treating no water wastes salt and water.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Defer regenerations on {device}",
-            "description": "Scheduled regenerations will be cancelled while the house stays empty and resume automatically when water use returns. A regeneration is still allowed through after 21 deferred days to protect the resin bed."
+            "description": "No meaningful water use has been seen on {device} for {consecutive_days} days, and regenerating a softener that treats no water wastes salt and water. Scheduled regenerations will be cancelled while the house stays empty and resume automatically when water use returns. A regeneration is still allowed through after 21 deferred days to protect the resin bed."
           }
         },
         "abort": {
@@ -416,12 +415,11 @@
     },
     "regen_time": {
       "title": "Regeneration time on {device} overlaps household water use",
-      "description": "Regenerations on {device} are configured for {current}, but learned usage patterns show water is regularly used at that hour. Softened water is unavailable during a regeneration, so a quieter hour ({proposed}) would fit this household better.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Move the regeneration time on {device}",
-            "description": "The regeneration time setting will be changed from {current} to {proposed}. You can change it back at any time from the device settings."
+            "description": "Learned usage patterns show water is regularly used around {current}, and softened water is unavailable while a regeneration runs. The regeneration time setting will be changed from {current} to {proposed} — a quieter hour for this household. You can change it back at any time from the device settings."
           }
         },
         "abort": {

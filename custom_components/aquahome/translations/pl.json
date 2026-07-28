@@ -401,12 +401,11 @@
     },
     "vacation_defer": {
       "title": "Wykryto nieobecność — odroczyć regeneracje w urządzeniu {device}?",
-      "description": "Od {consecutive_days} dni urządzenie {device} nie odnotowało istotnego zużycia wody, co wygląda na nieobecność domowników. Regeneracja zmiękczacza, który nie uzdatnia wody, marnuje sól i wodę.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Odrocz regeneracje w urządzeniu {device}",
-            "description": "Zaplanowane regeneracje będą anulowane, dopóki dom pozostaje pusty, i wznowią się automatycznie, gdy wróci zużycie wody. Po 21 odroczonych dniach jedna regeneracja i tak zostanie dopuszczona, aby chronić złoże żywicy."
+            "description": "Od {consecutive_days} dni na {device} nie zaobserwowano znaczącego zużycia wody, a regeneracja zmiękczacza, który nie uzdatnia wody, marnuje sól i wodę. Zaplanowane regeneracje będą anulowane, dopóki dom pozostaje pusty, i wznowią się automatycznie po powrocie zużycia wody. Po 21 dniach odroczenia jedna regeneracja zostanie mimo to przepuszczona, aby chronić złoże żywicy."
           }
         },
         "abort": {
@@ -416,12 +415,11 @@
     },
     "regen_time": {
       "title": "Godzina regeneracji w urządzeniu {device} pokrywa się z domowym poborem wody",
-      "description": "Regeneracje w urządzeniu {device} są ustawione na godzinę {current}, ale wyuczone wzorce zużycia pokazują, że o tej porze regularnie pobierana jest woda. Podczas regeneracji zmiękczona woda jest niedostępna, więc spokojniejsza godzina ({proposed}) pasowałaby lepiej do tego gospodarstwa domowego.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Zmień godzinę regeneracji w urządzeniu {device}",
-            "description": "Ustawienie godziny regeneracji zostanie zmienione z {current} na {proposed}. W każdej chwili możesz je przywrócić w ustawieniach urządzenia."
+            "description": "Wyuczone wzorce zużycia pokazują, że woda jest regularnie używana około {current}, a podczas regeneracji woda zmiękczona jest niedostępna. Ustawienie czasu regeneracji zostanie zmienione z {current} na {proposed} — na spokojniejszą godzinę dla tego gospodarstwa. Możesz to zmienić z powrotem w dowolnym momencie w ustawieniach urządzenia."
           }
         },
         "abort": {
