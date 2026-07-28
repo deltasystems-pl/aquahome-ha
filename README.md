@@ -25,8 +25,8 @@ absence detection, usage forecast), strictly opt-in automation, and an
 on-demand live mode that streams water flow and counters within seconds while
 you are watching.
 
-> **Status: v1.0.0 — installed as a HACS *custom repository*** (not yet in the
-> default HACS store). See [Installation](#installation).
+> **Status: installed as a HACS *custom repository*** (not yet in the default
+> HACS store). See [Installation](#installation).
 
 ## Contents
 
