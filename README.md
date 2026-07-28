@@ -395,7 +395,7 @@ device**: it only publishes sensors and binary sensors.
 - **Usage forecast** — expected use for the coming days, from the device's own
   weekday averages where they are fresh and from learned statistics otherwise.
 
-The same hour-of-week profile also names each weekday's **peak hours**: the
+The same hour-of-week profile also names each weekday's **peak hours**: up to
 four hours whose learned median use is highest among that weekday's buckets
 that have collected enough days to count. They describe whole hours and nothing
 finer — the imported history is hourly, so a peak hour says "this hour is

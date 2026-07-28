@@ -474,9 +474,18 @@ LIVE_ACTIVE_USE_DELTA_GALLONS: Final = 2.0
 LIVE_ACTIVE_USE_COOLDOWN_SECONDS: Final = 1800.0
 
 # Analytics-driven smart windows (trigger c): after this many consecutive
-# smart sessions that saw no water movement, suspend further smart windows for
-# the rest of the device-local day.
+# reporting windows of the tier's sessions that saw no water movement, suspend
+# further smart windows for the rest of the device-local day. Counted per
+# window, not per held block — an empty house must stop costing tickets within
+# minutes, not after hours of quietly held peak blocks.
 LIVE_SMART_NO_FLOW_SUSPEND: Final = 3
+
+# Floor on the spacing between a held session's ticket spends, sized to the
+# measured /live bucket refill (one token per ~100 s). The reporting-window
+# length is the device's own advertised value; this floor is what guarantees a
+# hold can never spend tickets faster than the bucket refills, whatever the
+# device advertises.
+LIVE_RENEWAL_MIN_SECONDS: Final = 100.0
 
 # Websocket failure recovery: bounded exponential backoff between reconnect
 # attempts, silent fallback to polling throughout, and a Repairs issue only

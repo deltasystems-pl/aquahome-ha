@@ -161,8 +161,8 @@ class GridSummary:
     (ascending) whose mature buckets rank in that weekday's top
     :data:`~..const.PEAK_HOURS_PER_WEEKDAY` by median volume. The analytics
     pipeline always passes all seven weekdays; the empty default means "not
-    computed", and every consumer guards on the seven-tuple shape rather than
-    assuming it.
+    computed", and every consumer tolerates it — shape-guarding or folding the
+    missing rows away — rather than assuming seven rows.
     """
 
     active_hours: tuple[bool, ...]

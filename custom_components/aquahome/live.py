@@ -54,7 +54,7 @@ import asyncio
 import contextlib
 import logging
 from dataclasses import replace
-from datetime import UTC, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING, Final
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -71,6 +71,7 @@ from .api import (
     AquaHomeConnectionError,
     LiveTicketExpiredError,
     PropertyValue,
+    RateLimitError,
     scaled_value,
 )
 from .api.websocket import AquaHomeLiveSession, live_websocket_url
@@ -84,6 +85,7 @@ from .const import (
     LIVE_FAILURES_FOR_ISSUE,
     LIVE_IQUA2_WINDOW_SECONDS,
     LIVE_PUSHED_PROPERTIES,
+    LIVE_RENEWAL_MIN_SECONDS,
     LIVE_SMART_NO_FLOW_SUSPEND,
     LIVE_SOURCE_ACTIVE_USE,
     LIVE_SOURCE_ANOMALY,
@@ -245,29 +247,29 @@ def _window_timeout_minutes(device: Device | None) -> float | None:
     return minutes if minutes is not None and minutes > 0 else None
 
 
-def _device_timezone(device: Device | None, device_slug: str) -> tzinfo:
-    """Return the zone the device dates its own days in, falling back to UTC.
+def _device_timezone(device: Device | None, device_slug: str) -> tzinfo | None:
+    """Return the zone the device dates its own days in, or ``None``.
 
     The daily grant budget, the smart-window hours and the night rule are all
     keyed to the *device-local* day, which is the day the softener itself works
-    in. A device that reports no (or an unusable) ``tz_id`` falls back to UTC,
-    which keeps the counters consistent even if their rollover is not local
-    midnight. Zone lookups are cached by :class:`~zoneinfo.ZoneInfo` itself, so
-    this stays cheap on every call.
+    in. ``None`` when the device reports no (or an unusable) ``tz_id`` — the
+    caller decides the fallback. Zone lookups are cached by
+    :class:`~zoneinfo.ZoneInfo` itself, so this stays cheap on every call.
     """
     prop = device.properties.get(_TIMEZONE_PROPERTY) if device is not None else None
     tz_id = prop.value if prop is not None else None
     if not isinstance(tz_id, str) or not tz_id:
-        return UTC
+        return None
     try:
         return ZoneInfo(tz_id)
     except (ZoneInfoNotFoundError, ValueError, OSError):
         _LOGGER.debug(
-            "Device %s reports unusable timezone %s; pacing live mode against UTC",
+            "Device %s reports unusable timezone %s; falling back to the "
+            "installation's zone",
             device_slug,
             tz_id,
         )
-        return UTC
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -346,8 +348,11 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         #: Today-usage counter seen on the previous *fresh* poll.
         self._usage_baseline: float | None = None
         self._last_active_use: datetime | None = None
-        self._no_flow_sessions = 0
-        self._session_saw_flow = False
+        #: Consecutive no-flow reporting windows across the tier's sessions
+        #: today — the granularity the no-flow brake counts in.
+        self._no_flow_windows = 0
+        #: Whether the current reporting window streamed a counter movement.
+        self._window_saw_flow = False
         self._regen_active: bool | None = None
         self._anomaly_active: bool | None = None
         super().__init__(
@@ -600,7 +605,7 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         self._day = day
         self._usage_baseline = None
         self._last_active_use = None
-        self._no_flow_sessions = 0
+        self._no_flow_windows = 0
         state = self.state
         if state.sessions_today or state.smart_suspended_today:
             self._publish(replace(state, sessions_today=0, smart_suspended_today=False))
@@ -797,23 +802,58 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
             return LIVE_SOURCE_MANUAL
         return None
 
+    def _smart_block_wanted(self, now: datetime) -> bool:
+        """Return whether the peak-hour tier wants the socket held right now.
+
+        The peak block is a hold in its own right, and this is its single
+        definition: the tier is on, not suspended for the day, ``now`` falls on
+        a learned peak hour, and it is not night. Every lifecycle decision —
+        renewing a window, releasing a user hold, resuming after a lost
+        session — consults this rather than re-deriving the terms, so the
+        block can never be torn down by one path while another still wants it.
+        """
+        state = self.state
+        return (
+            state.config.smart_windows
+            and not state.smart_suspended_today
+            and self._in_peak_hour(now)
+            and not self._is_night(now)
+        )
+
     @callback
     def _resume_hold(self) -> None:
         """Re-request a wanted hold that is not currently streaming.
 
-        A hold outlives the session that carries it: a refused grant, a failure
-        backoff or a device that went briefly offline all end the session while
-        the user's switch stays on. Retrying from the poll (and from the backoff
-        expiry) is what makes the hold resume by itself instead of silently
-        staying dead until the switch is toggled.
+        A hold can outlive the session that carries it. For the continuous
+        flag that is unconditional: a refused grant, a failure backoff or an
+        offline blink all end the session while the flag stays on, and this
+        retry (from every poll and from the backoff expiry) is what brings it
+        back. The manual hold is narrower by design — any *clean* session end
+        also switches it off (deliberate: manual is ephemeral) — so it resumes
+        only across failures, where the switch survives. The peak block
+        resumes like the continuous flag: a block lost to an absorbed window,
+        a ticket collision or a backoff picks up again mid-hour instead of
+        forfeiting the rest of it.
         """
         source = self._hold_wanted()
+        if source is None and self._smart_block_wanted(dt_util.utcnow()):
+            source = LIVE_SOURCE_SMART
         if source is not None and not self._session_running:
             self._request(source)
 
     async def _async_release_hold(self) -> None:
-        """End the running session once the last hold on it is gone."""
-        if self._hold_wanted() is None and self._session_task is not None:
+        """End the running session once nothing is holding it any more.
+
+        A released switch is not the only interest that can keep the socket:
+        a peak block in progress holds the session too, whoever started it —
+        the manual switch's auto-off cap (and the live-dashboard blueprint
+        flipping it off) must not cost the tier the rest of its block.
+        """
+        if (
+            self._hold_wanted() is None
+            and not self._smart_block_wanted(dt_util.utcnow())
+            and self._session_task is not None
+        ):
             await self._async_stop_session()
 
     async def _async_release_smart_hold(self) -> None:
@@ -858,6 +898,7 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         self._session = await self._async_open()
         self._publish_live(source)
         while True:
+            window_opened = self.hass.loop.time()
             reason = await self._async_stream()
             if not self._window_saw_frames:
                 # A healthy window always delivers frames within seconds (the
@@ -867,6 +908,7 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
                 # the failure path so the backoff can grow instead.
                 msg = "The live stream ended without delivering a single frame"
                 raise AquaHomeConnectionError(msg)
+            self._account_window()
             if not self._wants_renewal(reason):
                 break
             blocked = self._renewal_blocked()
@@ -876,12 +918,46 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
                 )
                 break
             await self._async_close_socket()
-            self._session = await self._async_open()
+            await self._async_pace_renewal(window_opened)
+            self._session = await self._async_renewal_open()
             self._publish_renewal()
         # Close before publishing the end so the state never claims idle while
         # the socket is still up.
         await self._async_close_socket()
         self._finish_session()
+
+    async def _async_pace_renewal(self, window_opened: float) -> None:
+        """Hold the renewal until the window has cost at most one refill token.
+
+        The window length is the device's own ``app_active_timeout`` — a value
+        the cloud could someday shrink. Renewal cadence is a ticket cadence, so
+        it is floored here at the measured refill interval of the /live bucket:
+        whatever the device advertises, a held session can never spend tickets
+        faster than the bucket refills.
+        """
+        remaining = LIVE_RENEWAL_MIN_SECONDS - (self.hass.loop.time() - window_opened)
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+
+    async def _async_renewal_open(self) -> AquaHomeLiveSession:
+        """Open the next reporting window, riding out one ticket collision.
+
+        The client's live-ticket floor is account-wide while holds are
+        per-device: two devices renewing their blocks in the same minute
+        collide on it. For a renewal that is not a failure — the block is
+        healthy, the account is simply mid-floor — so one bounded wait clears
+        the floor and retries once. A second refusal is a real throttle and
+        takes the failure path.
+        """
+        try:
+            return await self._async_open()
+        except RateLimitError:
+            _LOGGER.debug(
+                "Live-ticket floor hit renewing the %s session; waiting it out",
+                self.device_slug,
+            )
+            await asyncio.sleep(LIVE_RENEWAL_MIN_SECONDS)
+            return await self._async_open()
 
     async def _async_open(self) -> AquaHomeLiveSession:
         """Fetch a ticket and open the websocket on it.
@@ -941,6 +1017,7 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         if session is None:
             return _WINDOW_STREAM_END
         self._window_saw_frames = False
+        self._window_saw_flow = False
         self._arm_window_timer()
         async for frame in session.frames():
             if not self._window_saw_frames:
@@ -959,35 +1036,35 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
     def _wants_renewal(self, reason: str) -> bool:
         """Return whether the session should open another reporting window.
 
-        A hold renews for as long as it is held. A smart session renews for as
-        long as its peak hour lasts — the full-block hold, which is the whole
-        point of arming on peaks: the sub-hour, per-gallon capture this API can
-        yield nowhere else needs the socket held across the probable-usage
-        block, not for the five minutes one reporting window covers. All four
-        conditions are re-read per window, so the hold ends within one window
-        of the tier being switched off, suspended for the day, or the block
-        running out; consecutive peak hours therefore renew straight through as
-        one contiguous block (deliberate — asking the grant gate for the second
-        hour would lose it to the minimum-gap check).
+        A hold renews for as long as it is held, and a wanted peak block is a
+        hold — the full-block capture is the whole point of arming on peaks:
+        the sub-hour, per-gallon events this API yields nowhere else need the
+        socket held across the probable-usage block, not for the five minutes
+        one reporting window covers. :meth:`_smart_block_wanted` is re-read per
+        window, so the hold ends within one window of the tier being switched
+        off, suspended for the day, or the block running out; consecutive peak
+        hours renew straight through as one contiguous block (deliberate —
+        asking the grant gate for the second hour would lose it to the
+        minimum-gap check).
 
-        Without either hold only the newer API host renews: there
+        Without any hold only the newer API host renews: there
         ``app_active=false`` mid-session is the server asking for a reconnect,
         while on the legacy host it is simply the window closing and an
-        on-demand session is done.
+        on-demand session is done. A smart session is excluded from that
+        host-side renewal — its block rule decides its end on both hosts.
         """
         if self._hold_wanted() is not None:
             return True
-        state = self.state
-        if state.source == LIVE_SOURCE_SMART:
-            now = dt_util.utcnow()
-            if (
-                state.config.smart_windows
-                and not state.smart_suspended_today
-                and self._in_peak_hour(now)
-                and not self._is_night(now)
-            ):
-                return True
-        return self._iqua2 and reason == _WINDOW_APP_INACTIVE
+        if self._smart_block_wanted(dt_util.utcnow()):
+            # Whoever opened the session: a burst or a manual grant streaming
+            # when a peak block begins renews straight into it, because the
+            # per-gallon capture is the same whichever trigger paid the grant.
+            return True
+        return (
+            self._iqua2
+            and reason == _WINDOW_APP_INACTIVE
+            and self.state.source != LIVE_SOURCE_SMART
+        )
 
     def _renewal_blocked(self) -> str | None:
         """Return the hard-off condition that forbids a renewal, or ``None``.
@@ -1019,7 +1096,6 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         now = dt_util.utcnow()
         if source == LIVE_SOURCE_ACTIVE_USE:
             self._last_active_use = now
-        self._session_saw_flow = False
         state = self.state
         self._publish(
             replace(
@@ -1076,9 +1152,6 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         state = self.state
         if state.status != LIVE_STATUS_LIVE:
             return
-        suspended = state.smart_suspended_today
-        if state.source == LIVE_SOURCE_SMART:
-            suspended = self._account_smart_session(suspended=suspended)
         self._cancel_view_cap()
         self._publish(
             replace(
@@ -1089,30 +1162,44 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
                 windows_in_session=0,
                 last_session_end=dt_util.utcnow(),
                 live_view=False,
-                smart_suspended_today=suspended,
             )
         )
 
-    def _account_smart_session(self, *, suspended: bool) -> bool:
-        """Return whether smart windows are suspended after this session.
+    @callback
+    def _account_window(self) -> None:
+        """Count one finished reporting window against the no-flow brake.
 
         Streaming a house where no water moves buys nothing, so a run of
-        consecutive no-flow smart sessions suspends the tier until the next
-        device-local day. Any session that saw a counter move resets the run —
-        the grid was right, it was just a quiet hour.
+        consecutive no-flow *windows* — the five-minute unit, not the whole
+        held block, or an empty house would stream its blocks for hours before
+        the brake could bite — suspends the tier until the next device-local
+        day. Counted whenever the tier is what keeps the socket open: the
+        session it granted itself, and any burst-opened session whose renewals
+        the wanted block is paying for. A manual or continuous hold is the
+        user's explicit choice, quiet house or not, and is never counted. The
+        latch is published mid-session, which is exactly what lets the next
+        renewal decision end the held block within one window.
         """
-        if self._session_saw_flow:
-            self._no_flow_sessions = 0
-            return suspended
-        self._no_flow_sessions += 1
-        if self._no_flow_sessions < LIVE_SMART_NO_FLOW_SUSPEND:
-            return suspended
-        _LOGGER.debug(
-            "Suspending smart live windows for %s today: %s sessions saw no flow",
-            self.device_slug,
-            self._no_flow_sessions,
-        )
-        return True
+        if self._hold_wanted() is not None:
+            return
+        if self.state.source != LIVE_SOURCE_SMART and not self._smart_block_wanted(
+            dt_util.utcnow()
+        ):
+            return
+        if self._window_saw_flow:
+            self._no_flow_windows = 0
+            return
+        self._no_flow_windows += 1
+        if self._no_flow_windows < LIVE_SMART_NO_FLOW_SUSPEND:
+            return
+        if not self.state.smart_suspended_today:
+            _LOGGER.debug(
+                "Suspending smart live windows for %s today: %s windows in a "
+                "row saw no flow",
+                self.device_slug,
+                self._no_flow_windows,
+            )
+            self._publish(replace(self.state, smart_suspended_today=True))
 
     async def _async_stop_session(self, *, publish_idle: bool = True) -> None:
         """Cancel the running session task and close the socket it owns.
@@ -1226,7 +1313,7 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
             return
         self._pending[frame.name] = frame
         if frame.name in _COUNTER_PROPERTIES:
-            self._session_saw_flow = True
+            self._window_saw_flow = True
         if self._unsub_coalesce is None:
             self._unsub_coalesce = async_call_later(
                 self.hass, LIVE_COALESCE_SECONDS, self._handle_coalesce
@@ -1410,8 +1497,16 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
             self._unsub_smart = None
 
     def _timezone(self) -> tzinfo:
-        """Return the zone the device dates its own days in."""
-        return _device_timezone(self.fast.data, self.device_slug)
+        """Return the zone the device dates its own days in.
+
+        Falls back to the installation's configured zone rather than UTC: the
+        peak grid this manager reads was learned in the analytics tier's zone,
+        whose own missing-``tz_id`` fallback is the installation zone — so both
+        tiers degrade to the *same* clock and four sharp peak hours cannot
+        silently shift by the household's UTC offset.
+        """
+        zone = _device_timezone(self.fast.data, self.device_slug)
+        return zone if zone is not None else dt_util.get_default_time_zone()
 
     def _local_date(self, now: datetime) -> date:
         """Return the device-local calendar day ``now`` falls on."""

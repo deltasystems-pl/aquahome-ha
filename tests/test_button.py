@@ -15,7 +15,9 @@ runs the real coordinator-first-refresh path), then exercise:
 * the CONFIG / registry-disabled and DIAGNOSTIC entity-category metadata;
 * the literal ``{"function": ..., "action": ...}`` PUT body of each command;
 * the refresh-data two-step: the ``get_all_data`` command fires immediately, but
-  the follow-up coordinator poll only after ``REFRESH_BUTTON_POLL_DELAY_SECONDS``;
+  the follow-up coordinator poll only after ``REFRESH_BUTTON_POLL_DELAY_SECONDS``
+  — and the timer behind it is re-armed by a second press and cancelled outright
+  when the entity is torn down;
 * the error taxonomy (422 -> ``command_rejected``, 429 -> ``rate_limited``,
   a transport failure -> ``cannot_connect``);
 * availability (``can_recharge`` ``False`` disables only regenerate-now; an
@@ -31,7 +33,7 @@ edited in place.
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import aiohttp
 import pytest
@@ -45,8 +47,10 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_platform as ep
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
+from homeassistant.helpers.event import async_call_later
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 from yarl import URL
 
@@ -65,11 +69,12 @@ from tests.conftest import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
+    from datetime import datetime
 
     from aioresponses import aioresponses
     from freezegun.api import FrozenDateTimeFactory
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import CALLBACK_TYPE, HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 #: Slug derived from the fixture serial ``4213377-30105-2242``.
@@ -131,6 +136,20 @@ def _detail_without_recharge_tile() -> dict[str, Any]:
 def _button_entity_id(entity_registry: er.EntityRegistry, key: str) -> str | None:
     """Resolve a button's entity id from its unique-id suffix, or ``None``."""
     return entity_registry.async_get_entity_id(BUTTON_DOMAIN, DOMAIN, f"{SLUG}_{key}")
+
+
+def _platform_entity(hass: HomeAssistant, entity_id: str) -> button.AquaHomeButton:
+    """Return the live entity object behind ``entity_id``, failing if it is gone.
+
+    The registry answers what an entity *is*; the platform holds the object
+    that owns the pending-timer handle, which is what the teardown test has to
+    look at. Only valid while the entry is loaded.
+    """
+    for platform in ep.async_get_platforms(hass, DOMAIN):
+        entity = platform.entities.get(entity_id)
+        if entity is not None:
+            return cast("button.AquaHomeButton", entity)
+    pytest.fail(f"no live entity object for {entity_id}")
 
 
 def _state_of(hass: HomeAssistant, entity_id: str) -> str | None:
@@ -622,30 +641,52 @@ async def test_pending_refresh_poll_is_cancelled_when_the_entry_unloads(
     mock_config_entry: MockConfigEntry,
     mock_api: aioresponses,
     entity_registry: er.EntityRegistry,
-    freezer: FrozenDateTimeFactory,
 ) -> None:
-    """Unloading the entry before the delay elapses drops the follow-up poll.
+    """Unloading the entry cancels the pending timer, not merely its effect.
 
-    The timer outlives the entity unless removal cancels it; a surviving
-    callback would poll the cloud through a coordinator whose entry is already
-    unloaded — the classic "lingering timer" teardown leak Home Assistant fails
-    tests for.
+    A timer outlives the entity unless removal cancels it — the classic
+    "lingering timer" teardown leak. Asserting that no poll follows the unload
+    cannot catch a missing cancel: by then the coordinator has been shut down
+    and swallows a refresh request either way, so that assertion holds whether
+    or not anything was cancelled. What is asserted here is the cancellation
+    itself — the handle Home Assistant handed the entity is invoked exactly
+    once, during teardown, and the entity lets go of it — which fails the
+    moment ``async_will_remove_from_hass`` stops cancelling.
     """
     add_device_routes(mock_api)
     mock_api.put(command_url(), payload={"result": "ok"})
 
-    assert await setup_integration(hass, mock_config_entry)
+    cancelled_delays: list[float] = []
 
-    entity_id = _button_entity_id(entity_registry, "refresh_data")
-    assert entity_id is not None
+    def _recording_call_later(
+        hass: HomeAssistant, delay: float, action: Callable[[datetime], Any]
+    ) -> CALLBACK_TYPE:
+        """Arm the real timer behind a cancel handle that records its use."""
+        unsub = async_call_later(hass, delay, action)
 
-    await _press(hass, entity_id)
-    assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    baseline = _device_detail_get_count(mock_api)
+        def _cancel() -> None:
+            """Note the cancellation, then perform it."""
+            cancelled_delays.append(delay)
+            unsub()
 
-    freezer.tick(REFRESH_BUTTON_POLL_DELAY_SECONDS + 1)
-    async_fire_time_changed(hass)
-    await hass.async_block_till_done()
+        return _cancel
 
-    assert _device_detail_get_count(mock_api) == baseline
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(button, "async_call_later", _recording_call_later)
+        assert await setup_integration(hass, mock_config_entry)
+
+        entity_id = _button_entity_id(entity_registry, "refresh_data")
+        assert entity_id is not None
+        entity = _platform_entity(hass, entity_id)
+
+        await _press(hass, entity_id)
+        # The press armed the follow-up poll, and nothing has cancelled it.
+        assert entity._refresh_unsub is not None
+        assert cancelled_delays == []
+
+        assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    # Exactly one cancellation, of exactly the follow-up poll's timer.
+    assert cancelled_delays == [REFRESH_BUTTON_POLL_DELAY_SECONDS]
+    assert entity._refresh_unsub is None
