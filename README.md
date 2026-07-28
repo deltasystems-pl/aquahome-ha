@@ -445,6 +445,24 @@ That gives you two water sources:
   from before the installation.
 
 Both are selectable in **Settings → Dashboards → Energy → Water consumption**.
+
+### Adding it to the Energy dashboard's Water tab
+
+[![Open the Energy configuration on your Home Assistant instance.](https://my.home-assistant.io/badges/config_energy.svg)](https://my.home-assistant.io/redirect/config_energy/)
+
+1. Open the Energy configuration (badge above, or **Settings → Dashboards →
+   Energy**).
+2. Under **Water consumption**, press **Add water source**.
+3. Pick **one** AquaHome series — the imported history
+   (`<device> water usage history`) is the better choice, since it carries the
+   months from before you installed the integration.
+4. Save; the **Water** tab of the Energy dashboard fills in, back through the
+   imported history.
+
+Pick **one source only**: both series count the same water, and adding both —
+or keeping a water source from another integration for the same meter — makes
+the dashboard double-count. This is a configuration page, not an automation,
+so no blueprint can set it up; it is a two-click, one-time choice.
 **Pick exactly one.** Adding both counts every litre twice — choose the
 imported statistic if you want the full history, the sensor if you would rather
 keep the Energy dashboard on a live entity.
