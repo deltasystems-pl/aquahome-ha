@@ -17,6 +17,9 @@ reference softener — an AquaHome 20 Smart with no shutoff valve and no leak
 detectors — ends up with 83 entities: 39 sensors, 15 device settings, 14 binary
 sensors, 6 buttons, 6 switches, 2 numbers and 1 event.
 
+For installation, setup, the feature overview and the known limitations, see the
+[README](../README.md).
+
 ## Contents
 
 - [Words this page uses](#words-this-page-uses)

@@ -45,6 +45,7 @@ you are watching.
 - [Honest limitations](#honest-limitations)
 - [Removal](#removal)
 - [Translations](#translations)
+- [Documentation](#documentation)
 - [Development](#development)
 - [Continuous integration](#continuous-integration)
 - [Repository layout](#repository-layout)
@@ -152,172 +153,32 @@ reports; nothing is created for data a device does not have. Feature-gated
 entities require the matching hardware, and *disabled by default* entities must
 be enabled in the entity registry before they appear.
 
-The tables below are a summary. For the full, beginner-friendly reference —
-every entity explained in plain language, with where its value comes from, how
-often it updates, when it exists, and the caveats worth knowing — see
-[`docs/entities.md`](docs/entities.md).
+**[`docs/entities.md`](docs/entities.md) is the full reference** — every entity
+in plain language, with where its value comes from, how often it updates, when
+it exists, and the caveats worth knowing. The summary below is just the shape of
+it. For scale: the reference device (an AquaHome 20 Smart with no shutoff valve
+and no leak detectors) registers 83 entities.
 
-For scale: the reference device (an AquaHome 20 Smart with no shutoff valve and
-no leak detectors) registers 83 entities.
-
-### Sensors
-
-40 sensors, plus 2 per paired leak detector.
-
-**Water and regeneration**
-
-| Entity | Notes |
+| Platform | What you get |
 | --- | --- |
-| Salt level | Percentage as the device reports it. |
-| Water used today | Resets at the device-local midnight. |
-| Treated water available | Softened water left before the next regeneration. |
-| Total water | Lifetime outlet counter; restores across restarts. |
-| Capacity remaining | Percentage of resin capacity left. |
-| Average daily water use | The device's own rolling average. |
-| Out of salt estimate | Timestamp, from the device's own day estimate. |
-| Regeneration status | Enum: idle, scheduled, regenerating, suspended, disabled, disabled by the shutoff valve, error. |
-| Regeneration time remaining | Forced to zero unless a regeneration is actually running. |
-| Next regeneration | Timestamp of the next scheduled cycle. |
-| Last regeneration | Timestamp, from the regeneration history feed. |
-| Days since last recharge | |
-| Total recharges | Lifetime count. |
-| Average use Saturday … Friday | Seven per-weekday averages the device maintains, each with its own freshness attribute. |
-
-**Salt consumption**
-
-| Entity | Notes |
-| --- | --- |
-| Total salt used | Lifetime weight. |
-| Total hardness removed | Lifetime weight. |
-| Salt per regeneration | Device average. |
-| Daily salt usage estimate | Chemistry-derived from hardness, efficiency and water use. |
-| Salt days remaining estimate | Diagnostic. |
-| Salt depletion estimate | Timestamp. Diagnostic, disabled by default. |
-| Salt efficiency | Diagnostic; attributes name the source of the figure. |
-
-**Analysis and live data**
-
-| Entity | Notes |
-| --- | --- |
-| Usage forecast | Expected water use tomorrow, with the reasoning in its attributes. |
-| Night flow | Minimum overnight flow, the leak-watch input. Diagnostic. |
-| Water flow | Current flow rate. Live only in practice: the cloud carries a fresh flow value just during live sessions, so between them the sensor normally reads 0 (rarely, the last streamed rate) even while the daily counter climbs. See [Live mode](#live-mode). |
-| Live mode | Idle / live / reconnect backoff, with session bookkeeping in its attributes. Diagnostic. |
-
-**Device and diagnostics**
-
-| Entity | Notes |
-| --- | --- |
-| Latest alert | Most recent alert title, with the full alert in its attributes. |
-| Error codes | Diagnostic; empty when the device is healthy. |
-| Model, Serial number, Controller firmware, Wi-Fi module firmware | Diagnostic. |
-| Hardness setting | Diagnostic. |
-| RF signal strength | Diagnostic, disabled by default. |
-| Days powered up | Diagnostic. |
-
-**Per leak detector** (feature-gated, one sub-device per detector)
-
-| Entity | Notes |
-| --- | --- |
-| Temperature | |
-| Signal strength | Diagnostic, disabled by default. |
-
-### Binary sensors
-
-17, plus 4 per paired leak detector.
-
-| Entity | Notes |
-| --- | --- |
-| Online | Connectivity. Diagnostic. |
-| Salt level alert, Error code alert, Flow monitor alert, Water usage alert, Resin alert | The device's own alert flags. |
-| Connection alert | Diagnostic. |
-| Alarm sounding | Feature-gated on an audible alarm. |
-| Water-to-drain alert | Feature-gated on a water-to-drain or leak sensor. |
-| Regenerating | Running. |
-| Regeneration suspended | |
-| Vacation mode, Recharge off | The device's own recharge-mode states, as reported by the cloud. |
-| Shutoff valve closed | Feature-gated on a water shutoff valve. |
-| Leak suspected | From the usage analysis, not from a leak sensor. Attributes carry the tier, rate and evidence. |
-| Usage anomaly | Unusually high water use for this household and hour. |
-| Vacation detected | Sustained multi-day absence inferred from water use. |
-| Leak detected, Low battery, Tampered, Connectivity | Per leak detector; Low battery and Connectivity are diagnostic. |
-
-### Buttons
-
-8.
-
-| Entity | Notes |
-| --- | --- |
-| Regenerate now | Unavailable when the device says it cannot start one. |
-| Schedule regeneration | Schedules the next regeneration time. |
-| Cancel regeneration | Cancels a started or scheduled cycle. |
-| Silence alarm | Feature-gated on an audible alarm. |
-| Refresh data | Forces an immediate refresh. Diagnostic. |
-| Advance valve | Service tool. Configuration, disabled by default. |
-| Reset error code | Service tool. Configuration, disabled by default. |
-| Reset shutoff valve error | Feature-gated. Configuration, disabled by default. |
-
-### Switches
-
-7 named switches, plus one per boolean device setting the cloud exposes.
-
-| Entity | Default | Notes |
-| --- | --- | --- |
-| Live view | Off | Holds a live session open while it is on; turns itself off after 30 minutes. |
-| Smart live windows | Off | Configuration. Opt-in: a live session held through each learned peak water-use hour. |
-| Continuous live flow | Off | Configuration. Advanced: keeps a live session open indefinitely. |
-| Vacation deferral | Off | Defers scheduled regenerations while the household is away. |
-| Auto vacation deferral | Off | Configuration. Lets the absence detector drive the deferral above. |
-| Smart regeneration scheduling | Off | Configuration. Schedules regenerations against the usage forecast. |
-| Leak detector scan | — | Configuration, feature-gated. Starts/stops a detector scan. |
-| *Boolean device settings* | — | Configuration; created from the device's own settings document. |
-
-### Numbers
-
-2 named numbers, plus one per numeric device setting.
-
-| Entity | Default | Notes |
-| --- | --- | --- |
-| Live sessions per day | 48 | Configuration. Range 4–200. |
-| Live session minimum gap | 120 s | Configuration. Range 60–900 s. |
-| *Numeric device settings* | — | Configuration; bounds and precision come from the device. |
-
-### Selects
-
-One per device setting that offers a fixed list of options — water hardness,
-regeneration time, salt type, efficiency mode, maximum days between recharges,
-flow-monitor alert thresholds, and so on. They are built from the settings
-document the cloud returns, so their names are the server's own localized
-labels and a setting hidden by another setting's value stays visible but
-unavailable rather than disappearing.
-
-The account/display preferences among them (volume, weight and hardness units,
-date and time format, time zone) are created **disabled by default**: this
-integration's sensors bind fixed units, so changing those settings only affects
-the phone app.
-
-### Valve
-
-| Entity | Notes |
-| --- | --- |
-| Water shutoff valve | Feature-gated. Open/close, with the in-flight state shown optimistically for a few seconds. |
-
-### Event
-
-| Entity | Notes |
-| --- | --- |
-| Alert | Fires on each new device alert with a normalized `event_type` (low salt, excessive water use, shutoff valve opened, connection online/offline, other) and the raw alert in its attributes. |
+| **Sensors** | 40, plus 2 per paired leak detector: water use and lifetime totals, salt level and consumption, regeneration state and timing, the daily usage analysis, live-mode status, and device/firmware details. |
+| **Binary sensors** | 17, plus 4 per paired leak detector: the softener's own alert flags, its recharge-mode states, and the analysis verdicts (leak suspected, usage anomaly, vacation detected). |
+| **Buttons** | 8: regenerate now, schedule, cancel, silence alarm, refresh data, and three service tools that ship disabled. |
+| **Switches** | 7, plus one per boolean device setting: three live-mode controls, three opt-in automations — all off by default — and the leak-detector scan. |
+| **Numbers** | 2, plus one per numeric device setting: the live-session budget knobs. |
+| **Selects** | One per device setting offering a fixed list of options (hardness, regeneration time, salt type, efficiency mode, …), named by the cloud in your own language. |
+| **Valve** | 1, feature-gated: the water shutoff valve. |
+| **Event** | 1: fires on each new device alert, with the raw alert in its attributes. |
 
 Alongside the event entity, the integration fires `aquahome_event` on the Home
-Assistant event bus: once per new device alert (`type: alert`), on every
-analysis transition (`leak_suspected`/`leak_cleared`,
-`usage_anomaly`/`usage_anomaly_cleared`, `vacation_started`/`vacation_ended`,
-`leak_while_away`), and for the automation tier's own moves (`regen_scheduled`,
-`regen_deferred`, `regen_deferral_expired`). Every event carries `device_id`,
-`device` (the slug), `type`, and the evidence behind it, shows up in the
-logbook with a readable description, and is what the bundled blueprints
-trigger on. Listen with a standard event trigger:
-`event_type: aquahome_event`.
+Assistant event bus: once per new device alert, on every analysis transition
+(leak, usage anomaly, vacation), and for the automation tier's own moves
+(regeneration scheduled, deferred, deferral expired). Every event carries
+`device_id`, `device` (the slug), `type`, and the evidence behind it, shows up
+in the logbook with a readable description, and is what the bundled blueprints
+trigger on. Listen with a standard event trigger: `event_type: aquahome_event`.
+The full payload table is in
+[`docs/entities.md`](docs/entities.md#events-on-the-event-bus).
 
 ## Live mode
 
@@ -383,6 +244,10 @@ above are deliberately conservative — comfortably inside the observed limits
 even with every trigger enabled — and they are exposed as entities so you can
 lower them further, not only raise them.
 
+The six live-mode entities themselves — the three switches, the two budget
+numbers and the status sensor — are documented in
+[`docs/entities.md`](docs/entities.md#live-mode).
+
 ## Analytics and automation
 
 The integration analyses the imported water-usage history once a day, just
@@ -434,6 +299,11 @@ Assistant's side. They do **not** toggle the vacation tile in the iQua app —
 that command's payload is undocumented and unverified, so the integration does
 not send it. The *Vacation mode* binary sensor still reports the device's own
 state, whatever set it.
+
+Per-entity detail for both tiers — what each verdict means, what its attributes
+carry, and why a detector can read *unknown* — is in
+[`docs/entities.md`](docs/entities.md#analysis) and
+[`docs/entities.md`](docs/entities.md#automation).
 
 ## Actions
 
@@ -645,6 +515,19 @@ Translation contributions are welcome: copy
 `custom_components/aquahome/translations/en.json` to your language code and open
 a pull request.
 
+## Documentation
+
+- **[`docs/entities.md`](docs/entities.md) — the full entity reference.** Every
+  entity the integration can create, grouped by function (water, analysis, live
+  mode, regeneration, salt, automation, alerts, device, plus the feature-gated
+  hardware and the device settings): what it tells you, where its value comes
+  from, how often it updates, when it exists, and the caveats worth knowing. It
+  also documents the `aquahome_event` bus events and how availability works.
+- [`dashboards/aquahome-dashboard.yaml`](dashboards/aquahome-dashboard.yaml) —
+  the ready-made function-grouped dashboard (see [Dashboard](#dashboard)).
+- [`blueprints/automation/aquahome/`](blueprints/automation/aquahome) — the
+  bundled automation blueprints (see [Blueprints](#blueprints)).
+
 ## Development
 
 Requires Python **3.13**.
@@ -687,7 +570,10 @@ someone's installation.
 
 - `custom_components/aquahome/` — the integration (API client, coordinators,
   config flow, and entity platforms).
+- `docs/` — the long-form documentation, starting with
+  [`docs/entities.md`](docs/entities.md).
 - `blueprints/automation/aquahome/` — the bundled automation blueprints.
+- `dashboards/` — the ready-made function-grouped dashboard.
 - `tests/` — the test suite.
 - `reverse-engineering/` — maintainer-only git submodule (restricted access). It is **not**
   required to build, run, install, or contribute to the integration; a normal
