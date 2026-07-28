@@ -25,6 +25,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -127,6 +128,7 @@ class AquaHomeCoordinator(DataUpdateCoordinator[Device]):
         self._monotonic = monotonic
         self._last_good: float | None = None
         self._serving_stale = False
+        self._updating_from_push = False
         super().__init__(
             hass,
             _LOGGER,
@@ -156,6 +158,44 @@ class AquaHomeCoordinator(DataUpdateCoordinator[Device]):
         :func:`~.dynamic.async_setup_dynamic_entities` — must ignore it.
         """
         return self._serving_stale
+
+    @property
+    def updating_from_push(self) -> bool:
+        """Return whether the update being dispatched is a live-stream push.
+
+        ``True`` only while :meth:`async_apply_live_update` is notifying
+        listeners. A push refreshes a handful of raw properties and carries the
+        rest of the device view — the enriched block above all — verbatim, so
+        synchronous listeners that react to *polled* facts (the automation
+        tier's enforcement, the capability debounce, the activity triggers)
+        must treat it as no new observation and return immediately.
+        """
+        return self._updating_from_push
+
+    @callback
+    def async_apply_live_update(self, device: Device) -> None:
+        """Publish a live-streamed device view without starving the REST poll.
+
+        :meth:`~homeassistant.helpers.update_coordinator.DataUpdateCoordinator.async_set_updated_data`
+        reschedules the next poll a full interval away, so a stream that pushes
+        at least once per interval — one gallon every ten minutes is enough —
+        would postpone polling indefinitely, freezing the enriched block that
+        only genuine polls refresh (regeneration state, salt level, feature
+        gating, ``is_online``). Whenever the last *genuine* poll is older than
+        the update interval, a refresh is requested alongside the publish, so
+        streaming can only ever make data fresher, never staler.
+        """
+        self._updating_from_push = True
+        try:
+            self.async_set_updated_data(device)
+        finally:
+            self._updating_from_push = False
+        last = self._last_good
+        if (
+            last is not None
+            and self._monotonic() - last >= UPDATE_INTERVAL.total_seconds()
+        ):
+            self.hass.async_create_task(self.async_request_refresh())
 
     async def _async_update_data(self) -> Device:
         """Fetch the full device view, serving cached data on transient errors.

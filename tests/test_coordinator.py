@@ -601,3 +601,76 @@ async def test_device_online_false_before_first_refresh(
     # No poll has run, so ``data`` is unset and the online signal is False even
     # though the (unfetched) device would report itself online.
     assert coordinator.device_online is False
+
+
+# ---------------------------------------------------------------------------
+# Live-stream applies (direct construction with injected monotonic)
+# ---------------------------------------------------------------------------
+
+
+async def test_live_apply_marks_the_push_for_synchronous_listeners(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+) -> None:
+    """Listeners can tell a live push from a genuine poll while dispatching.
+
+    The flag is up only for the synchronous span of the push dispatch, so the
+    consumers that must ignore pushes — deferral enforcement, the capability
+    debounce, the activity triggers — read it in their ``@callback`` before
+    scheduling any work.
+    """
+    mock_config_entry.add_to_hass(hass)
+    device = Device.from_dict(load_fixture("device-detail.json"))
+    coordinator = AquaHomeCoordinator(
+        hass, mock_config_entry, _standalone_client(hass), device
+    )
+    seen: list[bool] = []
+    coordinator.async_add_listener(lambda: seen.append(coordinator.updating_from_push))
+
+    coordinator.async_set_updated_data(device)
+    coordinator.async_apply_live_update(device)
+    coordinator.async_set_updated_data(device)
+
+    assert seen == [False, True, False]
+    assert coordinator.updating_from_push is False
+
+
+async def test_live_apply_keeps_the_poll_floor(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+) -> None:
+    """Sustained pushes cannot postpone the REST poll past its interval.
+
+    ``async_set_updated_data`` reschedules the next poll a full interval away,
+    so a stream pushing at least once per interval would starve the poll — and
+    with it the enriched block only polls refresh. Once the last genuine poll
+    is older than the interval, a push must bring a refresh with it.
+    """
+    mock_config_entry.add_to_hass(hass)
+    clock = _FakeMonotonic()
+    device = Device.from_dict(load_fixture("device-detail.json"))
+    coordinator = AquaHomeCoordinator(
+        hass, mock_config_entry, _standalone_client(hass), device, monotonic=clock
+    )
+    coordinator.async_add_listener(lambda: None)
+
+    mock_api.get(device_url(), payload=load_fixture("device-detail.json"))
+    await coordinator.async_refresh()
+    assert coordinator.last_update_success is True
+
+    # Fresh poll: a push is pure gravy and must not trigger anything.
+    coordinator.async_apply_live_update(device)
+    await hass.async_block_till_done()
+    assert len(mock_api.requests) == 1  # the single GET route, called once
+
+    # The last genuine poll ages past the interval while pushes keep landing:
+    # the next push requests a refresh alongside the publish.
+    clock.advance(UPDATE_INTERVAL.total_seconds() + 1.0)
+    mock_api.get(device_url(), payload=load_fixture("device-detail.json"))
+    coordinator.async_apply_live_update(device)
+    await hass.async_block_till_done()
+
+    calls = next(iter(mock_api.requests.values()))
+    assert len(calls) == 2

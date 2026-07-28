@@ -337,6 +337,12 @@ def _capture_grant_decisions(caplog: pytest.LogCaptureFixture) -> None:
 async def live_server() -> AsyncIterator[FakeIquaLiveServer]:
     """Run the fake iQua /live + /ws/ server for the duration of a test."""
     server = FakeIquaLiveServer()
+    # A healthy stream always opens with a partial snapshot (observed live: the
+    # app_active frame lands within seconds of every connect), and a window
+    # that delivers no frame at all is treated as a sick stream and escalates
+    # into the failure path. Default to the realistic minimum; tests that need
+    # a richer snapshot (or a deliberately dead stream) overwrite `script`.
+    server.script = [frame("app_active", True)]
     await server.start()
     try:
         yield server
@@ -789,7 +795,7 @@ async def test_renewals_spend_tickets_but_never_grants(
     await harness.server.close_connections()
     await _settle_until(
         harness.hass,
-        lambda: len(harness.server.all_connections) == 2,
+        lambda: harness.manager.state.windows_in_session >= 1,
         "the hold to reconnect for a second window",
     )
 
@@ -842,7 +848,7 @@ async def test_the_continuous_hold_renews_and_stops_when_the_device_drops(
     await harness.server.close_connections()
     await _settle_until(
         harness.hass,
-        lambda: len(harness.server.all_connections) == 2,
+        lambda: harness.manager.state.windows_in_session >= 1,
         "continuous mode to reconnect",
     )
     assert harness.manager.state.windows_in_session == 1
@@ -916,7 +922,7 @@ async def test_the_newer_host_reconnects_when_the_window_closes(
     await harness.server.push(frame("app_active", value=False))
     await _settle_until(
         harness.hass,
-        lambda: len(harness.server.all_connections) == 2,
+        lambda: harness.manager.state.windows_in_session >= 1,
         "the session to reconnect on the newer host",
     )
 
@@ -1330,3 +1336,132 @@ async def test_shutdown_closes_a_running_session(
     await _fire_in(harness.hass, timedelta(hours=2).total_seconds())
     await _quiesce(harness.hass)
     assert len(harness.server.all_connections) == 1
+
+
+# ---------------------------------------------------------------------------
+# Stream evidence: frames, not handshakes, are what prove the cloud healthy
+# ---------------------------------------------------------------------------
+
+
+async def test_a_frameless_stream_is_a_failure_not_a_renewal(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """A window that never delivers a frame escalates instead of renewing.
+
+    A server that accepts the handshake and drops the socket without sending
+    anything would otherwise cycle connect-and-die at the ticket floor forever,
+    with the backoff pinned at its minimum by each "successful" connect.
+    """
+    harness = await build_live()
+    harness.server.script = []
+
+    await harness.manager.async_set_continuous(True)
+    await _wait_live(harness)
+    await harness.server.close_connections()
+    await _settle_until(
+        harness.hass,
+        lambda: harness.manager.state.status == LIVE_STATUS_BACKOFF,
+        "the frameless stream to be recorded as a failure",
+    )
+
+    state = harness.manager.state
+    assert state.consecutive_failures == 1
+    assert state.last_error is not None
+    assert "single frame" in state.last_error
+    # No renewal hammer: the one connect is all the cloud saw.
+    assert len(harness.server.all_connections) == 1
+
+
+async def test_the_failure_trail_clears_on_a_frame_not_on_the_handshake(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """Only stream evidence withdraws the failure count.
+
+    A recovery attempt that connects but stays mute keeps the trail growing;
+    the first frame of a real stream zeroes it.
+    """
+    harness = await build_live()
+    harness.server.live_status_overrides.append(HTTPStatus.INTERNAL_SERVER_ERROR)
+    delays = await _drive_ticket_failures(harness, 1)
+
+    # The ticket endpoint recovers, but the stream stays mute: the handshake
+    # alone must not clear anything, and the mute window is failure number two.
+    harness.server.script = []
+    await _fire_in(harness.hass, delays[-1] + 1.0)
+    await _wait_live(harness)
+    await harness.server.close_connections()
+    await _wait_for_failures(harness.hass, harness.manager, 2)
+
+    # A stream that actually talks clears the trail with its first frame.
+    harness.server.script = [frame("app_active", True)]
+    backoff_until = harness.manager.state.backoff_until
+    assert backoff_until is not None
+    await _fire_in(
+        harness.hass, (backoff_until - dt_util.utcnow()).total_seconds() + 1.0
+    )
+    await _wait_live(harness)
+    await _settle_until(
+        harness.hass,
+        lambda: harness.manager.state.consecutive_failures == 0,
+        "the first frame to clear the failure trail",
+    )
+    assert harness.manager.state.last_error is None
+
+
+async def test_the_window_timer_ends_a_quiet_on_demand_session(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """A session nobody holds ends at the window timer, without a server close.
+
+    The stream falls silent well before the socket closes, so the client-side
+    timer is the only thing that ends a window the device stopped reporting in.
+    """
+    harness = await build_live(result=_result(anomaly_active=False))
+
+    await _push_result(harness, _result(anomaly_active=True))
+    await _wait_live(harness)
+    assert len(harness.server.connections) == 1
+
+    # Fire past the reporting window (five minutes plus grace); the timer
+    # closes the socket, the frame loop returns, and no hold renews it.
+    await _fire_in(harness.hass, 331.0)
+    await _wait_idle(harness)
+    assert harness.server.connections == []
+    assert len(harness.server.all_connections) == 1
+
+
+async def test_a_flow_window_resets_the_no_flow_suspend_counter(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One window that sees water restarts the smart tier's patience.
+
+    Quiet, quiet, flow, quiet must not suspend: the counter counts consecutive
+    dry windows, not dry windows per day.
+    """
+    zone = _zone_for_local_hour(DAY_HOUR)
+    harness = await build_live(
+        detail=_detail(tz_id=zone), result=_result(active_hours=ALL_ACTIVE_HOURS)
+    )
+    await _allow_back_to_back_grants(monkeypatch, harness)
+    await harness.manager.async_set_smart_windows(True)
+
+    for _ in range(LIVE_SMART_NO_FLOW_SUSPEND - 1):
+        await _fire_in(harness.hass, timedelta(hours=2).total_seconds())
+        await _wait_live(harness)
+        await _end_session(harness)
+
+    harness.server.script = [
+        frame("app_active", True),
+        frame("water_counter_gals", FIXTURE_WATER_COUNTER + 9),
+    ]
+    await _fire_in(harness.hass, timedelta(hours=2).total_seconds())
+    await _wait_live(harness)
+    await _end_session(harness)
+
+    harness.server.script = [frame("app_active", True)]
+    await _fire_in(harness.hass, timedelta(hours=2).total_seconds())
+    await _wait_live(harness)
+    await _end_session(harness)
+
+    assert harness.manager.state.smart_suspended_today is False

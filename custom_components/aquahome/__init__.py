@@ -344,6 +344,10 @@ def _async_wire_activity_triggers(
     def _handle_fast_update() -> None:
         """Request an activity refresh when the badge rises or regen flips."""
         nonlocal previous_badge, previous_regen
+        if fast.updating_from_push:
+            # Live-stream pushes carry the enriched block — the only source of
+            # both compared signals — verbatim; skip them outright.
+            return
         device = fast.data
         badge = _alert_badge_count(device)
         regen_active = _regen_active(device)

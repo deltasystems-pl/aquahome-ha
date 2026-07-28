@@ -83,6 +83,11 @@ def async_setup_dynamic_entities(  # noqa: PLR0913 - deliberate capability-detec
             # payload followed by a rate-limited re-serve would fake the second
             # sighting and defeat the debounce.
             return
+        if getattr(coordinator, "updating_from_push", False):
+            # A live-stream push refreshes a few raw properties and carries
+            # the capability-bearing payload verbatim — it is not a poll, so
+            # it must not count as a sighting either.
+            return
         current = discover()
         added: set[str] = set()
         for key in current:

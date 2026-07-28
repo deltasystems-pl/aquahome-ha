@@ -64,9 +64,10 @@ you are watching.
    `config/custom_components/aquahome/manifest.json` exists.
 2. **Restart Home Assistant.**
 
-The blueprints in `blueprints/automation/aquahome/` ship with the integration
-either way, and can also be imported one by one from the badges in
-[Blueprints](#blueprints).
+Neither install method copies the automation blueprints into Home Assistant —
+blueprints only load from `config/blueprints/automation/`. Import the ones you
+want with one click from the badges in [Blueprints](#blueprints), or copy the
+repository's `blueprints/automation/aquahome/` folder there yourself.
 
 ## Setup
 

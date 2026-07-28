@@ -1507,3 +1507,35 @@ async def test_persisting_a_flag_never_reloads_the_entry(
     assert mock_config_entry.state is ConfigEntryState.LOADED
     assert mock_config_entry.runtime_data is runtime_before
     assert _scheduler(mock_config_entry) is scheduler
+
+
+async def test_deferral_enforcement_ignores_live_stream_pushes(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A live-stream push is not a fresh observation and enforces nothing.
+
+    Pushes republish the device with the enriched block — the only input the
+    enforcement reads — carried over verbatim, at streaming cadence. Spending
+    the daily cancel budget against that stale copy would burn all three
+    cancels in the first seconds of a live session; only a genuine poll may
+    trigger the cancel.
+    """
+    await _boot(hass, mock_config_entry, mock_api, freezer)
+    scheduler = _scheduler(mock_config_entry)
+    await scheduler.async_set_vacation_deferral(True, source=DEFERRAL_SOURCE_MANUAL)
+
+    scheduled = Device.from_dict(_detail(tile_state=RECHARGE_STATE_SCHEDULED))
+    coordinator = mock_config_entry.runtime_data.coordinators[TEST_DEVICE_ID]
+    coordinator.async_apply_live_update(scheduled)
+    await hass.async_block_till_done()
+
+    assert _commands(mock_api) == []
+
+    # The same view arriving through a genuine poll enforces immediately.
+    coordinator.async_set_updated_data(scheduled)
+    await hass.async_block_till_done()
+
+    assert _commands(mock_api) == [CANCEL_COMMAND]

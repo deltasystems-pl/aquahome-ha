@@ -319,6 +319,9 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         self._session: AquaHomeLiveSession | None = None
         self._session_task: asyncio.Task[None] | None = None
         self._window_reason = _WINDOW_STREAM_END
+        #: Whether the current reporting window delivered at least one frame —
+        #: the evidence that clears the failure trail and permits a renewal.
+        self._window_saw_frames = False
         #: Reporting-window length last seen on the stream, in minutes.
         self._timeout_minutes: float | None = None
         #: Frames waiting for the next coalesced apply, newest per property.
@@ -775,6 +778,14 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         self._publish_live(source)
         while True:
             reason = await self._async_stream()
+            if not self._window_saw_frames:
+                # A healthy window always delivers frames within seconds (the
+                # connect snapshot at minimum). A stream that ends without a
+                # single one is a sick cloud, and renewing into it would cycle
+                # connect-and-die at the ticket floor forever — escalate into
+                # the failure path so the backoff can grow instead.
+                msg = "The live stream ended without delivering a single frame"
+                raise AquaHomeConnectionError(msg)
             if not self._wants_renewal(reason):
                 break
             blocked = self._renewal_blocked()
@@ -837,8 +848,11 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         session = self._session
         if session is None:
             return _WINDOW_STREAM_END
+        self._window_saw_frames = False
         self._arm_window_timer()
         async for frame in session.frames():
+            if not self._window_saw_frames:
+                self._note_stream_alive()
             if frame.name == _APP_ACTIVE_PROPERTY:
                 if frame.value is False:
                     self._window_reason = _WINDOW_APP_INACTIVE
@@ -881,12 +895,18 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
 
     @callback
     def _publish_live(self, source: str) -> None:
-        """Record the start of a granted session and spend one grant."""
+        """Record the start of a granted session and spend one grant.
+
+        The failure trail is deliberately NOT cleared here: a completed
+        handshake against a sick cloud proves nothing (a server that accepts
+        connections and instantly drops them would otherwise pin the backoff
+        at its floor forever). The trail clears on stream evidence — the first
+        frame of a window — in :meth:`_note_stream_alive`.
+        """
         now = dt_util.utcnow()
         if source == LIVE_SOURCE_ACTIVE_USE:
             self._last_active_use = now
         self._session_saw_flow = False
-        self._clear_failure_state()
         state = self.state
         self._publish(
             replace(
@@ -896,9 +916,7 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
                 session_started=now,
                 windows_in_session=0,
                 sessions_today=state.sessions_today + 1,
-                consecutive_failures=0,
                 backoff_until=None,
-                last_error=None,
             )
         )
 
@@ -906,20 +924,33 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
     def _publish_renewal(self) -> None:
         """Record one more reporting window inside the running session.
 
-        A renewal spends a ticket, never a grant, and — being a successful
-        connect — also clears any failure trail the session recovered from.
+        A renewal spends a ticket, never a grant. Like a fresh grant it earns
+        no failure-trail clearing by connecting — only its first frame does.
         """
-        self._clear_failure_state()
         state = self.state
-        self._publish(
-            replace(
-                state,
-                windows_in_session=state.windows_in_session + 1,
-                consecutive_failures=0,
-                backoff_until=None,
-                last_error=None,
+        self._publish(replace(state, windows_in_session=state.windows_in_session + 1))
+
+    @callback
+    def _note_stream_alive(self) -> None:
+        """Clear the failure trail on real stream evidence.
+
+        Called for the first frame of every reporting window. Frames are the
+        proof a session is worth something — the connect snapshot arrives
+        within seconds on a healthy stream — so this is where a recovered
+        cloud withdraws the repair issue and zeroes the failure count.
+        """
+        self._window_saw_frames = True
+        state = self.state
+        if state.consecutive_failures or state.last_error is not None:
+            self._clear_failure_state()
+            self._publish(
+                replace(
+                    state,
+                    consecutive_failures=0,
+                    backoff_until=None,
+                    last_error=None,
+                )
             )
-        )
 
     @callback
     def _finish_session(self) -> None:
@@ -1100,9 +1131,10 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
 
         Live mode upgrades the existing entities rather than adding its own, so
         the streamed values are written into the polling coordinator's frozen
-        device and republished from there. That also postpones the next poll,
-        which is exactly right: the socket just delivered fresher data than the
-        poll would have.
+        device and republished through its live-apply path, which keeps the
+        REST poll's floor cadence: the stream refreshes a handful of raw
+        properties, but the enriched block — regeneration state, salt level,
+        feature gating — only ever refreshes through a genuine poll.
         """
         pending = self._pending
         self._pending = {}
@@ -1119,7 +1151,7 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
                     name=name, value=frame.value, updated_at=frame.timestamp
                 )
             )
-        self.fast.async_set_updated_data(replace(device, properties=properties))
+        self.fast.async_apply_live_update(replace(device, properties=properties))
 
     # -- failure handling --------------------------------------------------
 

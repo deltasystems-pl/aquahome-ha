@@ -399,7 +399,15 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
 
         @callback
         def _handle_fast_update() -> None:
-            """Enforce an active deferral against the fresh device view."""
+            """Enforce an active deferral against the fresh device view.
+
+            Live-stream pushes republish the device with the enriched block —
+            the only input the enforcement reads — carried over verbatim, so
+            they are no new observation: evaluating them would re-spend the
+            daily cancel budget against stale facts at streaming cadence.
+            """
+            if self.fast.updating_from_push:
+                return
             self.hass.async_create_task(
                 self._async_evaluate_fast(),
                 name=f"{DOMAIN} {self.device_slug} automation deferral pass",
