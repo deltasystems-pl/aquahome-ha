@@ -284,6 +284,12 @@ POINT_ANOMALY_MIN_HOURS: Final = 2
 MIN_BUCKET_SAMPLES: Final = 4
 LEARNED_DAILY_MIN_DAYS: Final = 14
 
+# Peak hours published per weekday: the top-K mature grid buckets by median
+# volume. 4 covers the real usage clusters (wake-up, meals, evening
+# appliances) without diluting back into "the household is awake" — the
+# failure mode of the binary activity grid on a normal household.
+PEAK_HOURS_PER_WEEKDAY: Final = 4
+
 # Freshness guard on the device's own per-weekday averages (observed live:
 # slots go weeks stale — the fixture's Friday slot was 43 days old and 4x off).
 # updated_at is a change-stamp, so a stable-valued fresh slot can look stale;

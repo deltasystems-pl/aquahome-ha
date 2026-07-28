@@ -156,11 +156,19 @@ class GridSummary:
     """Learned hour-of-week activity classification (internal Phase-8/9 signal).
 
     ``active_hours`` has 168 entries indexed ``weekday(Mon=0) * 24 + hour``.
+
+    ``peak_hours`` holds, per python weekday (``Monday = 0``), the hours of day
+    (ascending) whose mature buckets rank in that weekday's top
+    :data:`~..const.PEAK_HOURS_PER_WEEKDAY` by median volume. The analytics
+    pipeline always passes all seven weekdays; the empty default means "not
+    computed", and every consumer guards on the seven-tuple shape rather than
+    assuming it.
     """
 
     active_hours: tuple[bool, ...]
     mature_buckets: int
     hourly_samples: int
+    peak_hours: tuple[tuple[int, ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
