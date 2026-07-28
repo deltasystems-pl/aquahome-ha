@@ -60,6 +60,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # description/topics are GitHub repo metadata; drop them from the
-          # ignore list once the repository has both set.
-          ignore: brands description topics
+          # brands stays ignored until the home-assistant/brands submission
+          # is merged; description and topics are set on the repository.
+          ignore: brands
