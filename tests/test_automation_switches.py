@@ -373,9 +373,10 @@ async def test_three_automation_switches_per_device(
         )
         if entity.domain == SWITCH_DOMAIN
     ]
-    assert {entity.unique_id for entity in switches} == {
-        f"{SLUG}_{key}" for key, _category, _icon in AUTOMATION_SWITCHES
-    }
+    # The switch domain also hosts the live-mode controls; the automation trio
+    # must be exactly present within it, all on the one telemetry device.
+    automation_ids = {f"{SLUG}_{key}" for key, _category, _icon in AUTOMATION_SWITCHES}
+    assert automation_ids <= {entity.unique_id for entity in switches}
     assert len({entity.device_id for entity in switches}) == 1
 
 

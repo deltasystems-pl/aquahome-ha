@@ -53,12 +53,16 @@ SLUG = "7384243_20203_1120"
 #: usage, days remaining, depletion timestamp, per-regeneration, efficiency).
 #: Switches: the three Phase-8 automation opt-ins (vacation deferral, auto
 #: vacation, smart regeneration), created for every device.
-EXPECTED_SENSORS = 37
+# The two live-mode additions (water flow, live-mode status) count here too.
+EXPECTED_SENSORS = 39
 EXPECTED_BINARY_SENSORS = 14
 EXPECTED_EVENTS = 1
 EXPECTED_BUTTONS = 6
 EXPECTED_SELECTS = 15
-EXPECTED_SWITCHES = 3
+# The three automation opt-ins plus the three live-mode controls.
+EXPECTED_SWITCHES = 6
+# The two live-mode budget numbers.
+EXPECTED_NUMBERS = 2
 
 #: The alert that "arrives" between the setup refresh and the next poll.
 FRESH_ALERT: dict[str, Any] = {
@@ -116,6 +120,7 @@ async def test_full_integration_alert_flow(
         "button": EXPECTED_BUTTONS,
         "select": EXPECTED_SELECTS,
         "switch": EXPECTED_SWITCHES,
+        "number": EXPECTED_NUMBERS,
     }
 
     # Idle dev device: no regeneration in progress, countdown force-zeroed, and

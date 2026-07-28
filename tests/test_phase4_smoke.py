@@ -106,12 +106,15 @@ _DEV_BUTTONS = 6
 _DEV_SELECTS = 15
 
 EXPECTED_ENTITIES: dict[str, int] = {
-    "sensor": _DEV_SENSORS + 2,
+    # + water flow and live-mode status
+    "sensor": _DEV_SENSORS + 2 + 2,
     "binary_sensor": _DEV_BINARY_SENSORS + 1 + 4 + 1,
     "button": _DEV_BUTTONS + 1,
     "select": _DEV_SELECTS,
-    "number": 1,
-    "switch": 2 + 3,
+    # + the two live-mode budget numbers
+    "number": 1 + 2,
+    # + the three live-mode controls
+    "switch": 2 + 3 + 3,
     "valve": 1,
     "event": 1,
 }

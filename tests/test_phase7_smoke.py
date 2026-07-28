@@ -103,12 +103,15 @@ FROZEN_NOW: Final = datetime(2026, 7, 27, 10, 30, tzinfo=dt_util.UTC)
 #: ``night_flow``, and 11 + the three detection binaries. The switches are the
 #: three Phase-8 automation opt-ins, created for every device.
 EXPECTED_ENTITIES: Final[dict[str, int]] = {
-    "sensor": 37,
+    # 37 + water flow + live-mode status
+    "sensor": 39,
     "binary_sensor": 14,
     "event": 1,
     "button": 6,
     "select": 15,
-    "switch": 3,
+    # automation opt-ins + live-mode controls
+    "switch": 6,
+    "number": 2,
 }
 
 #: The five entities the analytics tier itself contributes.

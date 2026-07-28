@@ -114,12 +114,16 @@ NEXT_RUN: Final = datetime(2026, 7, 28, 5, 35, tzinfo=UTC)
 #: but ``switch`` is the Phase-7 inventory verbatim; the three switches are the
 #: Phase-8 automation opt-ins, created unconditionally for every device.
 EXPECTED_ENTITIES: Final[dict[str, int]] = {
-    "sensor": 37,
+    # 37 + the water-flow and live-mode-status additions
+    "sensor": 39,
     "binary_sensor": 14,
     "event": 1,
     "button": 6,
     "select": 15,
-    "switch": 3,
+    # automation opt-ins + live-mode controls
+    "switch": 6,
+    # the two live-mode budget knobs
+    "number": 2,
 }
 
 #: Total entities a full boot on the dev fixtures registers. The per-domain map
@@ -127,7 +131,8 @@ EXPECTED_ENTITIES: Final[dict[str, int]] = {
 #: pin so a platform that silently stops registering anything is caught even if
 #: another one grows by the same amount. (The earlier "63 + 3 = 66" estimate
 #: understates the measured Phase-7 inventory of 73.)
-EXPECTED_TOTAL: Final = 76
+# 76 pre-live entities + 3 live switches + 2 budget numbers + 2 live sensors.
+EXPECTED_TOTAL: Final = 83
 
 #: The three automation switches, by unique-id suffix, in creation order.
 AUTOMATION_SWITCH_KEYS: Final[tuple[str, ...]] = (

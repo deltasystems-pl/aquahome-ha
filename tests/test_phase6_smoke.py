@@ -58,7 +58,8 @@ FROZEN_NOW: Final = "2026-07-21T12:00:00+00:00"
 #: Sensors the captured dev fixtures create: the Phase-3 set of 30 plus the five
 #: Phase-6 salt sensors (daily usage, days remaining, depletion timestamp,
 #: per-regeneration, efficiency). Pinned identically by test_phase3_smoke.
-EXPECTED_SENSORS: Final = 37
+# Includes the two live-mode additions (water flow, live-mode status).
+EXPECTED_SENSORS: Final = 39
 
 # ---------------------------------------------------------------------------
 # Ground truth computed from first principles against the real fixtures:
