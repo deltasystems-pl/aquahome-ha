@@ -1,0 +1,131 @@
+# AquaHome — function-grouped dashboard (sections view)
+#
+# Entity ids below use the placeholder NICK for your device's slug. Entity ids
+# are minted from the device nickname and your Home Assistant language at
+# first setup, so replace NICK with your slug (check any AquaHome entity in
+# Settings -> Devices & services -> Entities), and adjust ids whose names your
+# installation minted in another language. Delete rows for entities your
+# device does not have (feature-gated or disabled ones).
+#
+# Use: Settings -> Dashboards -> Add dashboard -> New dashboard from scratch,
+# open it, edit, three-dot menu -> Raw configuration editor, paste this file.
+views:
+  - type: sections
+    title: AquaHome
+    path: aquahome
+    icon: mdi:water
+    max_columns: 4
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Water
+            icon: mdi:water
+          - type: entities
+            entities:
+              - sensor.NICK_water_used_today
+              - sensor.NICK_total_water
+              - sensor.NICK_average_daily_water_use
+              - sensor.NICK_water_flow
+              - sensor.NICK_treated_water_available
+              - sensor.NICK_hardness_setting
+          - type: history-graph
+            hours_to_show: 24
+            entities:
+              - sensor.NICK_water_used_today
+              - sensor.NICK_water_flow
+      - type: grid
+        cards:
+          - type: heading
+            heading: Analysis
+            icon: mdi:chart-line
+          - type: entities
+            entities:
+              - binary_sensor.NICK_leak_suspected
+              - binary_sensor.NICK_usage_anomaly
+              - binary_sensor.NICK_vacation_detected
+              - sensor.NICK_usage_forecast
+              - sensor.NICK_night_flow
+      - type: grid
+        cards:
+          - type: heading
+            heading: Live mode
+            icon: mdi:broadcast
+          - type: entities
+            entities:
+              - switch.NICK_live_view
+              - switch.NICK_smart_live_windows
+              - switch.NICK_continuous_live_flow
+              - sensor.NICK_live_mode
+              - number.NICK_live_sessions_per_day
+              - number.NICK_minimum_gap_between_live_sessions
+      - type: grid
+        cards:
+          - type: heading
+            heading: Regeneration
+            icon: mdi:autorenew
+          - type: entities
+            entities:
+              - sensor.NICK_regeneration_status
+              - binary_sensor.NICK_regenerating
+              - sensor.NICK_regeneration_time_remaining
+              - sensor.NICK_next_regeneration
+              - sensor.NICK_last_regeneration
+              - sensor.NICK_days_since_last_recharge
+              - sensor.NICK_capacity_remaining
+              - sensor.NICK_total_recharges
+              - button.NICK_regenerate_now
+              - button.NICK_schedule_regeneration
+              - button.NICK_cancel_regeneration
+              - select.NICK_regeneration_time
+      - type: grid
+        cards:
+          - type: heading
+            heading: Salt
+            icon: mdi:shaker-outline
+          - type: entities
+            entities:
+              - sensor.NICK_salt_level
+              - sensor.NICK_out_of_salt_estimate
+              - sensor.NICK_daily_salt_usage_estimate
+              - sensor.NICK_salt_per_regeneration
+              - sensor.NICK_total_salt_used
+              - binary_sensor.NICK_salt_level_alert
+              - select.NICK_salt_type
+      - type: grid
+        cards:
+          - type: heading
+            heading: Automation
+            icon: mdi:robot
+          - type: entities
+            entities:
+              - switch.NICK_vacation_deferral
+              - switch.NICK_auto_vacation_deferral
+              - switch.NICK_smart_regeneration_scheduling
+      - type: grid
+        cards:
+          - type: heading
+            heading: Alerts
+            icon: mdi:bell-alert
+          - type: entities
+            entities:
+              - event.NICK_alert
+              - sensor.NICK_latest_alert
+              - binary_sensor.NICK_error_code_alert
+              - binary_sensor.NICK_flow_monitor_alert
+              - binary_sensor.NICK_water_usage_alert
+              - binary_sensor.NICK_connection_alert
+      - type: grid
+        cards:
+          - type: heading
+            heading: Device
+            icon: mdi:chip
+          - type: entities
+            entities:
+              - binary_sensor.NICK_online
+              - sensor.NICK_model
+              - sensor.NICK_serial_number
+              - sensor.NICK_controller_firmware
+              - sensor.NICK_wi_fi_module_firmware
+              - sensor.NICK_days_powered_up
+              - button.NICK_refresh_data

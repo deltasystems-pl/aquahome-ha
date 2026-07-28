@@ -40,6 +40,7 @@ you are watching.
 - [Actions](#actions)
 - [Statistics and the Energy dashboard](#statistics-and-the-energy-dashboard)
 - [Blueprints](#blueprints)
+- [Dashboard](#dashboard)
 - [Example automations](#example-automations)
 - [Honest limitations](#honest-limitations)
 - [Removal](#removal)
@@ -527,6 +528,20 @@ Assistant, then create an automation from it.
 The interactive buttons need the Home Assistant Companion app. With any other
 notification service the messages still arrive — the buttons are simply
 ignored, and each blueprint documents what happens then.
+
+## Dashboard
+
+Home Assistant groups a device page only by category (controls, sensors,
+configuration, diagnostic). For grouping by *function* — water, analysis,
+live mode, regeneration, salt, automation, alerts, device — the repository
+ships a ready-made sections dashboard:
+[`dashboards/aquahome-dashboard.yaml`](dashboards/aquahome-dashboard.yaml).
+Create an empty dashboard (**Settings → Dashboards → Add dashboard**), open
+its raw configuration editor, paste the file, and replace the `NICK`
+placeholder with your device's entity-id slug as described in the file's
+header. Labels are the other good tool for the same job: create labels named
+after those functions and filter by them anywhere — labels are yours to
+manage, so the integration does not pre-assign any.
 
 ## Example automations
 
