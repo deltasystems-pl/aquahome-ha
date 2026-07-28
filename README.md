@@ -50,6 +50,11 @@ you are watching.
 
 ### HACS (recommended)
 
+[![Open this repository in HACS on your Home Assistant instance.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=deltasystems-pl&repository=aquahome-ha&category=integration)
+
+The badge opens HACS on your instance with this repository pre-filled — press
+**Download**, then restart Home Assistant. To do the same by hand:
+
 1. In Home Assistant, open **HACS**.
 2. Open the **⋮** menu (top right) → **Custom repositories**.
 3. Add the repository URL `https://github.com/deltasystems-pl/aquahome-ha`
