@@ -190,7 +190,7 @@ STATUS_ATTRIBUTE_KEYS = frozenset(
         "consecutive_failures",
         "backoff_until",
         "last_error",
-        "smart_suspended_today",
+        "smart_suspended_until",
     }
 )
 
@@ -843,7 +843,7 @@ async def test_status_sensor_is_a_diagnostic_enum_starting_idle(
     assert attributes["consecutive_failures"] == 0
     assert attributes["backoff_until"] is None
     assert attributes["last_error"] is None
-    assert attributes["smart_suspended_today"] is False
+    assert attributes["smart_suspended_until"] is None
 
 
 async def test_status_sensor_reports_the_configured_budget(

@@ -87,7 +87,9 @@ class LiveState:
     consecutive_failures: int = 0
     backoff_until: datetime | None = None
     last_error: str | None = None
-    smart_suspended_today: bool = False
+    #: End of the peak block the no-flow brake stood down; ``None`` when
+    #: the tier is free to hold. Later blocks the same day start fresh.
+    smart_suspended_until: datetime | None = None
 
     def with_config(self, config: LiveConfig) -> LiveState:
         """Return a copy carrying ``config`` as the current configuration."""

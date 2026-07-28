@@ -1862,7 +1862,7 @@ class AquaHomeLiveStatusSensor(CoordinatorEntity["AquaHomeLiveManager"], SensorE
             "consecutive_failures": state.consecutive_failures,
             "backoff_until": _isoformat(state.backoff_until),
             "last_error": state.last_error,
-            "smart_suspended_today": state.smart_suspended_today,
+            "smart_suspended_until": state.smart_suspended_until,
         }
 
 

@@ -1022,7 +1022,7 @@ async def test_the_grant_gate_reports_the_first_unmet_condition(
             backoff_until=now + timedelta(minutes=5),
             sessions_today=seeded.config.sessions_per_day,
             last_session_end=now,
-            smart_suspended_today=True,
+            smart_suspended_until=dt_util.utcnow() + timedelta(hours=1),
         )
     )
 
@@ -1047,7 +1047,7 @@ async def test_the_grant_gate_reports_the_first_unmet_condition(
     assert manager._can_grant(LIVE_SOURCE_ACTIVE_USE, now) == DENIED_COOLDOWN
 
     assert manager._can_grant(LIVE_SOURCE_SMART, now) == DENIED_SUSPENDED
-    manager._publish(replace(manager.state, smart_suspended_today=False))
+    manager._publish(replace(manager.state, smart_suspended_until=None))
     assert manager._can_grant(LIVE_SOURCE_SMART, now) == DENIED_NIGHT
 
     # Every shared condition is clear, and the per-source rules do not touch a
@@ -1398,7 +1398,7 @@ async def test_three_no_flow_windows_suspend_the_tier_mid_block(
     def _record() -> None:
         """Record the session status each published state carried."""
         state = manager.data
-        published.append((state.status, state.smart_suspended_today))
+        published.append((state.status, state.smart_suspended_until is not None))
 
     unsub = manager.async_add_listener(_record)
     try:
@@ -1410,13 +1410,13 @@ async def test_three_no_flow_windows_suspend_the_tier_mid_block(
         # ever moves: nothing in this house is worth the socket.
         for window in range(1, LIVE_SMART_NO_FLOW_SUSPEND):
             await _renew_window(harness, window)
-            assert manager.state.smart_suspended_today is False
+            assert manager.state.smart_suspended_until is None
         await _end_session(harness)
     finally:
         unsub()
 
     state = manager.state
-    assert state.smart_suspended_today is True
+    assert state.smart_suspended_until is not None
     assert manager._no_flow_windows == LIVE_SMART_NO_FLOW_SUSPEND
     assert state.consecutive_failures == 0
     assert state.sessions_today == 1
@@ -1442,7 +1442,7 @@ async def test_three_no_flow_windows_suspend_the_tier_mid_block(
     await _quiesce(harness.hass)
 
     rolled = manager.state
-    assert rolled.smart_suspended_today is False
+    assert rolled.smart_suspended_until is None
     assert rolled.sessions_today == 0
     assert manager._no_flow_windows == 0
 
@@ -1591,7 +1591,7 @@ async def test_a_peak_hour_session_holds_across_its_whole_block(
     ended = manager.state
     assert ended.sessions_today == 1
     assert ended.last_session_end is not None
-    assert ended.smart_suspended_today is False
+    assert ended.smart_suspended_until is None
     assert manager._no_flow_windows == 0
 
 
@@ -1632,7 +1632,12 @@ async def test_the_full_block_hold_requires_every_one_of_its_conditions(
         await manager.async_set_smart_windows(False)
     elif false_term == "suspended_today":
         # Suspended for the day by the no-flow brake.
-        manager._publish(replace(manager.state, smart_suspended_today=True))
+        manager._publish(
+            replace(
+                manager.state,
+                smart_suspended_until=dt_util.utcnow() + timedelta(hours=1),
+            )
+        )
     elif false_term == "outside_the_hour":
         # The block ran out: the grid still ranks peaks, just not this hour.
         await _push_result(harness, _result(peak_hours=_peaks_away_from(day_hour)))
@@ -1645,7 +1650,7 @@ async def test_the_full_block_hold_requires_every_one_of_its_conditions(
     state = manager.state
     unmet = {
         "tier_off": not state.config.smart_windows,
-        "suspended_today": state.smart_suspended_today,
+        "suspended_today": manager._suspension_active(now),
         "outside_the_hour": not manager._in_peak_hour(now),
         "night": manager._is_night(now),
     }
@@ -2682,17 +2687,58 @@ async def test_a_flow_window_resets_the_no_flow_window_count(
 
     holding = manager.state
     assert holding.status == LIVE_STATUS_LIVE
-    assert holding.smart_suspended_today is False
+    assert holding.smart_suspended_until is None
     # Five windows accounted and four of them dry — but only two in a row.
     assert manager._no_flow_windows == LIVE_SMART_NO_FLOW_SUSPEND - 1
 
     await _end_session(harness)
 
-    assert manager.state.smart_suspended_today is True
+    assert manager.state.smart_suspended_until is not None
     assert manager.state.sessions_today == 1
     # One grant, one connection per window: quiet, quiet, flow, quiet, quiet,
     # quiet, and the sixth is where the run of three completes.
     assert len(harness.server.all_connections) == 6
+
+
+async def test_the_no_flow_brake_stands_down_one_block_not_the_day(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """A quiet block forfeits itself; a later block starts fresh.
+
+    Under the day-long latch this shipped with, a quiet 17:00 block silently
+    skipped the household's real evening block — the first production day did
+    exactly that. The stand-down now ends with the contiguous block: the walk
+    stops at the first non-peak (or night) hour, so once that instant passes,
+    the tier is free again the same day.
+    """
+    zone, _hour = _zone_for_local_hour(DAY_HOUR)
+    harness = await build_live(
+        detail=_detail(tz_id=zone), result=_result(peak_hours=ALL_PEAK_HOURS)
+    )
+    manager = harness.manager
+    await manager.async_set_smart_windows(True)
+
+    now = dt_util.utcnow()
+    # An all-peak grid walks to the night wall, never a full day ahead.
+    end = manager._block_end(now)
+    assert now < end <= now + timedelta(hours=25)
+
+    manager._publish(replace(manager.state, smart_suspended_until=end))
+    assert manager._suspension_active(now) is True
+    assert manager._smart_block_wanted(now) is False
+    # The instant the block runs out, the same grid grants again.
+    assert manager._suspension_active(end) is False
+    assert manager._smart_block_wanted(end + timedelta(seconds=1)) is (
+        manager._in_peak_hour(end + timedelta(seconds=1))
+        and not manager._is_night(end + timedelta(seconds=1))
+    )
+    # The day rollover clears any leftover stamp outright.
+    manager._publish(
+        replace(manager.state, smart_suspended_until=now + timedelta(hours=9))
+    )
+    manager._day = None
+    manager._roll_day(now)
+    assert manager.state.smart_suspended_until is None
 
 
 async def test_a_quiet_burst_held_by_the_block_counts_against_the_brake(
@@ -2722,11 +2768,11 @@ async def test_a_quiet_burst_held_by_the_block_counts_against_the_brake(
 
     for window in range(1, LIVE_SMART_NO_FLOW_SUSPEND):
         await _renew_window(harness, window)
-        assert manager.state.smart_suspended_today is False
+        assert manager.state.smart_suspended_until is None
     await _end_session(harness)
 
     state = manager.state
-    assert state.smart_suspended_today is True
+    assert state.smart_suspended_until is not None
     assert state.sessions_today == 1
     assert len(harness.server.all_connections) == LIVE_SMART_NO_FLOW_SUSPEND
 

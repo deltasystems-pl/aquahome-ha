@@ -980,7 +980,7 @@
       ]),
       'sessions_per_day': 48,
       'sessions_today': 0,
-      'smart_suspended_today': False,
+      'smart_suspended_until': None,
       'source': None,
       'windows_in_session': 0,
     }),

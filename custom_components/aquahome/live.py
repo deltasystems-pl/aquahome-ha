@@ -607,8 +607,10 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         self._last_active_use = None
         self._no_flow_windows = 0
         state = self.state
-        if state.sessions_today or state.smart_suspended_today:
-            self._publish(replace(state, sessions_today=0, smart_suspended_today=False))
+        if state.sessions_today or state.smart_suspended_until is not None:
+            self._publish(
+                replace(state, sessions_today=0, smart_suspended_until=None)
+            )
 
     @callback
     def _arm_smart_window(self, now: datetime) -> None:
@@ -766,7 +768,7 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
                 DENIED_COOLDOWN,
             ),
             (
-                source == LIVE_SOURCE_SMART and state.smart_suspended_today,
+                source == LIVE_SOURCE_SMART and self._suspension_active(now),
                 DENIED_SUSPENDED,
             ),
             (source == LIVE_SOURCE_SMART and self._is_night(now), DENIED_NIGHT),
@@ -815,10 +817,42 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         state = self.state
         return (
             state.config.smart_windows
-            and not state.smart_suspended_today
+            and not self._suspension_active(now)
             and self._in_peak_hour(now)
             and not self._is_night(now)
         )
+
+    def _suspension_active(self, now: datetime) -> bool:
+        """Return whether the no-flow brake still stands the tier down."""
+        until = self.state.smart_suspended_until
+        return until is not None and now < until
+
+    def _block_end(self, now: datetime) -> datetime:
+        """Return when the peak block containing ``now`` runs out.
+
+        The no-flow brake stands the tier down for the *rest of the current
+        contiguous block* — quiet at 17:00 must not forfeit the evening block,
+        which is a fresh hypothesis about a different hour (first production
+        day proved exactly this: a quiet 17:00 skipped the household's real
+        evening usage window under the old day-long latch). The walk
+        follows the same rules the hold itself renews under: consecutive peak
+        hours extend the block, and the night wall ends it outright.
+        """
+        local = now.astimezone(self._timezone()).replace(
+            minute=0, second=0, microsecond=0
+        )
+        end = local + timedelta(hours=1)
+        result: AnalyticsResult | None = self.engine.data
+        peak_hours = result.grid.peak_hours if result is not None else ()
+        if len(peak_hours) == _WEEKDAYS:
+            for _ in range(_HOURS_PER_DAY):
+                hour = end.hour
+                if _NIGHT_START_HOUR <= hour < _NIGHT_END_HOUR:
+                    break
+                if hour not in peak_hours[end.weekday()]:
+                    break
+                end += timedelta(hours=1)
+        return end
 
     @callback
     def _resume_hold(self) -> None:
@@ -1192,14 +1226,17 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         self._no_flow_windows += 1
         if self._no_flow_windows < LIVE_SMART_NO_FLOW_SUSPEND:
             return
-        if not self.state.smart_suspended_today:
+        now = dt_util.utcnow()
+        if not self._suspension_active(now):
+            until = self._block_end(now)
             _LOGGER.debug(
-                "Suspending smart live windows for %s today: %s windows in a "
-                "row saw no flow",
+                "Standing smart live windows for %s down until %s: %s windows "
+                "in a row saw no flow",
                 self.device_slug,
+                until,
                 self._no_flow_windows,
             )
-            self._publish(replace(self.state, smart_suspended_today=True))
+            self._publish(replace(self.state, smart_suspended_until=until))
 
     async def _async_stop_session(self, *, publish_idle: bool = True) -> None:
         """Cancel the running session task and close the socket it owns.
