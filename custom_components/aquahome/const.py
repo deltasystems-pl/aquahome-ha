@@ -51,7 +51,7 @@ ACTIVITY_PAGE_SIZE: Final = 20
 # convention, like zha_event).
 EVENT_AQUAHOME: Final = "aquahome_event"
 
-# Alert types observed on the live feed (reverse-engineering/knowledge/api samples). The event
+# Alert types observed on a live account's real alert feed. The event
 # entity declares exactly these plus the catch-all; unknown vendor strings map
 # to ALERT_EVENT_TYPE_OTHER with the raw type preserved in the attributes.
 KNOWN_ALERT_TYPES: Final[tuple[str, ...]] = (
@@ -220,9 +220,9 @@ SALT_DAYS_WARNING_THRESHOLD: Final = 14
 SALT_DAYS_CRITICAL_THRESHOLD: Final = 7
 SALT_DAYS_HYSTERESIS: Final = 2
 
-# --- Analytics tier (Phase 7). Every threshold below traces to
-# reverse-engineering/knowledge/research/water-usage-analytics.md (bracketed
-# source numbers refer to its bibliography) — no folklore thresholds.
+# --- Analytics tier. Every threshold below traces to published water-demand
+# research (residential end-use studies, CUSUM/EWMA process-control practice)
+# or to measurements on the reference device — no folklore thresholds.
 
 # Daily engine run, device-local wall clock: just after the 01-07 minimum-night-
 # flow window closes, so the freshest complete night is classifiable the same

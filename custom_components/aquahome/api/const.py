@@ -1,6 +1,6 @@
 """Constants for the iQua cloud API client.
 
-Values verified live on 2026-07-21 — see reverse-engineering/knowledge/api/api-reference.md.
+Every value here was verified against the live cloud API on 2026-07-21.
 """
 
 from __future__ import annotations
@@ -8,8 +8,8 @@ from __future__ import annotations
 API_BASE_URL = "https://api.myiquaapp.com/v1"
 
 # Post-migration ("iQua2") accounts live in a separate user/device database
-# with an identical API surface; login simply fails on the wrong host. The
-# config flow offers both hosts — see reverse-engineering/knowledge/prior-art/iqua-mutilator-fork.md.
+# with an identical API surface; login simply fails on the wrong host, so the
+# config flow probes both hosts and keeps the one that answers.
 IQUA2_BASE_URL = "https://api.iqua2.com/v1"
 
 # App-mimicry headers: the server localizes strings/units from accept-language
@@ -60,7 +60,6 @@ COMMAND_FUNCTIONS: dict[str, frozenset[str]] = {
 LIVE_TICKET_MIN_INTERVAL_SECONDS = 60.0
 
 # Fallback backoff applied after a 429 when the server sends no usable
-# `ratelimit-policy` refill interval. The token-bucket 429 windows observed on
-# the fork clear in ~5 min, so a one-minute floor is a safe, cheap default
-# (see reverse-engineering/knowledge/research/automation-gap-analysis.md §7 D1).
+# `ratelimit-policy` refill interval. Observed token-bucket 429 windows clear
+# in ~5 min, so a one-minute floor is a safe, cheap default.
 DEFAULT_RATE_LIMIT_BACKOFF_SECONDS = 60.0
