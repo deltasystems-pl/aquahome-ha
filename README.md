@@ -258,7 +258,7 @@ no leak detectors) registers 83 entities.
 | Entity | Default | Notes |
 | --- | --- | --- |
 | Live view | Off | Holds a live session open while it is on; turns itself off after 30 minutes. |
-| Smart live windows | Off | Configuration. Opt-in: live sessions during learned busy hours. |
+| Smart live windows | Off | Configuration. Opt-in: a live session held through each learned peak water-use hour. |
 | Continuous live flow | Off | Configuration. Advanced: keeps a live session open indefinitely. |
 | Vacation deferral | Off | Defers scheduled regenerations while the household is away. |
 | Auto vacation deferral | Off | Configuration. Lets the absence detector drive the deferral above. |
@@ -331,10 +331,16 @@ the poll feeds — it never creates a second set.
 2. **The live dashboard blueprint** — the same switch, driven from an
    "app is open" indicator, so live data runs exactly while you are looking at
    a dashboard. See [Blueprints](#blueprints).
-3. **Smart live windows** (opt-in, off by default) — one session at the start
-   of the next hour the usage analysis expects to be busy. Never between 01:00
-   and 07:00, and suspended for the rest of the day after three windows in a
-   row saw no water move.
+3. **Smart live windows** (opt-in, off by default) — a session at the start of
+   the next **peak hour** the usage analysis has learned for this weekday, held
+   open for the whole of it: it renews at the end of each reporting window and
+   runs straight through a block of adjacent peak hours, so an hour of real
+   household use is recorded gallon by gallon with timestamps instead of
+   sampled once at the top. A held hour costs about a dozen reconnects, against
+   roughly 36 an hour the cloud has been measured to sustain, and renewals
+   inside a session never count against the daily session budget. Never between
+   01:00 and 07:00, and suspended for the rest of the day after three windows
+   in a row saw no water move.
 4. **Event bursts** — a session when a regeneration starts, and one when the
    usage-anomaly binary sensor turns on, so the event is captured at gallon
    resolution instead of in a 10-minute average.
@@ -389,6 +395,14 @@ device**: it only publishes sensors and binary sensors.
 - **Usage forecast** — expected use for the coming days, from the device's own
   weekday averages where they are fresh and from learned statistics otherwise.
 
+The same hour-of-week profile also names each weekday's **peak hours**: the
+four hours whose learned median use is highest among that weekday's buckets
+that have collected enough days to count. They describe whole hours and nothing
+finer — the imported history is hourly, so a peak hour says "this hour is
+usually busy on a Tuesday", not when inside it the water moves — and
+[Live mode](#live-mode) uses them to decide when holding a session open is
+worth it.
+
 Two of these can raise a repair issue: a sustained urgent-tier leak, and a leak
 detected while the household appears to be away. Both are notifications, not
 actions.
@@ -424,7 +438,7 @@ while the integration is reloading.
 
 | Action | Target | Fields | Returns |
 | --- | --- | --- | --- |
-| `aquahome.analyze_usage` | any AquaHome analytics sensor | `refresh` (bool, default false) — recompute from the latest statistics first | The full usage analysis: nightly leak verdicts, daily assessments, anomaly and absence state, tomorrow's forecast, the learned activity grid |
+| `aquahome.analyze_usage` | any AquaHome analytics sensor | `refresh` (bool, default false) — recompute from the latest statistics first | The full usage analysis: nightly leak verdicts, daily assessments, anomaly and absence state, tomorrow's forecast, and the learned activity grid — its `active_hours` plus each weekday's `peak_hours` |
 | `aquahome.get_usage_forecast` | any AquaHome analytics sensor | `days` (1–7, default 1) | Expected daily water use for the coming days |
 | `aquahome.set_vacation_mode` | the AquaHome *Vacation deferral* switch | `vacation` (bool, required) | — |
 | `aquahome.schedule_regeneration` | any AquaHome regeneration button | `mode`: `schedule` (default), `now`, `cancel` | — |

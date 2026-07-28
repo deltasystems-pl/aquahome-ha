@@ -445,7 +445,7 @@
   "services": {
     "analyze_usage": {
       "name": "Analyze usage",
-      "description": "Returns the full water-usage analysis for a device: nightly leak verdicts, daily usage assessments, anomaly and vacation detection state, tomorrow's forecast, and the learned activity grid.",
+      "description": "Returns the full water-usage analysis for a device: nightly leak verdicts, daily usage assessments, anomaly and vacation detection state, tomorrow's forecast, and the learned activity grid, including each weekday's peak water-use hours.",
       "fields": {
         "refresh": {
           "name": "Refresh first",

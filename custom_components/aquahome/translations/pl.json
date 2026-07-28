@@ -445,7 +445,7 @@
   "services": {
     "analyze_usage": {
       "name": "Analizuj zużycie wody",
-      "description": "Zwraca pełną analizę zużycia wody dla urządzenia: nocne werdykty dotyczące wycieków, dobowe oceny zużycia, stan wykrywania anomalii i nieobecności, prognozę na jutro oraz wyuczoną siatkę aktywności.",
+      "description": "Zwraca pełną analizę zużycia wody dla urządzenia: nocne werdykty dotyczące wycieków, dobowe oceny zużycia, stan wykrywania anomalii i nieobecności, prognozę na jutro oraz wyuczoną siatkę aktywności wraz z godzinami szczytowego zużycia wody w poszczególnych dniach tygodnia.",
       "fields": {
         "refresh": {
           "name": "Najpierw odśwież",
