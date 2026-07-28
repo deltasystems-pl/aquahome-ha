@@ -608,9 +608,7 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         self._no_flow_windows = 0
         state = self.state
         if state.sessions_today or state.smart_suspended_until is not None:
-            self._publish(
-                replace(state, sessions_today=0, smart_suspended_until=None)
-            )
+            self._publish(replace(state, sessions_today=0, smart_suspended_until=None))
 
     @callback
     def _arm_smart_window(self, now: datetime) -> None:
