@@ -1338,6 +1338,32 @@ async def test_shutdown_closes_a_running_session(
     assert len(harness.server.all_connections) == 1
 
 
+async def test_updates_landing_after_shutdown_cannot_open_a_session(
+    build_live: Callable[..., Awaitable[LiveHarness]],
+) -> None:
+    """An update delivered mid-unload to a shut-down manager is inert.
+
+    The fast and engine listeners are released with the config entry — after
+    every consumer's own shutdown has run — so a poll or analytics pass
+    completing during unload delivers one more update to a manager that is
+    already down. Without the stop-flag guard that update passed the grant
+    gate and spent a ticket on a fresh socket nothing would ever close.
+    """
+    harness = await build_live()
+
+    await harness.manager.async_shutdown()
+
+    # A regeneration-start transition and an every-hour-active grid: both
+    # would open a session on a running manager.
+    await _push_device(harness, _detail(tile_state=REGENERATING))
+    await _push_result(harness, _result(active_hours=ALL_ACTIVE_HOURS))
+    await _quiesce(harness.hass)
+
+    assert harness.server.all_connections == []
+    assert harness.manager.state.sessions_today == 0
+    assert harness.manager.state.status == LIVE_STATUS_IDLE
+
+
 # ---------------------------------------------------------------------------
 # Stream evidence: frames, not handshakes, are what prove the cloud healthy
 # ---------------------------------------------------------------------------

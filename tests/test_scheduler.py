@@ -1539,3 +1539,34 @@ async def test_deferral_enforcement_ignores_live_stream_pushes(
     await hass.async_block_till_done()
 
     assert _commands(mock_api) == [CANCEL_COMMAND]
+
+
+async def test_updates_landing_after_shutdown_enforce_nothing(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: aioresponses,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """An update delivered mid-unload to a shut-down scheduler is inert.
+
+    The fast and engine listeners are released with the config entry — after
+    the scheduler's own shutdown — so a poll completing during unload delivers
+    one more device view to a scheduler that is already down. Without the
+    stop-flag guard that view ran the full deferral enforcement and sent a
+    cloud command from a dead scheduler.
+    """
+    await _boot(hass, mock_config_entry, mock_api, freezer)
+    scheduler = _scheduler(mock_config_entry)
+    await scheduler.async_set_vacation_deferral(True, source=DEFERRAL_SOURCE_MANUAL)
+    assert _commands(mock_api) == []
+
+    await scheduler.async_shutdown()
+
+    # A genuine poll showing a device-scheduled regeneration: exactly the view
+    # the enforcement cancels on a running scheduler (see the test above).
+    scheduled = Device.from_dict(_detail(tile_state=RECHARGE_STATE_SCHEDULED))
+    coordinator = mock_config_entry.runtime_data.coordinators[TEST_DEVICE_ID]
+    coordinator.async_set_updated_data(scheduled)
+    await hass.async_block_till_done()
+
+    assert _commands(mock_api) == []

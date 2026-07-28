@@ -318,6 +318,12 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         self._iqua2 = client.base_url == IQUA2_BASE_URL
         self._session: AquaHomeLiveSession | None = None
         self._session_task: asyncio.Task[None] | None = None
+        #: Set once shutdown begins. The fast/engine listeners stay subscribed
+        #: until the config entry releases them — after every consumer's own
+        #: shutdown — so an update landing mid-unload could otherwise pass the
+        #: grant gate and open a fresh ticketed session against a manager that
+        #: is already down.
+        self._stopping = False
         self._window_reason = _WINDOW_STREAM_END
         #: Whether the current reporting window delivered at least one frame —
         #: the evidence that clears the failure trail and permits a renewal.
@@ -421,11 +427,14 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
     async def async_shutdown(self) -> None:
         """Cancel every timer, close the session, then shut the coordinator down.
 
-        Ordered so nothing can re-arm behind the teardown: the timers go first
-        (a window or backoff timer firing mid-shutdown would try to reconnect),
-        then the session task is cancelled and its socket closed, and only then
-        does the base coordinator stand down.
+        Ordered so nothing can re-arm behind the teardown: the stop flag goes
+        up first (the data-source listeners outlive this method and keep
+        delivering updates until the config entry releases them), then the
+        timers (a window or backoff timer firing mid-shutdown would try to
+        reconnect), then the session task is cancelled and its socket closed,
+        and only then does the base coordinator stand down.
         """
+        self._stopping = True
         self._cancel_timers()
         await self._async_stop_session(publish_idle=False)
         await super().async_shutdown()
@@ -500,6 +509,8 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
 
     async def _async_evaluate_fast(self) -> None:
         """Re-derive the poll-driven triggers from a fresh device view."""
+        if self._stopping:
+            return
         now = dt_util.utcnow()
         self._roll_day(now)
         device: Device | None = self.fast.data
@@ -509,6 +520,8 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
 
     async def _async_evaluate_engine(self) -> None:
         """Re-derive the analytics-driven triggers from a fresh verdict."""
+        if self._stopping:
+            return
         now = dt_util.utcnow()
         self._roll_day(now)
         result: AnalyticsResult | None = self.engine.data
@@ -579,7 +592,7 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
         hour. With the flag off, or without a usable grid, nothing is armed.
         """
         self._cancel_smart_window()
-        if not self.state.config.smart_windows:
+        if self._stopping or not self.state.config.smart_windows:
             return
         result: AnalyticsResult | None = self.engine.data
         if result is None:
@@ -646,8 +659,12 @@ class AquaHomeLiveManager(DataUpdateCoordinator[LiveState]):
 
         Deliberately synchronous through to the task hand-off: nothing awaits
         between the gate and the session task taking ownership, so concurrent
-        triggers cannot both pass.
+        triggers cannot both pass. The stop flag is checked here too — the
+        single choke point every trigger path funnels through — so a stray
+        evaluator task or timer landing mid-unload cannot spend a ticket.
         """
+        if self._stopping:
+            return
         now = dt_util.utcnow()
         self._roll_day(now)
         denied = self._can_grant(source, now)

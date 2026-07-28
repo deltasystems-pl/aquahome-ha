@@ -344,6 +344,11 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
         #: Whether the current deferral already announced that it ran past the
         #: resin-hygiene cap. Reset when a new deferral starts.
         self._expiry_fired = False
+        #: Set once shutdown begins. The fast/engine listeners stay subscribed
+        #: until the config entry releases them — after this coordinator's own
+        #: shutdown — so an update landing mid-unload could otherwise run a
+        #: full evaluation and send a cloud command from a dead scheduler.
+        self._stopping = False
         super().__init__(
             hass,
             _LOGGER,
@@ -379,6 +384,16 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
         republish and can never fail.
         """
         return self.state
+
+    async def async_shutdown(self) -> None:
+        """Raise the stop flag before the base coordinator stands down.
+
+        The flag — not the shutdown itself — is what stops the evaluators: the
+        listeners feeding them are released with the config entry, after every
+        consumer's shutdown has already run.
+        """
+        self._stopping = True
+        await super().async_shutdown()
 
     async def async_start(self) -> None:
         """Publish the seeded state and subscribe to the two data sources.
@@ -469,6 +484,10 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
     async def _async_evaluate_engine(self) -> None:
         """Run one automation pass over a fresh analytics result."""
         async with self._lock:
+            # Re-checked under the lock: a pass already queued (or waiting on
+            # the lock) when shutdown started must not send commands after it.
+            if self._stopping:
+                return
             result: AnalyticsResult | None = self.engine.data
             await self._async_follow_vacation(result)
             await self._async_decide(result)
@@ -476,6 +495,8 @@ class AquaHomeRegenScheduler(DataUpdateCoordinator[AutomationState]):
     async def _async_evaluate_fast(self) -> None:
         """Enforce an active deferral against the freshest device view."""
         async with self._lock:
+            if self._stopping:
+                return
             await self._async_enforce_deferral()
 
     async def _async_follow_vacation(self, result: AnalyticsResult | None) -> None:
