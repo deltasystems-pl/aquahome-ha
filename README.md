@@ -33,6 +33,7 @@ you are watching.
 - [Blueprints](#blueprints)
 - [Example automations](#example-automations)
 - [Honest limitations](#honest-limitations)
+- [Removal](#removal)
 - [Translations](#translations)
 - [Development](#development)
 - [Continuous integration](#continuous-integration)
@@ -520,6 +521,16 @@ automation:
   cloud API at any time and the integration will break when they do. Nothing
   here is a substitute for a plumber, a hardware leak sensor, or an actual
   shutoff valve.
+
+## Removal
+
+Delete the integration entry under **Settings → Devices & services → AquaHome**.
+Removing the entry also deletes the imported `aquahome:*` water-usage statistics
+series and every repair issue the integration created — nothing is left behind.
+If you installed through HACS, remove the repository from HACS afterwards (or
+delete `custom_components/aquahome/` for a manual install) and restart Home
+Assistant. Your iQua account itself is untouched: the integration only ever held
+an API session, which expires on its own.
 
 ## Translations
 
