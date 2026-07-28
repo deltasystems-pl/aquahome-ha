@@ -351,8 +351,9 @@ def _live_session_attributes(state: LiveState) -> dict[str, Any]:
     not necessarily this switch: a hold requested while another trigger already
     streams is absorbed by that session rather than opening a second socket.
     ``windows_in_session`` counts the reporting-window renewals spent since the
-    session was granted; the device fast-reports for roughly three minutes per
-    window, so a hold kept open for a while renews repeatedly.
+    session was granted; a window closes roughly five minutes after it opens
+    (the device concentrates its pushes in the first few), so a hold kept open
+    for a while renews repeatedly.
     """
     started = state.session_started
     return {

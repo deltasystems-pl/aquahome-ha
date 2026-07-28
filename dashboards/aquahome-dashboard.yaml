@@ -58,7 +58,7 @@ views:
               - switch.NICK_continuous_live_flow
               - sensor.NICK_live_mode
               - number.NICK_live_sessions_per_day
-              - number.NICK_minimum_gap_between_live_sessions
+              - number.NICK_live_session_minimum_gap
       - type: grid
         cards:
           - type: heading

@@ -152,6 +152,11 @@ reports; nothing is created for data a device does not have. Feature-gated
 entities require the matching hardware, and *disabled by default* entities must
 be enabled in the entity registry before they appear.
 
+The tables below are a summary. For the full, beginner-friendly reference —
+every entity explained in plain language, with where its value comes from, how
+often it updates, when it exists, and the caveats worth knowing — see
+[`docs/entities.md`](docs/entities.md).
+
 For scale: the reference device (an AquaHome 20 Smart with no shutoff valve and
 no leak detectors) registers 83 entities.
 
@@ -196,7 +201,7 @@ no leak detectors) registers 83 entities.
 | --- | --- |
 | Usage forecast | Expected water use tomorrow, with the reasoning in its attributes. |
 | Night flow | Minimum overnight flow, the leak-watch input. Diagnostic. |
-| Water flow | Current flow rate. Live only in practice: the cloud carries a fresh flow value just during live sessions, so between them the sensor reads 0 even while the daily counter climbs — a poll almost never catches a draw mid-flow. See [Live mode](#live-mode). |
+| Water flow | Current flow rate. Live only in practice: the cloud carries a fresh flow value just during live sessions, so between them the sensor normally reads 0 (rarely, the last streamed rate) even while the daily counter climbs. See [Live mode](#live-mode). |
 | Live mode | Idle / live / reconnect backoff, with session bookkeeping in its attributes. Diagnostic. |
 
 **Device and diagnostics**
@@ -447,11 +452,12 @@ while the integration is reloading.
 The two read-only actions return response data and change nothing, which makes
 them safe to call from a template sensor or a script loop.
 
-One reading note: the analysis works in **noon-to-noon** days (a `day` labeled
-2026-07-27 spans 2026-07-27 12:00 to 2026-07-28 12:00 device-local), because
-household water use bridges midnight and a calendar-day cut would split every
-evening from its night. The daily totals in a response therefore deliberately
-differ from the Energy dashboard's midnight-to-midnight bars.
+One reading note: the analysis works in **noon-to-noon** days, each labeled by
+the date it *closes* on (a `day` labeled 2026-07-27 spans 2026-07-26 12:00 to
+2026-07-27 12:00 device-local), because household water use bridges midnight
+and a calendar-day cut would split every evening from its night. The daily
+totals in a response therefore deliberately differ from the Energy dashboard's
+midnight-to-midnight bars.
 
 ```yaml
 actions:

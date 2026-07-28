@@ -424,8 +424,10 @@ LIVE_SUBSCRIBED_PROPERTIES: Final[tuple[str, ...]] = (
     "current_time_secs",
 )
 
-# The subset of subscribed properties that entity value paths actually bind;
-# only these are merged into the fast coordinator's device view.
+# The subset of subscribed properties merged into the fast coordinator's
+# device view. Most are bound by entity value paths; the two spare counters
+# (treated water, the raw water counter) are merged as flow evidence for the
+# live tier's no-flow brake even though no entity reads them directly.
 LIVE_PUSHED_PROPERTIES: Final = frozenset(
     {
         "total_outlet_water_gals",
