@@ -83,6 +83,13 @@ blueprints only load from `config/blueprints/automation/`. Import the ones you
 want with one click from the badges in [Blueprints](#blueprints), or copy the
 repository's `blueprints/automation/aquahome/` folder there yourself.
 
+### Branding
+
+On Home Assistant 2026.3 or newer the integration ships its own icon and logo
+(`custom_components/aquahome/brand/`) and they appear automatically in the
+integrations list, on device pages, and in HACS once installed — no external
+brands submission required.
+
 ## Setup
 
 Everything is configured from the UI; there is nothing to put in
